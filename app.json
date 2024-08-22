@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "aora",
+    "scheme": "aora",
     "slug": "aora",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -18,10 +19,23 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.neonzed.aora"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "528bfb31-57b8-42e3-9ad6-25249367191b"
+      }
+    },
+    "owner": "neonzed"
   }
 }
