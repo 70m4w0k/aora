@@ -70,7 +70,7 @@ const Home = () => {
                 Latest Videos
               </Text>
 
-              {/* <Trending posts={latestPosts ?? []} /> */}
+              <Trending posts={latestPosts ?? []} />
             </View>
           </View>
         )}
