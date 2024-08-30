@@ -4,11 +4,11 @@ import { FlatList, Image, RefreshControl, Text, View } from "react-native";
 
 import { images } from "../../constants";
 import useAppwrite from "../../lib/useAppwrite";
-import { getAllPosts, getLatestPosts } from "../../lib/appwrite";
-import EmptyState from "../../components/EmptyState";
-import SearchInput from "../../components/SearchInput";
 import Trending from "../../components/Trending";
 import VideoCard from "../../components/VideoCard";
+import EmptyState from "../../components/EmptyState";
+import SearchInput from "../../components/SearchInput";
+import { getAllPosts, getLatestPosts } from "../../lib/appwrite";
 
 const Home = () => {
   const { data: posts, refetch } = useAppwrite(getAllPosts);

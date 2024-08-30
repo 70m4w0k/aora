@@ -31,6 +31,11 @@ const zoomOut = {
 const TrendingItem = ({ activeItem, item }) => {
   const [play, setPlay] = useState(false);
 
+  const descibeVideo = () => {
+    setPlay(true);
+    console.log("activeItem: " + activeItem);
+  };
+
   return (
     <Animatable.View
       className="mr-5"
@@ -49,12 +54,15 @@ const TrendingItem = ({ activeItem, item }) => {
               setPlay(false);
             }
           }}
+          onError={(error) => {
+            console.log(error);
+          }}
         />
       ) : (
         <TouchableOpacity
           className="relative flex justify-center items-center"
           activeOpacity={0.7}
-          onPress={() => setPlay(true)}
+          onPress={() => descibeVideo()}
         >
           <ImageBackground
             source={{
