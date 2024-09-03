@@ -28,9 +28,6 @@ const TabIcon = ({ icon, color, name, focused }) => {
 const TabLayout = () => {
   const { loading, isLogged, user } = useGlobalContext();
 
-  console.log("TabLayout - isLogged", isLogged);
-  console.log("TabLayout - user", user);
-
   if (!loading && !isLogged) return <Redirect href="/sign-in" />;
   return (
     <>
@@ -63,15 +60,15 @@ const TabLayout = () => {
           }}
         />
         <Tabs.Screen
-          name="bookmark"
+          name="chores"
           options={{
-            title: "Bookmark",
+            title: "Chores",
             headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
                 icon={icons.bookmark}
                 color={color}
-                name="Bookmark"
+                name="Chores"
                 focused={focused}
               />
             ),
