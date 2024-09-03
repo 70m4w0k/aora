@@ -5,9 +5,9 @@ import { Text, View, Image, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { images } from "../constants";
+import Loader from "../components/Loader";
 import CustomButton from "../components/CustomButton";
 import { useGlobalContext } from "../context/GlobalProvider";
-// import Loader from "../components/Loader";
 
 NativeWindStyleSheet.setOutput({
   default: "native",
@@ -20,7 +20,7 @@ export default function App() {
 
   return (
     <SafeAreaView className="bg-primary h-full">
-      {/* <Loader isLoading={loading} /> */}
+      <Loader isLoading={loading} />
 
       <ScrollView
         contentContainerStyle={{
