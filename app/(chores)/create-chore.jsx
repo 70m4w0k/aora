@@ -17,7 +17,6 @@ const CreateChore = () => {
   });
 
   const submit = async () => {
-    console.log(form);
     if ((form.title === "") | (form.recurrence === "")) {
       return Alert.alert("Please provide all fields");
     }
