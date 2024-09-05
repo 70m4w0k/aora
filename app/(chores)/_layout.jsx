@@ -12,8 +12,14 @@ const ChoresLayout = () => {
   return (
     <>
       <Stack>
-        <Stack.Screen
+        {/* <Stack.Screen
           name="create-chore"
+          options={{
+            headerShown: false,
+          }}
+        /> */}
+        <Stack.Screen
+          name="calendar"
           options={{
             headerShown: false,
           }}
