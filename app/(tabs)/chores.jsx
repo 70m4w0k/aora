@@ -92,32 +92,7 @@ const ChoresListScreen = () => {
               subtitle="You can create new chores"
             />
           )}
-          ListHeaderComponent={() => (
-            // <View className="w-full flex justify-center items-center mt-6 mb-12 px-4">
-            //   <InfoBox
-            //     title={user?.username}
-            //     containerStyles="mt-5"
-            //     titleStyles="text-lg"
-            //   />
-
-            //   <View className="mt-5 flex flex-row">
-            //     <InfoBox
-            //       title={posts.length || 0}
-            //       subtitle="Posts"
-            //       titleStyles="text-xl"
-            //       containerStyles="mr-10"
-            //     />
-            //     <InfoBox
-            //       title="1.2k"
-            //       subtitle="Followers"
-            //       titleStyles="text-xl"
-            //     />
-            //   </View>
-            // </View>
-            <Text>Hello World</Text>
-          )}
         />
-
         <View className="flex my-6 px-4 space-y-6"></View>
         <CustomButton
           title="Create New Chore"
