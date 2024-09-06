@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -7,17 +7,9 @@ import {
   TouchableOpacity,
 } from "react-native";
 import LegendModal from "./LegendModal";
-import useAppwrite from "../lib/useAppwrite";
 import { getAllUsers } from "../lib/appwrite";
 import { useGlobalContext } from "../context/GlobalProvider";
 import { getFirstDayOfWeek, getWeekNumberByDate } from "../lib/utils";
-
-const USERS = [
-  { id: "1", name: "Alice", color: "#FF5733" },
-  { id: "2", name: "Bob", color: "#33FF57" },
-  { id: "3", name: "Charlie", color: "#3357FF" },
-  { id: "4", name: "Diana", color: "#FF33F1" },
-];
 
 const WEEKS_IN_YEAR = 52;
 const COLUMN_WIDTH = 60;
@@ -32,11 +24,18 @@ const TasksTracker = ({ initialTasks }) => {
     getWeekNumberByDate(new Date())
   );
   const { user } = useGlobalContext();
+  const scrollRef = useRef();
+  const [currentWeekXPos, setCurrentWeekXPos] = useState(0);
 
   useEffect(() => {
     setTasks(initialTasks);
     fetchUsers();
+    scrollToCurrentWeek();
   }, [initialTasks]);
+
+  const scrollToCurrentWeek = () => {
+    scrollRef.current?.scrollTo({ x: currentWeekXPos, animated: true });
+  };
 
   const fetchUsers = async () => {
     try {
@@ -47,23 +46,36 @@ const TasksTracker = ({ initialTasks }) => {
     }
   };
 
-  const toggleTask = (taskId, weekIndex) => {
+  const toggleTask = async (taskId, weekIndex) => {
+    // Find out if the task is already completed by the user
+    const task = tasks.find((task) => task.id === taskId);
+    const isCompletedByUser = task.completedWeeks[weekIndex]?.$id === user.$id;
+
     setTasks((prevTasks) =>
       prevTasks.map((task) =>
         task.id === taskId
           ? {
               ...task,
               completedWeeks: task.completedWeeks.map((prevUser, index) =>
-                index === weekIndex
-                  ? prevUser.$id === user.$id
-                    ? ""
-                    : user
-                  : prevUser
+                index === weekIndex ? (isCompletedByUser ? "" : user) : prevUser
               ),
             }
           : task
       )
     );
+    const percentageDone = isCompletedByUser ? 0 : 100;
+
+    // Make an async call to createTaskImplementation to persist the task completion
+    try {
+      await createTaskImplementation({
+        percentageDone,
+        userId: user.$id,
+        taskId: taskId,
+        doneDate: weekIndex,
+      });
+    } catch (error) {
+      console.error("Error creating task implementation:", error);
+    }
   };
 
   return (
@@ -86,7 +98,11 @@ const TasksTracker = ({ initialTasks }) => {
           ))}
         </ScrollView>
       </View>
-      <ScrollView horizontal={true} showsHorizontalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal={true}
+        showsHorizontalScrollIndicator={false}
+      >
         <View>
           <View style={styles.header}>
             {[...Array(WEEKS_IN_YEAR)].map((_, index) => (
@@ -106,6 +122,12 @@ const TasksTracker = ({ initialTasks }) => {
                 {task.completedWeeks.map((completed, index) => (
                   <TouchableOpacity
                     key={index}
+                    onLayout={(event) => {
+                      if (index + 3 === currentWeekNumber) {
+                        const layout = event.nativeEvent.layout;
+                        setCurrentWeekXPos(layout.x);
+                      }
+                    }}
                     style={[
                       styles.cell,
                       { width: COLUMN_WIDTH },
