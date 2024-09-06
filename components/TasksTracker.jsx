@@ -5,15 +5,12 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
-  Modal,
-  Picker,
-  Alert,
 } from "react-native";
 import LegendModal from "./LegendModal";
-import { createTask, getAllUsers } from "../lib/appwrite";
+import { getAllUsers } from "../lib/appwrite";
 import { useGlobalContext } from "../context/GlobalProvider";
 import { getFirstDayOfWeek, getWeekNumberByDate } from "../lib/utils";
+import CreateTaskModal from "./CreateTaskModal";
 
 const WEEKS_IN_YEAR = 52;
 const COLUMN_WIDTH = 60;
@@ -35,16 +32,7 @@ const TasksTracker = ({ initialTasks }) => {
 
   // Modals
   const [legendModalVisible, setLegendModalVisible] = useState(false);
-  const [newTaskModalVisible, setNewTaskModalVisible] = useState(false);
-
-  // Tasks
-  const [newTaskName, setNewTaskName] = useState("");
-  const [newTaskRecurrence, setNewTaskRecurrence] = useState("weekly");
-  const [uploading, setUploading] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    recurrence: "",
-  });
+  const [createTaskModal, setCreateTaskModalVisible] = useState(false);
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -85,38 +73,16 @@ const TasksTracker = ({ initialTasks }) => {
     const percentageDone = isCompletedByUser ? 0 : 100;
 
     // Make an async call to createTaskImplementation to persist the task completion
-    try {
-      await createTaskImplementation({
-        percentageDone,
-        userId: user.$id,
-        taskId: taskId,
-        doneDate: weekIndex,
-      });
-    } catch (error) {
-      console.error("Error creating task implementation:", error);
-    }
-  };
-
-  const submit = async () => {
-    if ((form.title.trim() === "") | (form.recurrence.trim() === "")) {
-      return Alert.alert("Please provide a name");
-    }
-
-    setUploading(true);
-    try {
-      await createTask(form);
-
-      Alert.alert("Success", "Post uploaded successfully");
-    } catch (error) {
-      Alert.alert("Error", error.message);
-    } finally {
-      setForm({
-        title: "",
-        recurrence: "",
-      });
-      setUploading(false);
-      setNewTaskModalVisible(false);
-    }
+    // try {
+    //   await createTaskImplementation({
+    //     percentageDone,
+    //     userId: user.$id,
+    //     taskId: taskId,
+    //     doneDate: weekIndex,
+    //   });
+    // } catch (error) {
+    //   console.error("Error creating task implementation:", error);
+    // }
   };
 
   return (
@@ -140,7 +106,7 @@ const TasksTracker = ({ initialTasks }) => {
         </ScrollView>
         <TouchableOpacity
           style={styles.addTaskButton}
-          onPress={() => setNewTaskModalVisible(true)}
+          onPress={() => setCreateTaskModalVisible(true)}
         >
           <Text style={styles.addTaskButtonText}>+</Text>
         </TouchableOpacity>
@@ -203,44 +169,10 @@ const TasksTracker = ({ initialTasks }) => {
         visible={legendModalVisible}
         onClose={() => setLegendModalVisible(false)}
       />
-      <Modal visible={newTaskModalVisible} transparent={true}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Task</Text>
-            <TextInput
-              style={styles.input}
-              value={form.title}
-              onChangeText={(e) => setForm({ ...form, title: e })}
-              placeholder="Enter task name"
-            />
-            <Text style={styles.pickerLabel}>Recurrence:</Text>
-            <Picker
-              selectedValue={form.recurrence}
-              style={styles.picker}
-              onValueChange={(itemValue) =>
-                setForm({ ...form, recurrence: itemValue })
-              }
-            >
-              <Picker.Item label="Weekly" value="weekly" />
-              <Picker.Item label="Monthly" value="monthly" />
-            </Picker>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setNewTaskModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.addButton]}
-                onPress={submit}
-              >
-                <Text style={styles.modalButtonText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <CreateTaskModal
+        visible={createTaskModal}
+        onClose={() => setCreateTaskModalVisible(false)}
+      ></CreateTaskModal>
     </View>
   );
 };
