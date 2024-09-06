@@ -54,7 +54,11 @@ const TasksTracker = ({ initialTasks }) => {
           ? {
               ...task,
               completedWeeks: task.completedWeeks.map((prevUser, index) =>
-                index === weekIndex ? (prevUser === user ? "" : user) : prevUser
+                index === weekIndex
+                  ? prevUser.$id === user.$id
+                    ? ""
+                    : user
+                  : prevUser
               ),
             }
           : task
