@@ -46,13 +46,13 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     padding: 20,
     borderRadius: 10,
-    width: "80%",
     maxHeight: "80%",
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 10,
+    paddingBottom: 10,
   },
   legendItem: {
     flexDirection: "row",

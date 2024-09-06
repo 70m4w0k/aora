@@ -5,9 +5,13 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
+  Modal,
+  Picker,
+  Alert,
 } from "react-native";
 import LegendModal from "./LegendModal";
-import { getAllUsers } from "../lib/appwrite";
+import { createTask, getAllUsers } from "../lib/appwrite";
 import { useGlobalContext } from "../context/GlobalProvider";
 import { getFirstDayOfWeek, getWeekNumberByDate } from "../lib/utils";
 
@@ -17,15 +21,30 @@ const ROW_HEIGHT = 40;
 const TASK_COLUMN_WIDTH = 120;
 
 const TasksTracker = ({ initialTasks }) => {
+  // Data
+  const { user } = useGlobalContext();
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState(initialTasks);
-  const [modalVisible, setModalVisible] = useState(false);
   const [currentWeekNumber, setCurrentWeekNumber] = useState(
     getWeekNumberByDate(new Date())
   );
-  const { user } = useGlobalContext();
+
+  // Scrolling to current week
   const scrollRef = useRef();
   const [currentWeekXPos, setCurrentWeekXPos] = useState(0);
+
+  // Modals
+  const [legendModalVisible, setLegendModalVisible] = useState(false);
+  const [newTaskModalVisible, setNewTaskModalVisible] = useState(false);
+
+  // Tasks
+  const [newTaskName, setNewTaskName] = useState("");
+  const [newTaskRecurrence, setNewTaskRecurrence] = useState("weekly");
+  const [uploading, setUploading] = useState(false);
+  const [form, setForm] = useState({
+    title: "",
+    recurrence: "",
+  });
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -42,7 +61,7 @@ const TasksTracker = ({ initialTasks }) => {
       const allUsers = await getAllUsers();
       setUsers(allUsers);
     } catch (error) {
-      console.error("Error fetching chores:", error);
+      console.error("Error fetching users:", error);
     }
   };
 
@@ -78,12 +97,34 @@ const TasksTracker = ({ initialTasks }) => {
     }
   };
 
+  const submit = async () => {
+    if ((form.title.trim() === "") | (form.recurrence.trim() === "")) {
+      return Alert.alert("Please provide a name");
+    }
+
+    setUploading(true);
+    try {
+      await createTask(form);
+
+      Alert.alert("Success", "Post uploaded successfully");
+    } catch (error) {
+      Alert.alert("Error", error.message);
+    } finally {
+      setForm({
+        title: "",
+        recurrence: "",
+      });
+      setUploading(false);
+      setNewTaskModalVisible(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.taskColumn}>
         <TouchableOpacity
           style={[styles.headerCell, { width: TASK_COLUMN_WIDTH }]}
-          onPress={() => setModalVisible(true)}
+          onPress={() => setLegendModalVisible(true)}
         >
           <Text style={styles.headerText}>Legend</Text>
         </TouchableOpacity>
@@ -97,6 +138,12 @@ const TasksTracker = ({ initialTasks }) => {
             </View>
           ))}
         </ScrollView>
+        <TouchableOpacity
+          style={styles.addTaskButton}
+          onPress={() => setNewTaskModalVisible(true)}
+        >
+          <Text style={styles.addTaskButtonText}>+</Text>
+        </TouchableOpacity>
       </View>
       <ScrollView
         ref={scrollRef}
@@ -151,10 +198,49 @@ const TasksTracker = ({ initialTasks }) => {
         </View>
       </ScrollView>
       <LegendModal
+        title="Users"
         users={users}
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
+        visible={legendModalVisible}
+        onClose={() => setLegendModalVisible(false)}
       />
+      <Modal visible={newTaskModalVisible} transparent={true}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add New Task</Text>
+            <TextInput
+              style={styles.input}
+              value={form.title}
+              onChangeText={(e) => setForm({ ...form, title: e })}
+              placeholder="Enter task name"
+            />
+            <Text style={styles.pickerLabel}>Recurrence:</Text>
+            <Picker
+              selectedValue={form.recurrence}
+              style={styles.picker}
+              onValueChange={(itemValue) =>
+                setForm({ ...form, recurrence: itemValue })
+              }
+            >
+              <Picker.Item label="Weekly" value="weekly" />
+              <Picker.Item label="Monthly" value="monthly" />
+            </Picker>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setNewTaskModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.addButton]}
+                onPress={submit}
+              >
+                <Text style={styles.modalButtonText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -221,6 +307,76 @@ const styles = StyleSheet.create({
   },
   checked: {
     backgroundColor: "#4CAF50",
+  },
+  addTaskButton: {
+    position: "absolute",
+    bottom: 10,
+    left: 10,
+    width: 40,
+    height: 40,
+    backgroundColor: "#8e9aaf",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 20,
+    elevation: 3,
+  },
+  addTaskButtonText: {
+    color: "white",
+    fontSize: 24,
+    fontWeight: "bold",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  modalContent: {
+    backgroundColor: "white",
+    padding: 20,
+    borderRadius: 10,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 10,
+  },
+  pickerLabel: {
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  picker: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 5,
+    marginBottom: 10,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  modalButton: {
+    padding: 10,
+    borderRadius: 5,
+    width: "45%",
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#ccc",
+  },
+  addButton: {
+    backgroundColor: "#8e9aaf",
+  },
+  modalButtonText: {
+    color: "white",
+    fontWeight: "bold",
   },
 });
 
