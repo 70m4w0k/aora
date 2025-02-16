@@ -7,10 +7,10 @@ import {
   TouchableOpacity,
 } from "react-native";
 import LegendModal from "./LegendModal";
-import { getAllUsers } from "../lib/appwrite";
+import CreateTaskModal from "./CreateTaskModal";
 import { useGlobalContext } from "../context/GlobalProvider";
 import { getFirstDayOfWeek, getWeekNumberByDate } from "../lib/utils";
-import CreateTaskModal from "./CreateTaskModal";
+import { createTaskDone, deleteTaskDone, getAllUsers } from "../lib/appwrite";
 
 const WEEKS_IN_YEAR = 52;
 const COLUMN_WIDTH = 60;
@@ -18,7 +18,6 @@ const ROW_HEIGHT = 40;
 const TASK_COLUMN_WIDTH = 120;
 
 const TasksTracker = ({ initialTasks }) => {
-  // Data
   const { user } = useGlobalContext();
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState(initialTasks);
@@ -54,35 +53,57 @@ const TasksTracker = ({ initialTasks }) => {
   };
 
   const toggleTask = async (taskId, weekIndex) => {
-    // Find out if the task is already completed by the user
+    console.log("toggleTask() - taskId", taskId);
+    console.log("toggleTask() - weekIndex", weekIndex);
+    console.log("toggleTask() - user", user);
     const task = tasks.find((task) => task.id === taskId);
+    console.log("toggleTask() - task", task);
     const isCompletedByUser = task.completedWeeks[weekIndex]?.$id === user.$id;
 
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              completedWeeks: task.completedWeeks.map((prevUser, index) =>
-                index === weekIndex ? (isCompletedByUser ? "" : user) : prevUser
-              ),
-            }
-          : task
-      )
-    );
-    const percentageDone = isCompletedByUser ? 0 : 100;
+    const taskDoneToCreate = {
+      done: true,
+      doneDate: weekIndex + 1,
+      userId: user.$id,
+      taskId: task.id,
+    };
 
-    // Make an async call to createTaskImplementation to persist the task completion
-    // try {
-    //   await createTaskImplementation({
-    //     percentageDone,
-    //     userId: user.$id,
-    //     taskId: taskId,
-    //     doneDate: weekIndex,
-    //   });
-    // } catch (error) {
-    //   console.error("Error creating task implementation:", error);
-    // }
+    const updatedTasks = tasks.map((task) => {
+      if (task.id === taskId) {
+        const updatedCompletedWeeks = task.completedWeeks.map(
+          (prevUser, index) => {
+            if (index === weekIndex) {
+              if (isCompletedByUser) {
+                // Task is being unchecked, so delete the task completion record
+                try {
+                  deleteTaskDone(taskId, user.$id, weekIndex + 1);
+                } catch (error) {
+                  console.error("Error deleting task implementation:", error);
+                }
+                return ""; // Clear the completed task for this week
+              }
+              return user; // Mark the task as completed by this user
+            }
+            return prevUser;
+          }
+        );
+
+        return { ...task, completedWeeks: updatedCompletedWeeks };
+      }
+      return task;
+    });
+
+    // Update the tasks state
+    setTasks(updatedTasks);
+
+    // If the task was uncompleted, no need to create a new task completion record
+    if (isCompletedByUser) return;
+
+    // Create TaskDone when the task is completed
+    try {
+      await createTaskDone(taskDoneToCreate);
+    } catch (error) {
+      console.error("Error creating task implementation:", error);
+    }
   };
 
   return (
@@ -172,7 +193,7 @@ const TasksTracker = ({ initialTasks }) => {
       <CreateTaskModal
         visible={createTaskModal}
         onClose={() => setCreateTaskModalVisible(false)}
-      ></CreateTaskModal>
+      />
     </View>
   );
 };

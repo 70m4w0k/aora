@@ -47,7 +47,7 @@ const ChoresListScreen = () => {
         const latestChoreImpl = await getLatestChoresImplByChoreId(chore.$id);
         if (latestChoreImpl[0]) {
           chore.lastDoneTime = getRelativeTime(latestChoreImpl[0].$updatedAt);
-          chore.authorName = latestChoreImpl[0].authorId.username;
+          chore.authorName = latestChoreImpl[0].authorId?.username;
           chore.isDone = true;
         }
       });

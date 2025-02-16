@@ -12,13 +12,14 @@ import {
 import { createTask } from "../lib/appwrite";
 
 const CreateTaskModal = ({ visible, onClose }) => {
-  // Tasks
   const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({
     title: "",
     recurrence: "weekly",
   });
+
   const submit = async () => {
+    // Todo: Check for duplicates
     if ((form.title.trim() === "") | (form.recurrence.trim() === "")) {
       return Alert.alert("Please provide a name");
     }
@@ -40,6 +41,7 @@ const CreateTaskModal = ({ visible, onClose }) => {
       onClose();
     }
   };
+
   return (
     <Modal visible={visible} transparent={true}>
       <View style={styles.modalContainer}>
@@ -65,7 +67,7 @@ const CreateTaskModal = ({ visible, onClose }) => {
           <View style={styles.modalButtons}>
             <TouchableOpacity
               style={[styles.modalButton, styles.cancelButton]}
-              onPress={() => setNewTaskModalVisible(false)}
+              onPress={onClose}
             >
               <Text style={styles.modalButtonText}>Cancel</Text>
             </TouchableOpacity>
