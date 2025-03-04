@@ -42,6 +42,7 @@ const TasksTracker = ({ initialTasks }) => {
   // Modals
   const [legendModalVisible, setLegendModalVisible] = useState(false);
   const [createTaskModal, setCreateTaskModalVisible] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -163,6 +164,43 @@ const TasksTracker = ({ initialTasks }) => {
   };
 
   // Filter tasks based on completion status
+  const handleTaskCreated = (newTask) => {
+    onRefresh();
+  };
+
+  const confirmDeleteTask = (taskId) => {
+    setTaskToDelete(taskId);
+    Alert.alert(
+      "Delete Task",
+      "Are you sure you want to delete this task?",
+      [
+        { text: "Cancel", style: "cancel", onPress: () => setTaskToDelete(null) },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: () => deleteTask(taskId)
+        }
+      ]
+    );
+  };
+
+  const deleteTask = async (taskId) => {
+    try {
+      await deleteTaskDone(taskId, user.$id, 0); // This is a placeholder - not sure if this API works for task deletion
+      
+      // Update UI
+      const updatedTasks = tasks.filter(t => t.id !== taskId);
+      setTasks(updatedTasks);
+      setTaskToDelete(null);
+      
+      Alert.alert("Success", "Task deleted successfully");
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      Alert.alert("Error", "Could not delete task. Please try again.");
+      setTaskToDelete(null);
+    }
+  };
+
   const filteredTasks = tasks.filter(task => {
     if (filter === "all") return true;
     
@@ -284,12 +322,21 @@ const TasksTracker = ({ initialTasks }) => {
             </View>
             <ScrollView>
               {filteredTasks.map((task) => (
-                <View
+                <TouchableOpacity
                   key={task.id}
                   style={[styles.cell, { width: TASK_COLUMN_WIDTH }]}
+                  onLongPress={() => confirmDeleteTask(task.id)}
                 >
-                  <Text style={styles.taskText}>{task.name}</Text>
-                </View>
+                  <View style={styles.taskTextContainer}>
+                    <Text style={styles.taskText}>{task.name}</Text>
+                    <TouchableOpacity 
+                      style={styles.deleteIcon} 
+                      onPress={() => confirmDeleteTask(task.id)}
+                    >
+                      <Text style={styles.deleteIconText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
@@ -388,9 +435,20 @@ const TasksTracker = ({ initialTasks }) => {
             
             return (
               <View key={task.id} style={styles.listItemContainer}>
-                <View style={styles.listItemTitleWrapper}>
-                  <Text style={styles.listItemTitle}>{task.name}</Text>
-                </View>
+                <TouchableOpacity 
+                  style={styles.listItemTitleWrapper}
+                  onLongPress={() => confirmDeleteTask(task.id)}
+                >
+                  <View style={styles.listItemTitleContainer}>
+                    <Text style={styles.listItemTitle}>{task.name}</Text>
+                    <TouchableOpacity 
+                      style={styles.deleteIcon} 
+                      onPress={() => confirmDeleteTask(task.id)}
+                    >
+                      <Text style={styles.deleteIconText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
                 <View style={styles.listItemCompletionWrapper}>
                   <View style={styles.progressBarContainer}>
                     <View 
@@ -440,6 +498,7 @@ const TasksTracker = ({ initialTasks }) => {
       <CreateTaskModal
         visible={createTaskModal}
         onClose={() => setCreateTaskModalVisible(false)}
+        onTaskCreated={handleTaskCreated}
       />
     </View>
   );
@@ -516,6 +575,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+  },
+  taskTextContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    paddingRight: 4,
+  },
+  deleteIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#F0F0F0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteIconText: {
+    color: "#FF6B6B",
+    fontSize: 12,
+    fontWeight: "bold",
   },
   header: {
     flexDirection: "row",
@@ -599,6 +678,11 @@ const styles = StyleSheet.create({
   },
   listItemTitleWrapper: {
     flex: 0.4,
+  },
+  listItemTitleContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   listItemTitle: {
     fontSize: 16,

@@ -63,13 +63,21 @@ const ExpensesScreen = () => {
 
   const fetchData = async () => {
     try {
-      await Promise.all([
-        fetchUsers(),
-        fetchExpenses(),
-        fetchSettlements(),
-      ]);
+      console.log("Fetching all data...");
+      // Fetch users first to ensure we have them before processing expenses
+      const fetchedUsers = await fetchUsers();
+      if (fetchedUsers && fetchedUsers.length > 0) {
+        // Then fetch expenses and settlements sequentially
+        await fetchExpenses();
+        await fetchSettlements();
+        // Force recalculation of balances
+        calculateBalances();
+      } else {
+        console.log("No users found, cannot fetch expenses");
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
+      Alert.alert("Error", "Failed to load expenses data. Pull down to refresh and try again.");
     }
   };
 
@@ -593,7 +601,23 @@ const ExpensesScreen = () => {
           </Picker>
         </View>
         
-        <Text style={styles.inputLabel}>Split Between: <Text style={styles.optionalText}>(Select who shares this expense)</Text></Text>
+        <View style={styles.splitBetweenHeader}>
+          <Text style={styles.inputLabel}>Split Between: <Text style={styles.optionalText}>(Select who shares this expense)</Text></Text>
+          <TouchableOpacity
+            style={styles.selectAllButton}
+            onPress={() => {
+              const allUserIds = users.map(u => u.$id);
+              setExpenseForm(prev => ({
+                ...prev,
+                splitBetween: prev.splitBetween.length === users.length ? [] : allUserIds
+              }));
+            }}
+          >
+            <Text style={styles.selectAllButtonText}>
+              {expenseForm.splitBetween.length === users.length ? "Deselect All" : "Select All"}
+            </Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.splitUsers}>
           {users.map((user) => (
             <TouchableOpacity
@@ -756,6 +780,23 @@ const ExpensesScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  splitBetweenHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  selectAllButton: {
+    backgroundColor: "#F0F0F0",
+    borderRadius: 15,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  selectAllButtonText: {
+    fontSize: 12,
+    color: "#666666",
+    fontWeight: "500",
+  },
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",

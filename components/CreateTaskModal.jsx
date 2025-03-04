@@ -32,7 +32,7 @@ const RecurrenceButton = ({ label, value, selected, onPress }) => (
   </TouchableOpacity>
 );
 
-const CreateTaskModal = ({ visible, onClose }) => {
+const CreateTaskModal = ({ visible, onClose, onTaskCreated }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -46,7 +46,7 @@ const CreateTaskModal = ({ visible, onClose }) => {
 
     setIsSubmitting(true);
     try {
-      await createTask(form);
+      const newTask = await createTask(form);
 
       Alert.alert("Success", "Task created successfully");
       // Reset form
@@ -54,6 +54,12 @@ const CreateTaskModal = ({ visible, onClose }) => {
         title: "",
         recurrence: "weekly",
       });
+      
+      // Notify parent component to refresh the task list
+      if (onTaskCreated) {
+        onTaskCreated(newTask);
+      }
+      
       onClose();
     } catch (error) {
       Alert.alert("Error", error.message);
