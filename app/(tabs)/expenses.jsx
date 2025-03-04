@@ -111,67 +111,119 @@ const ExpensesScreen = () => {
   };
 
   useEffect(() => {
-    if (expenses.length > 0 && users.length > 0) {
+    if (users.length > 0) {
       calculateBalances();
     }
   }, [expenses, settlements, users]);
 
   const calculateBalances = () => {
-    const newBalances = {};
-    
-    // Initialize balances for all users
-    users.forEach(u => {
-      newBalances[u.$id] = { 
-        userId: u.$id, 
-        username: u.username, 
-        balance: 0,
-        color: u.color,
-      };
-    });
-    
-    // Process expenses
-    expenses.forEach(expense => {
-      const amount = parseFloat(expense.amount);
-      const paidById = expense.paidBy.$id || expense.paidBy;
-      const splitBetween = Array.isArray(expense.splitBetween) 
-        ? expense.splitBetween 
-        : [expense.splitBetween];
+    try {
+      console.log("Calculating balances with users:", users.length, "expenses:", expenses.length, "settlements:", settlements.length);
       
-      const splitCount = splitBetween.length;
-      if (splitCount === 0) return; // Skip if no split
+      const newBalances = {};
       
-      const amountPerPerson = amount / splitCount;
-      
-      // Add amount to the person who paid
-      newBalances[paidById].balance += amount;
-      
-      // Subtract from each person who owes
-      splitBetween.forEach(personId => {
-        const id = personId.$id || personId;
-        if (newBalances[id]) {
-          newBalances[id].balance -= amountPerPerson;
-        }
+      // Initialize balances for all users
+      users.forEach(u => {
+        newBalances[u.$id] = { 
+          userId: u.$id, 
+          username: u.username, 
+          balance: 0,
+          color: u.color,
+        };
       });
-    });
-    
-    // Process settlements
-    settlements.forEach(settlement => {
-      const amount = parseFloat(settlement.amount);
-      const paidById = settlement.paidBy.$id || settlement.paidBy;
-      const paidToId = settlement.paidTo.$id || settlement.paidTo;
       
-      // The person who paid the settlement decreases their balance
-      if (newBalances[paidById]) {
-        newBalances[paidById].balance -= amount;
+      // Process expenses
+      if (expenses && expenses.length > 0) {
+        expenses.forEach(expense => {
+          if (!expense.amount) {
+            console.log("Invalid expense amount:", expense);
+            return;
+          }
+          
+          const amount = parseFloat(expense.amount);
+          
+          // Handle different ways paidBy might be structured
+          let paidById;
+          if (expense.paidBy) {
+            paidById = typeof expense.paidBy === 'object' ? expense.paidBy.$id : expense.paidBy;
+          } else {
+            console.log("Invalid paidBy:", expense);
+            return;
+          }
+          
+          // Handle different ways splitBetween might be structured
+          let splitBetween = [];
+          if (expense.splitBetween) {
+            splitBetween = Array.isArray(expense.splitBetween) 
+              ? expense.splitBetween 
+              : [expense.splitBetween];
+          }
+          
+          const splitCount = splitBetween.length;
+          if (splitCount === 0) return; // Skip if no split
+          
+          const amountPerPerson = amount / splitCount;
+          
+          // Add amount to the person who paid
+          if (newBalances[paidById]) {
+            newBalances[paidById].balance += amount;
+          }
+          
+          // Subtract from each person who owes
+          splitBetween.forEach(personId => {
+            const id = typeof personId === 'object' ? personId.$id : personId;
+            if (newBalances[id]) {
+              newBalances[id].balance -= amountPerPerson;
+            }
+          });
+        });
       }
       
-      // The person who received the settlement increases their balance
-      if (newBalances[paidToId]) {
-        newBalances[paidToId].balance += amount;
+      // Process settlements
+      if (settlements && settlements.length > 0) {
+        settlements.forEach(settlement => {
+          if (!settlement.amount) {
+            console.log("Invalid settlement amount:", settlement);
+            return;
+          }
+          
+          const amount = parseFloat(settlement.amount);
+          
+          // Handle different ways paidBy might be structured
+          let paidById;
+          if (settlement.paidBy) {
+            paidById = typeof settlement.paidBy === 'object' ? settlement.paidBy.$id : settlement.paidBy;
+          } else {
+            console.log("Invalid paidBy in settlement:", settlement);
+            return;
+          }
+          
+          // Handle different ways paidTo might be structured
+          let paidToId;
+          if (settlement.paidTo) {
+            paidToId = typeof settlement.paidTo === 'object' ? settlement.paidTo.$id : settlement.paidTo;
+          } else {
+            console.log("Invalid paidTo in settlement:", settlement);
+            return;
+          }
+          
+          // The person who paid the settlement decreases their balance
+          if (newBalances[paidById]) {
+            newBalances[paidById].balance -= amount;
+          }
+          
+          // The person who received the settlement increases their balance
+          if (newBalances[paidToId]) {
+            newBalances[paidToId].balance += amount;
+          }
+        });
       }
-    });
-    
-    setBalances(newBalances);
+      
+      console.log("Balance calculation completed:", Object.keys(newBalances).length);
+      setBalances(newBalances);
+    } catch (error) {
+      console.error("Error calculating balances:", error);
+    }
   };
 
   const onRefresh = async () => {
