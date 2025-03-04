@@ -33,13 +33,13 @@ const TabLayout = () => {
     <>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: "#FFA001",
-          tabBarInactiveTintColor: "#CDCDE0",
+          tabBarActiveTintColor: "#4F86C6",
+          tabBarInactiveTintColor: "#666666",
           tabBarShowLabel: false,
           tabBarStyle: {
-            backgroundColor: "#161622",
+            backgroundColor: "#FFFFFF",
             borderTopWidth: 1,
-            borderTopColor: "#232533",
+            borderTopColor: "#E0E0E0",
             height: 84,
           },
         }}
@@ -60,31 +60,45 @@ const TabLayout = () => {
           }}
         />
         <Tabs.Screen
-          name="chores"
+          name="calendar"
           options={{
-            title: "Chores",
+            title: "Calendar",
             headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
                 icon={icons.bookmark}
                 color={color}
-                name="Chores"
+                name="Calendar"
                 focused={focused}
               />
             ),
           }}
         />
-
         <Tabs.Screen
-          name="create"
+          name="shopping"
           options={{
-            title: "Create",
+            title: "Shopping",
             headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
-                icon={icons.plus}
+                icon={icons.search}
                 color={color}
-                name="Create"
+                name="Shopping"
+                focused={focused}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="expenses"
+          options={{
+            title: "Expenses",
+            headerShown: false,
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon
+                icon={icons.upload}
+                color={color}
+                name="Expenses"
                 focused={focused}
               />
             ),
@@ -108,7 +122,7 @@ const TabLayout = () => {
       </Tabs>
 
       <Loader isLoading={loading} />
-      <StatusBar backgroundColor="#161622" style="light" />
+      <StatusBar backgroundColor="#FFFFFF" style="dark" />
     </>
   );
 };

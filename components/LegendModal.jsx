@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -6,31 +6,43 @@ import {
   TouchableOpacity,
   Modal,
   FlatList,
+  SafeAreaView,
 } from "react-native";
 
 const LegendModal = ({ users, title, visible, onClose }) => {
   return (
-    <Modal transparent={true} visible={visible} onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
+    <Modal
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+      animationType="fade"
+    >
+      <SafeAreaView style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>{title}</Text>
+          
           <FlatList
             data={users}
             keyExtractor={(item) => item.$id}
+            contentContainerStyle={styles.usersList}
             renderItem={({ item }) => (
-              <View style={styles.legendItem}>
+              <View style={styles.userCard}>
                 <View
-                  style={[styles.legendColor, { backgroundColor: item.color }]}
+                  style={[styles.colorIndicator, { backgroundColor: item.color }]}
                 />
-                <Text style={styles.legendText}>{item.username}</Text>
+                <Text style={styles.username}>{item.username}</Text>
               </View>
             )}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>No users found</Text>
+            }
           />
+          
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <Text style={styles.closeButtonText}>Close</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 };
@@ -38,46 +50,72 @@ const LegendModal = ({ users, title, visible, onClose }) => {
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
     justifyContent: "center",
     alignItems: "center",
   },
   modalContent: {
     backgroundColor: "white",
-    padding: 20,
-    borderRadius: 10,
-    maxHeight: "80%",
+    width: "80%",
+    maxWidth: 400,
+    borderRadius: 12,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-    paddingBottom: 10,
+    fontWeight: "600",
+    color: "#333333",
+    textAlign: "center",
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E0E0E0",
   },
-  legendItem: {
+  usersList: {
+    padding: 16,
+  },
+  userCard: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: "#F9F9F9",
+    borderRadius: 8,
+    marginBottom: 8,
   },
-  legendColor: {
-    width: 20,
-    height: 20,
-    borderRadius: 3,
-    marginRight: 10,
+  colorIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
   },
-  legendText: {
+  username: {
     fontSize: 16,
+    color: "#333333",
+    fontWeight: "500",
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#666666",
+    padding: 20,
   },
   closeButton: {
-    marginTop: 20,
-    padding: 10,
-    backgroundColor: "#ddd",
-    borderRadius: 5,
+    backgroundColor: "#4F86C6",
+    padding: 14,
     alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#E0E0E0",
   },
   closeButtonText: {
+    color: "white",
+    fontWeight: "600",
     fontSize: 16,
-    fontWeight: "bold",
   },
 });
 

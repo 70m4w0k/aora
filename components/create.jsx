@@ -12,11 +12,11 @@ import {
   ScrollView,
 } from "react-native";
 
-import { icons } from "../../constants";
-import { createVideoPost } from "../../lib/appwrite";
-import FormField from "../../components/FormField";
-import CustomButton from "../../components/CustomButton";
-import { useGlobalContext } from "../../context/GlobalProvider";
+import { icons } from "../constants";
+import { createVideoPost } from "../lib/appwrite";
+import FormField from "./FormField";
+import CustomButton from "./CustomButton";
+import { useGlobalContext } from "../context/GlobalProvider";
 
 const Create = () => {
   const { user } = useGlobalContext();
