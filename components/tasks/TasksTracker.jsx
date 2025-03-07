@@ -11,9 +11,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import LegendModal from "./LegendModal";
 import CreateTaskModal from "./CreateTaskModal";
-import { useGlobalContext } from "../context/GlobalProvider";
-import { getFirstDayOfWeek, getWeekNumberByDate } from "../lib/utils";
-import { createTaskDone, deleteTaskDone, getAllUsers, getAllTasks } from "../lib/appwrite";
+import { useGlobalContext } from "../../context/GlobalProvider";
+import { getFirstDayOfWeek, getWeekNumberByDate } from "../../lib/utils";
+import { createTaskDone, deleteTaskDone, getAllUsers, getAllTasks } from "../../lib/appwrite";
 
 const WEEKS_IN_YEAR = 52;
 const COLUMN_WIDTH = 60;

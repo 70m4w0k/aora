@@ -5,7 +5,6 @@ import {
   View, 
   Text, 
   ScrollView, 
-  Dimensions, 
   Alert, 
   Image, 
   TouchableOpacity,

@@ -5,10 +5,9 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { getPlantImageUrl, getPlantEvents } from "../lib/appwrite";
+import { getPlantImageUrl, getPlantEvents } from "../../lib/appwrite";
 
 const PlantCard = ({ plant, onSelect, onAddEvent }) => {
   const [imageUrl, setImageUrl] = useState(null);

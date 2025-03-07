@@ -1,4 +1,3 @@
-import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,12 +5,10 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Platform,
   Alert,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
-import { createTask } from "../lib/appwrite";
-import { RecurrenceOptions } from "../lib/appwrite";
+import React, { useState } from "react";
+import { createTask } from "../../lib/appwrite";
 
 const RecurrenceButton = ({ label, value, selected, onPress }) => (
   <TouchableOpacity

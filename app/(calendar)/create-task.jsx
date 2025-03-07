@@ -32,7 +32,7 @@ const RecurrenceButton = ({ label, value, selected, onPress }) => (
   </TouchableOpacity>
 );
 
-const CreateChore = () => {
+const CreateTask = () => {
   const { user } = useGlobalContext();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -231,4 +231,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreateChore;
+export default CreateTask;

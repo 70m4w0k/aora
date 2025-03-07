@@ -10,12 +10,12 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useGlobalContext } from "../context/GlobalProvider";
-import EmptyState from "./EmptyState";
+import { useGlobalContext } from "../../context/GlobalProvider";
+import EmptyState from "../EmptyState";
 import PlantCard from "./PlantCard";
 import CreatePlantModal from "./CreatePlantModal";
 import CreatePlantEventModal from "./CreatePlantEventModal";
-import { getUserPlants, getUpcomingReminders } from "../lib/appwrite";
+import { getUserPlants, getUpcomingReminders } from "../../lib/appwrite";
 
 const GardenCalendar = () => {
   const { user } = useGlobalContext();

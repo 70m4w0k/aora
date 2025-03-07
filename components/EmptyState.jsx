@@ -1,6 +1,6 @@
 import { router } from "expo-router";
-import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
 import { images } from "../constants";
+import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
 
 const EmptyState = ({ title, subtitle, buttonText, onButtonPress }) => {
   return (

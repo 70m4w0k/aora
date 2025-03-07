@@ -13,8 +13,6 @@ import { router } from "expo-router";
 
 import { useGlobalContext } from "../../context/GlobalProvider";
 import { 
-  getAllTasks, 
-  getAllTasksDone, 
   getChores, 
   getLatestChoresImplByChoreId,
   getAllShoppingItems,
@@ -131,7 +129,6 @@ const Home = () => {
         </View>
 
         <View style={styles.dashboardSection}>
-          <Text style={styles.sectionTitle}>Household Dashboard</Text>
           
           <DashboardCard 
             title="Chores Calendar" 

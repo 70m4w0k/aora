@@ -1,9 +1,7 @@
 import { useEffect } from "react";
-import { SplashScreen, Stack } from "expo-router";
 import { useFonts } from "expo-font";
+import { SplashScreen, Stack } from "expo-router";
 import GlobalProvider from "../context/GlobalProvider";
-import { NavigationContainer } from "@react-navigation/native";
-// import "react-native-url-polyfill/auto";
 
 SplashScreen.preventAutoHideAsync();
 

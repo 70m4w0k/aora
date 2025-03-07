@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
-import TasksTracker from "../../components/TasksTracker";
-
-import { getAllTasks, getAllTasksDone } from "../../lib/appwrite";
 import { getWeekNumberByDate } from "../../lib/utils";
+import TasksTracker from "../../components/tasks/TasksTracker";
+import { getAllTasks, getAllTasksDone } from "../../lib/appwrite";
 
 const Calendar = () => {
   const [tasksToDisplay, setTasksToDisplay] = useState([]);

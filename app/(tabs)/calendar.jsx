@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
+import CalendarView from "../(calendar)/calendar";
+import GardenCalendar from "../../components/plants-tracker/GardenCalendar";
 import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
-import CalendarView from "../(chores)/calendar";
-import GardenCalendar from "../../components/GardenCalendar";
 
 const CalendarTab = () => {
   const [activeTab, setActiveTab] = useState('tasks'); // 'tasks' or 'garden'

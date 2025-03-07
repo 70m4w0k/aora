@@ -9,12 +9,14 @@ import {
   Image,
   Alert,
   ScrollView,
+  Switch,
 } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
-import { createPlant, PlantTypes } from "../lib/appwrite";
-import { useGlobalContext } from "../context/GlobalProvider";
+import { useGlobalContext } from "../../context/GlobalProvider";
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { createPlantEvent, PlantEventTypes } from "../../lib/appwrite";
 
-const PlantTypeButton = ({ label, value, selected, onPress }) => (
+const EventTypeButton = ({ label, value, selected, onPress }) => (
   <TouchableOpacity
     style={[
       styles.typeButton,
@@ -33,17 +35,18 @@ const PlantTypeButton = ({ label, value, selected, onPress }) => (
   </TouchableOpacity>
 );
 
-const CreatePlantModal = ({ visible, onClose, onPlantCreated }) => {
+const CreatePlantEventModal = ({ visible, onClose, onEventCreated, plant }) => {
   const { user } = useGlobalContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [form, setForm] = useState({
-    name: "",
-    type: PlantTypes.VEGETABLE,
-    variety: "",
+    eventType: PlantEventTypes.WATER,
+    date: new Date(),
     notes: "",
-    image: null,
+    images: [],
+    includeWeather: true
   });
 
   const pickImage = async () => {
@@ -69,14 +72,14 @@ const CreatePlantModal = ({ visible, onClose, onPlantCreated }) => {
         // Create the image object in the format expected by appwrite.js
         const imageFile = {
           uri: selectedAsset.uri,
-          name: selectedAsset.fileName || 'plant_image.jpg',
+          name: selectedAsset.fileName || 'plant_event.jpg',
           mimeType: selectedAsset.mimeType || 'image/jpeg',
           size: selectedAsset.fileSize || 0,
         };
         
         setForm(prev => ({
           ...prev,
-          image: imageFile
+          images: [...prev.images, imageFile]
         }));
         
         setImagePreview(selectedAsset.uri);
@@ -87,36 +90,53 @@ const CreatePlantModal = ({ visible, onClose, onPlantCreated }) => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (form.name.trim() === "") {
-      return Alert.alert("Missing Information", "Please provide a plant name");
-    }
+  const handleDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || form.date;
+    setShowDatePicker(false);
+    setForm(prev => ({ ...prev, date: currentDate }));
+  };
 
+  const formatDate = (date) => {
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const handleSubmit = async () => {
     if (!user) {
       return Alert.alert("Error", "User not found. Please sign in again.");
     }
 
+    if (!plant || !plant.$id) {
+      return Alert.alert("Error", "Plant information is missing.");
+    }
+
     setIsSubmitting(true);
     try {
-      const newPlant = await createPlant({
+      const newEvent = await createPlantEvent({
         ...form,
+        plantId: plant.$id,
         userId: user.$id,
+        date: form.date.toISOString(),
       });
 
-      Alert.alert("Success", "Plant added successfully");
+      Alert.alert("Success", "Plant event recorded successfully");
+      
       // Reset form
       setForm({
-        name: "",
-        type: PlantTypes.VEGETABLE,
-        variety: "",
+        eventType: PlantEventTypes.WATER,
+        date: new Date(),
         notes: "",
-        image: null,
+        images: [],
+        includeWeather: true
       });
       setImagePreview(null);
       
       // Notify parent component
-      if (onPlantCreated) {
-        onPlantCreated(newPlant);
+      if (onEventCreated) {
+        onEventCreated(newEvent);
       }
       
       onClose();
@@ -127,81 +147,134 @@ const CreatePlantModal = ({ visible, onClose, onPlantCreated }) => {
     }
   };
 
+  const getEventTypeLabel = (type) => {
+    switch(type) {
+      case PlantEventTypes.SOW: return "Sow";
+      case PlantEventTypes.PLANT: return "Plant";
+      case PlantEventTypes.WATER: return "Water";
+      case PlantEventTypes.FERTILIZE: return "Fertilize";
+      case PlantEventTypes.PRUNE: return "Prune";
+      case PlantEventTypes.HARVEST: return "Harvest";
+      case PlantEventTypes.TRANSPLANT: return "Transplant";
+      case PlantEventTypes.CUTTING: return "Cutting";
+      case PlantEventTypes.NOTE: return "Note";
+      default: return "Event";
+    }
+  };
+
   return (
     <Modal visible={visible} transparent={true} animationType="fade">
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <ScrollView>
-            <Text style={styles.modalTitle}>Add New Plant</Text>
+            <Text style={styles.modalTitle}>
+              Record a {getEventTypeLabel(form.eventType)} Event
+            </Text>
             
-            <Text style={styles.inputLabel}>Plant Name</Text>
-            <TextInput
-              style={styles.input}
-              value={form.name}
-              onChangeText={(text) => setForm({ ...form, name: text })}
-              placeholder="Enter plant name"
-              placeholderTextColor="#AAAAAA"
-            />
+            {plant && (
+              <Text style={styles.plantName}>{plant.name}</Text>
+            )}
             
-            <Text style={styles.inputLabel}>Plant Type</Text>
+            <Text style={styles.inputLabel}>Event Type</Text>
             <View style={styles.typeContainer}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <PlantTypeButton
-                  label="Vegetable"
-                  value={PlantTypes.VEGETABLE}
-                  selected={form.type}
-                  onPress={(value) => setForm({ ...form, type: value })}
+                <EventTypeButton
+                  label="Water"
+                  value={PlantEventTypes.WATER}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
                 />
-                <PlantTypeButton
-                  label="Herb"
-                  value={PlantTypes.HERB}
-                  selected={form.type}
-                  onPress={(value) => setForm({ ...form, type: value })}
+                <EventTypeButton
+                  label="Fertilize"
+                  value={PlantEventTypes.FERTILIZE}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
                 />
-                <PlantTypeButton
-                  label="Fruit"
-                  value={PlantTypes.FRUIT}
-                  selected={form.type}
-                  onPress={(value) => setForm({ ...form, type: value })}
+                <EventTypeButton
+                  label="Prune"
+                  value={PlantEventTypes.PRUNE}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
                 />
-                <PlantTypeButton
-                  label="Flower"
-                  value={PlantTypes.FLOWER}
-                  selected={form.type}
-                  onPress={(value) => setForm({ ...form, type: value })}
+                <EventTypeButton
+                  label="Harvest"
+                  value={PlantEventTypes.HARVEST}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
                 />
-                <PlantTypeButton
-                  label="Tree"
-                  value={PlantTypes.TREE}
-                  selected={form.type}
-                  onPress={(value) => setForm({ ...form, type: value })}
-                />
-                <PlantTypeButton
-                  label="Other"
-                  value={PlantTypes.OTHER}
-                  selected={form.type}
-                  onPress={(value) => setForm({ ...form, type: value })}
+                <EventTypeButton
+                  label="Note"
+                  value={PlantEventTypes.NOTE}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
                 />
               </ScrollView>
             </View>
             
-            <Text style={styles.inputLabel}>Variety <Text style={styles.optionalText}>(Optional)</Text></Text>
-            <TextInput
-              style={styles.input}
-              value={form.variety}
-              onChangeText={(text) => setForm({ ...form, variety: text })}
-              placeholder="E.g., Roma Tomato, Basil Genovese"
-              placeholderTextColor="#AAAAAA"
-            />
-          
-            <Text style={styles.inputLabel}>Plant Image <Text style={styles.optionalText}>(Optional)</Text></Text>
+            <View style={styles.secondaryTypeContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <EventTypeButton
+                  label="Sow"
+                  value={PlantEventTypes.SOW}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
+                />
+                <EventTypeButton
+                  label="Plant"
+                  value={PlantEventTypes.PLANT}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
+                />
+                <EventTypeButton
+                  label="Transplant"
+                  value={PlantEventTypes.TRANSPLANT}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
+                />
+                <EventTypeButton
+                  label="Cutting"
+                  value={PlantEventTypes.CUTTING}
+                  selected={form.eventType}
+                  onPress={(value) => setForm({ ...form, eventType: value })}
+                />
+              </ScrollView>
+            </View>
+            
+            <Text style={styles.inputLabel}>Date</Text>
+            <TouchableOpacity 
+              style={styles.datePickerButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.dateText}>{formatDate(form.date)}</Text>
+            </TouchableOpacity>
+            
+            {showDatePicker && (
+              <DateTimePicker
+                value={form.date}
+                mode="date"
+                display="default"
+                onChange={handleDateChange}
+              />
+            )}
+            
+            <View style={styles.switchContainer}>
+              <Text style={styles.switchLabel}>Include Weather Data</Text>
+              <Switch
+                value={form.includeWeather}
+                onValueChange={(value) => setForm(prev => ({ ...prev, includeWeather: value }))}
+                trackColor={{ false: "#E0E0E0", true: "#A5D6A7" }}
+                thumbColor={form.includeWeather ? "#4CAF50" : "#F5F5F5"}
+              />
+            </View>
+            
+            <Text style={styles.inputLabel}>Event Image <Text style={styles.optionalText}>(Optional)</Text></Text>
             <View style={styles.imageUploadContainer}>
               <TouchableOpacity 
                 style={styles.uploadButton}
                 onPress={pickImage}
               >
                 <Text style={styles.uploadButtonText}>
-                  {imagePreview ? 'Change Image' : 'Select Image'}
+                  {imagePreview ? 'Add Another Image' : 'Add Image'}
                 </Text>
               </TouchableOpacity>
               
@@ -216,12 +289,21 @@ const CreatePlantModal = ({ visible, onClose, onPlantCreated }) => {
                     style={styles.removeImageButton}
                     onPress={() => {
                       setImagePreview(null);
-                      setForm(prev => ({ ...prev, image: null }));
+                      setForm(prev => ({ 
+                        ...prev, 
+                        images: prev.images.filter((_, i) => i !== prev.images.length - 1)
+                      }));
                     }}
                   >
                     <Text style={styles.removeImageText}>✕</Text>
                   </TouchableOpacity>
                 </View>
+              )}
+              
+              {form.images.length > 0 && (
+                <Text style={styles.imagesCountText}>
+                  {form.images.length} image{form.images.length !== 1 ? 's' : ''} selected
+                </Text>
               )}
             </View>
             
@@ -230,7 +312,7 @@ const CreatePlantModal = ({ visible, onClose, onPlantCreated }) => {
               style={[styles.input, styles.notesInput]}
               value={form.notes}
               onChangeText={(text) => setForm({ ...form, notes: text })}
-              placeholder="Add any notes about this plant"
+              placeholder="Add any notes about this event"
               placeholderTextColor="#AAAAAA"
               multiline
             />
@@ -249,7 +331,7 @@ const CreatePlantModal = ({ visible, onClose, onPlantCreated }) => {
                 disabled={isSubmitting}
               >
                 <Text style={styles.addButtonText}>
-                  {isSubmitting ? "Adding..." : "Add Plant"}
+                  {isSubmitting ? "Saving..." : "Save Event"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -283,9 +365,16 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "600",
-    marginBottom: 20,
+    marginBottom: 10,
     color: "#333333",
     textAlign: "center",
+  },
+  plantName: {
+    fontSize: 16,
+    color: "#4CAF50",
+    fontWeight: "500",
+    textAlign: "center",
+    marginBottom: 20,
   },
   inputLabel: {
     fontSize: 14,
@@ -313,6 +402,9 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
   },
   typeContainer: {
+    marginBottom: 12,
+  },
+  secondaryTypeContainer: {
     marginBottom: 24,
   },
   typeButton: {
@@ -336,6 +428,29 @@ const styles = StyleSheet.create({
   selectedTypeText: {
     color: "white",
     fontWeight: "600",
+  },
+  datePickerButton: {
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: "#F9F9F9",
+    marginBottom: 20,
+  },
+  dateText: {
+    color: "#333333",
+    fontSize: 16,
+  },
+  switchContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  switchLabel: {
+    fontSize: 14,
+    color: "#666666",
   },
   imageUploadContainer: {
     marginBottom: 20,
@@ -379,6 +494,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
   },
+  imagesCountText: {
+    textAlign: "center",
+    color: "#666666",
+    fontSize: 12,
+    marginTop: 4,
+  },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -412,4 +533,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CreatePlantModal;
+export default CreatePlantEventModal;
