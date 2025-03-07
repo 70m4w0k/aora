@@ -45,13 +45,43 @@ const TabLayout = () => {
         }}
       >
         <Tabs.Screen
+          name="home"
+          options={{
+            title: "Home",
+            headerShown: false,
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon
+                icon={icons.tipi}
+                color={color}
+                name="Home"
+                focused={focused}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="calendar"
+          options={{
+            title: "Calendar",
+            headerShown: false,
+            tabBarIcon: ({ color, focused }) => (
+              <TabIcon
+                icon={icons.calendar}
+                color={color}
+                name="Calendar"
+                focused={focused}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="shopping"
           options={{
             title: "Shopping",
             headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
-                icon={icons.search}
+                icon={icons.list}
                 color={color}
                 name="Shopping"
                 focused={focused}
@@ -66,7 +96,7 @@ const TabLayout = () => {
             headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
-                icon={icons.upload}
+                icon={icons.calculator}
                 color={color}
                 name="Expenses"
                 focused={focused}

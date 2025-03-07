@@ -11,6 +11,10 @@ import logout from "../assets/icons/logout.png";
 import eyeHide from "../assets/icons/eye-hide.png";
 import eye from "../assets/icons/eye.png";
 import play from "../assets/icons/play.png";
+import calendar from "../assets/icons/calendar.png";
+import list from "../assets/icons/list.png";
+import calculator from "../assets/icons/calculator.png";
+import tipi from "../assets/icons/tipi.png";
 
 export default {
   play,
@@ -26,4 +30,8 @@ export default {
   logout,
   eyeHide,
   eye,
+  calendar,
+  list,
+  calculator,
+  tipi,
 };
