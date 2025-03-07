@@ -45,21 +45,6 @@ const TabLayout = () => {
         }}
       >
         <Tabs.Screen
-          name="calendar"
-          options={{
-            title: "Calendar",
-            headerShown: false,
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon
-                icon={icons.bookmark}
-                color={color}
-                name="Calendar"
-                focused={focused}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="shopping"
           options={{
             title: "Shopping",

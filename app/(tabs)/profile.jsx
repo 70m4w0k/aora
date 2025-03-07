@@ -33,7 +33,9 @@ const Profile = () => {
   const { user, setUser, setIsLogged } = useGlobalContext();
   const [stats, setStats] = useState({
     completedChores: 0,
-    completedTasks: 0
+    completedTasks: 0,
+    tasksPerWeek: 0,
+    completionRate: 0
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -49,9 +51,24 @@ const Profile = () => {
       // Get chores done by this user
       const chores = await getChores();
       
+      // Calculate tasks per week (assuming tasks are tracked for 52 weeks)
+      const tasksPerWeek = userTasksDone.length > 0 
+        ? (userTasksDone.length / 52).toFixed(1) 
+        : 0;
+      
+      // Calculate completion rate (placeholder logic)
+      const totalPossibleTasks = 52 * 10; // Assuming 10 possible tasks per week
+      const completionRate = userTasksDone.length > 0 
+        ? Math.min(100, Math.round((userTasksDone.length / totalPossibleTasks) * 100)) 
+        : 0;
+      
       setStats({
         completedTasks: userTasksDone.length,
-        completedChores: chores.length // This is just a placeholder, you might need to adjust the logic
+        completedChores: chores.filter(chore => 
+          chore.assignedTo && chore.assignedTo.$id === user.$id && chore.isDone
+        ).length,
+        tasksPerWeek,
+        completionRate
       });
     } catch (error) {
       console.error("Error fetching user stats:", error);
@@ -116,6 +133,31 @@ const Profile = () => {
               bgColor="#E8F5E9"
               icon={<Text style={styles.iconText}>✓</Text>}
             />
+          </View>
+          
+          <View style={styles.statsContainer}>
+            <ProfileCard 
+              title="Tasks Per Week" 
+              value={stats.tasksPerWeek}
+              bgColor="#FFF3E0"
+              icon={<Text style={styles.iconText}>📊</Text>}
+            />
+            <ProfileCard 
+              title="Completion Rate" 
+              value={`${stats.completionRate}%`}
+              bgColor="#E1F5FE"
+              icon={<Text style={styles.iconText}>🎯</Text>}
+            />
+          </View>
+          
+          <View style={styles.progressContainer}>
+            <View style={styles.progressHeader}>
+              <Text style={styles.progressTitle}>Overall Progress</Text>
+              <Text style={styles.progressValue}>{stats.completionRate}%</Text>
+            </View>
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { width: `${stats.completionRate}%` }]} />
+            </View>
           </View>
         </View>
         

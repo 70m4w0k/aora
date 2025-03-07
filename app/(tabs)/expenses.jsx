@@ -11,7 +11,9 @@ import {
   StyleSheet,
   RefreshControl,
   ScrollView,
+  Image,
 } from "react-native";
+import * as ImagePicker from 'expo-image-picker';
 import { Picker } from "@react-native-picker/picker";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
@@ -21,6 +23,7 @@ import {
   createSettlement,
   getUserSettlements,
   getAllUsers,
+  getExpenseImageUrl,
 } from "../../lib/appwrite";
 import EmptyState from "../../components/EmptyState";
 
@@ -45,7 +48,11 @@ const ExpensesScreen = () => {
     splitBetween: [],
     category: "general",
     notes: "",
+    image: null,
   });
+  
+  // Image preview state
+  const [imagePreview, setImagePreview] = useState(null);
   
   const [settlementForm, setSettlementForm] = useState({
     amount: "",
@@ -245,6 +252,48 @@ const ExpensesScreen = () => {
     fetchExpenses();
   };
 
+  // Image picker function
+  const pickImage = async () => {
+    try {
+      // Request media library permissions
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Denied', 'You need to grant permission to access your photos');
+        return;
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+      
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        
+        // Create the image object in the format expected by appwrite.js
+        const imageFile = {
+          uri: selectedAsset.uri,
+          name: selectedAsset.fileName || 'expense_receipt.jpg',
+          mimeType: selectedAsset.mimeType || 'image/jpeg',
+          size: selectedAsset.fileSize || 0,
+        };
+        
+        setExpenseForm(prev => ({
+          ...prev,
+          image: imageFile
+        }));
+        
+        setImagePreview(selectedAsset.uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
+  };
+
   const handleAddExpense = async () => {
     if (
       expenseForm.title.trim() === "" || 
@@ -256,6 +305,8 @@ const ExpensesScreen = () => {
     }
 
     try {
+      setExpenseModalVisible(false); // Close modal first to show loading UI
+      
       await createExpense({
         ...expenseForm,
         amount: parseFloat(expenseForm.amount),
@@ -270,7 +321,9 @@ const ExpensesScreen = () => {
         splitBetween: [],
         category: "general",
         notes: "",
+        image: null,
       });
+      setImagePreview(null);
       
       await fetchExpenses();
     } catch (error) {
@@ -342,7 +395,35 @@ const ExpensesScreen = () => {
     return `€${parseFloat(amount).toFixed(2)}`;
   };
 
+  // For showing expense image in a modal
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
+  
+  // Load expense image
+  const getExpenseImage = async (imageId) => {
+    if (!imageId) return null;
+    try {
+      const imageUrl = await getExpenseImageUrl(imageId);
+      return imageUrl;
+    } catch (error) {
+      console.error("Error loading expense image:", error);
+      return null;
+    }
+  };
+  
   const renderExpenseItem = ({ item }) => {
+    const [receiptImage, setReceiptImage] = useState(null);
+    
+    // Load receipt image if exists
+    useEffect(() => {
+      if (item.imageId) {
+        (async () => {
+          const imageUrl = await getExpenseImage(item.imageId);
+          if (imageUrl) setReceiptImage(imageUrl);
+        })();
+      }
+    }, [item.imageId]);
+    
     const paidByName = item.paidBy && item.paidBy.username 
       ? item.paidBy.username 
       : getUsername(item.paidBy);
@@ -365,6 +446,23 @@ const ExpensesScreen = () => {
           <Text style={styles.itemDetail}>Split with: <Text style={styles.highlight}>{splitNames}</Text></Text>
           {item.notes && <Text style={styles.itemNotes}>{item.notes}</Text>}
           <Text style={styles.itemDate}>{new Date(item.date).toLocaleDateString()}</Text>
+          
+          {receiptImage && (
+            <TouchableOpacity 
+              style={styles.receiptThumbnailContainer}
+              onPress={() => {
+                setSelectedImage(receiptImage);
+                setImageModalVisible(true);
+              }}
+            >
+              <Image 
+                source={{ uri: receiptImage }}
+                style={styles.receiptThumbnail}
+                resizeMode="cover"
+              />
+              <Text style={styles.viewReceiptText}>View Receipt</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -425,6 +523,30 @@ const ExpensesScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Full-size image modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setImageModalVisible(false)}
+      >
+        <View style={styles.fullImageModalContainer}>
+          <TouchableOpacity 
+            style={styles.closeImageButton}
+            onPress={() => setImageModalVisible(false)}
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+          
+          {selectedImage && (
+            <Image
+              source={{ uri: selectedImage }}
+              style={styles.fullSizeImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
       <View style={styles.header}>
         <Text style={styles.title}>Expense Sharing</Text>
         <View style={styles.tabButtons}>
@@ -658,6 +780,37 @@ const ExpensesScreen = () => {
               </Picker>
             </View>
             
+            <Text style={styles.inputLabel}>Receipt Image:</Text>
+            <View style={styles.imageUploadContainer}>
+              <TouchableOpacity 
+                style={styles.uploadButton}
+                onPress={pickImage}
+              >
+                <Text style={styles.uploadButtonText}>
+                  {imagePreview ? 'Change Image' : 'Attach Receipt'}
+                </Text>
+              </TouchableOpacity>
+              
+              {imagePreview && (
+                <View style={styles.imagePreviewContainer}>
+                  <Image 
+                    source={{ uri: imagePreview }}
+                    style={styles.imagePreview}
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    style={styles.removeImageButton}
+                    onPress={() => {
+                      setImagePreview(null);
+                      setExpenseForm(prev => ({ ...prev, image: null }));
+                    }}
+                  >
+                    <Text style={styles.removeImageText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            
             <Text style={styles.inputLabel}>Notes:</Text>
             <TextInput
               style={[styles.input, styles.notesInput]}
@@ -780,6 +933,92 @@ const ExpensesScreen = () => {
 };
 
 const styles = StyleSheet.create({
+  // Receipt thumbnail styles
+  receiptThumbnailContainer: {
+    marginTop: 8,
+    alignItems: "center",
+  },
+  receiptThumbnail: {
+    width: "100%",
+    height: 100,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  viewReceiptText: {
+    color: "#4F86C6",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  // Full-size image modal styles
+  fullImageModalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullSizeImage: {
+    width: "90%",
+    height: "80%",
+  },
+  closeImageButton: {
+    position: "absolute",
+    top: 40,
+    right: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  closeButtonText: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  imageUploadContainer: {
+    marginBottom: 16,
+  },
+  uploadButton: {
+    backgroundColor: "#4F86C6",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  uploadButtonText: {
+    color: "white",
+    fontWeight: "500",
+  },
+  imagePreviewContainer: {
+    position: "relative",
+    marginVertical: 8,
+    alignItems: "center",
+  },
+  imagePreview: {
+    width: "100%",
+    height: 200,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  removeImageText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
   splitBetweenHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
