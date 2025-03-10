@@ -99,6 +99,8 @@ const TabLayout = () => {
           tabBarActiveTintColor: "#4F86C6",
           tabBarInactiveTintColor: "#666666",
           tabBarShowLabel: false,
+          headerSafeAreaTop: true, // Ensure header respects safe area
+          
           tabBarStyle: {
             backgroundColor: "#FFFFFF",
             borderTopWidth: 1,

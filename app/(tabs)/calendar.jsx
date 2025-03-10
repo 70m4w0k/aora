@@ -43,6 +43,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   tabBar: {
+    marginTop: 50,  
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
