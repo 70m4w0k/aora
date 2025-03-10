@@ -96,7 +96,9 @@ const ExpensesScreen = () => {
       const allUsers = await getAllUsers();
       setUsers(allUsers || []);
       // Default paidBy to current user
-      setExpenseForm((prev) => ({ ...prev, paidBy: user.$id }));
+      if (user) {
+        setExpenseForm((prev) => ({ ...prev, paidBy: user.$id }));
+      }
       return allUsers;
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -106,9 +108,11 @@ const ExpensesScreen = () => {
 
   const fetchExpenses = async () => {
     try {
+      if (!user) return;
       const allExpenses = currentUserFilter
         ? await getUserExpenses(user.$id)
         : await getAllExpenses();
+      console.log("allExpenses", allExpenses);
       setExpenses(allExpenses || []);
       return allExpenses;
     } catch (error) {
@@ -119,9 +123,11 @@ const ExpensesScreen = () => {
 
   const fetchSettlements = async () => {
     try {
-      const userSettlements = await getUserSettlements(user.$id);
-      setSettlements(userSettlements || []);
-      return userSettlements;
+      if (user) {
+        const userSettlements = await getUserSettlements(user.$id);
+        setSettlements(userSettlements || []);
+        return userSettlements;
+      }
     } catch (error) {
       console.error("Error fetching settlements:", error);
       return [];
@@ -437,71 +443,51 @@ const ExpensesScreen = () => {
     }
   };
 
-  const renderExpenseItem = ({ item }) => {
-    const [receiptImage, setReceiptImage] = useState(null);
-
-    // Load receipt image if exists
-    useEffect(() => {
-      if (item.imageId) {
-        (async () => {
-          const imageUrl = await getExpenseImage(item.imageId);
-          if (imageUrl) setReceiptImage(imageUrl);
-        })();
-      }
-    }, [item.imageId]);
-
-    const paidByName =
-      item.paidBy && item.paidBy.username
-        ? item.paidBy.username
-        : getUsername(item.paidBy);
-
-    const splitNames = Array.isArray(item.splitBetween)
-      ? item.splitBetween
-          .map((id) => {
-            const userId = id.$id || id;
-            return getUsername(userId);
-          })
-          .join(", ")
-      : getUsername(item.splitBetween);
-
-    return (
-      <View style={styles.itemContainer}>
-        <View style={styles.itemHeader}>
-          <Text style={styles.itemTitle}>{item.title}</Text>
-          <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
-        </View>
-        <View style={styles.itemDetails}>
-          <Text style={styles.itemDetail}>
-            Paid by: <Text style={styles.highlight}>{paidByName}</Text>
-          </Text>
-          <Text style={styles.itemDetail}>
-            Split with: <Text style={styles.highlight}>{splitNames}</Text>
-          </Text>
-          {item.notes && <Text style={styles.itemNotes}>{item.notes}</Text>}
-          <Text style={styles.itemDate}>
-            {new Date(item.date).toLocaleDateString()}
-          </Text>
-
-          {receiptImage && (
-            <TouchableOpacity
-              style={styles.receiptThumbnailContainer}
-              onPress={() => {
-                setSelectedImage(receiptImage);
-                setImageModalVisible(true);
-              }}
-            >
-              <Image
-                source={{ uri: receiptImage }}
-                style={styles.receiptThumbnail}
-                resizeMode="cover"
-              />
-              <Text style={styles.viewReceiptText}>View Receipt</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+  const renderExpenseItem = ({ item }) => (
+    <View style={styles.itemContainer}>
+      <View style={styles.itemHeader}>
+        <Text style={styles.itemTitle}>{item.title}</Text>
+        <Text style={styles.itemAmount}>
+          €{parseFloat(item.amount).toFixed(2)}
+        </Text>
       </View>
-    );
-  };
+      <View style={styles.itemDetails}>
+        <Text style={styles.itemDetail}>
+          Paid by:{" "}
+          <Text style={styles.highlight}>{getUsername(item.paidBy)}</Text>
+        </Text>
+        <Text style={styles.itemDetail}>
+          Split with:{" "}
+          <Text style={styles.highlight}>
+            {Array.isArray(item.splitBetween)
+              ? item.splitBetween.map(getUsername).join(", ")
+              : getUsername(item.splitBetween)}
+          </Text>
+        </Text>
+        {item.notes && <Text style={styles.itemNotes}>{item.notes}</Text>}
+        <Text style={styles.itemDate}>
+          {new Date(item.date).toLocaleDateString()}
+        </Text>
+
+        {item.imageId && (
+          <TouchableOpacity
+            style={styles.receiptThumbnailContainer}
+            onPress={() => {
+              setSelectedImage(item.imageId);
+              setImageModalVisible(true);
+            }}
+          >
+            <Image
+              source={{ uri: item.imageId }}
+              style={styles.receiptThumbnail}
+              resizeMode="cover"
+            />
+            <Text style={styles.viewReceiptText}>View Receipt</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
 
   const renderSettlementItem = ({ item }) => {
     const paidByName =
@@ -570,31 +556,7 @@ const ExpensesScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Full-size image modal */}
-      <Modal
-        visible={imageModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setImageModalVisible(false)}
-      >
-        <View style={styles.fullImageModalContainer}>
-          <TouchableOpacity
-            style={styles.closeImageButton}
-            onPress={() => setImageModalVisible(false)}
-          >
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-
-          {selectedImage && (
-            <Image
-              source={{ uri: selectedImage }}
-              style={styles.fullSizeImage}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
       <View style={styles.header}>
         <Text style={styles.title}>Expense Sharing</Text>
         <View style={styles.tabButtons}>
@@ -632,8 +594,7 @@ const ExpensesScreen = () => {
           </TouchableOpacity>
         </View>
       </View>
-
-      {activeTab === "expenses" && (
+      {activeTab === "expenses" ? (
         <>
           <View style={styles.actionBar}>
             <TouchableOpacity
@@ -659,73 +620,40 @@ const ExpensesScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-
           <FlatList
             data={expenses}
             renderItem={renderExpenseItem}
             keyExtractor={(item) => item.$id}
             contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <EmptyState
-                title="No Expenses"
-                subtitle="Add your first expense to get started"
-              />
-            }
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
+            ListEmptyComponent={
+              <EmptyState
+                message="No expenses found"
+                subMessage="Add your first expense to get started"
+              />
+            }
+            removeClippedSubviews={false}
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={10}
           />
         </>
-      )}
-
-      {activeTab === "balances" && (
-        <ScrollView
-          style={styles.balancesContainer}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          <View style={styles.balanceSummary}>
-            <Text style={styles.balanceSummaryTitle}>Current Balances</Text>
-            <Text style={styles.balanceSummaryText}>
-              Positive balances indicate money owed to you. Negative balances
-              indicate money you owe others.
-            </Text>
-          </View>
-
+      ) : (
+        <View style={styles.balancesContainer}>
           <FlatList
             data={Object.values(balances)}
             renderItem={renderBalanceItem}
             keyExtractor={(item) => item.userId}
-            scrollEnabled={false}
-            contentContainerStyle={styles.balancesList}
-            ListEmptyComponent={
-              <EmptyState
-                title="No Balance Data"
-                subtitle="Add expenses to see balances"
-              />
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
           />
-
-          <View style={styles.balanceActions}>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                styles.settlementButton,
-                { flex: 1 },
-              ]}
-              onPress={() => {
-                setSettlementModalVisible(true);
-                setActiveTab("expenses");
-              }}
-            >
-              <Text style={styles.actionButtonText}>Settle Up</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+        </View>
       )}
-
-      {/* Add Expense Modal */}
+      {/* Modals */}
       <Modal
         visible={expenseModalVisible}
         animationType="slide"
@@ -1014,6 +942,31 @@ const ExpensesScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Full-size image modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setImageModalVisible(false)}
+      >
+        <View style={styles.fullImageModalContainer}>
+          <TouchableOpacity
+            style={styles.closeImageButton}
+            onPress={() => setImageModalVisible(false)}
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+
+          {selectedImage && (
+            <Image
+              source={{ uri: selectedImage }}
+              style={styles.fullSizeImage}
+              resizeMode="contain"
+            />
+          )}
         </View>
       </Modal>
     </SafeAreaView>
