@@ -13,7 +13,7 @@ import {
   ScrollView,
   Image,
 } from "react-native";
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from "expo-image-picker";
 import { Picker } from "@react-native-picker/picker";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
@@ -35,11 +35,11 @@ const ExpensesScreen = () => {
   const [users, setUsers] = useState([]);
   const [balances, setBalances] = useState({});
   const [refreshing, setRefreshing] = useState(false);
-  
+
   // Modal states
   const [expenseModalVisible, setExpenseModalVisible] = useState(false);
   const [settlementModalVisible, setSettlementModalVisible] = useState(false);
-  
+
   // Form states
   const [expenseForm, setExpenseForm] = useState({
     title: "",
@@ -50,10 +50,10 @@ const ExpensesScreen = () => {
     notes: "",
     image: null,
   });
-  
+
   // Image preview state
   const [imagePreview, setImagePreview] = useState(null);
-  
+
   const [settlementForm, setSettlementForm] = useState({
     amount: "",
     paidBy: "",
@@ -84,7 +84,10 @@ const ExpensesScreen = () => {
       }
     } catch (error) {
       console.error("Error fetching data:", error);
-      Alert.alert("Error", "Failed to load expenses data. Pull down to refresh and try again.");
+      Alert.alert(
+        "Error",
+        "Failed to load expenses data. Pull down to refresh and try again."
+      );
     }
   };
 
@@ -93,7 +96,7 @@ const ExpensesScreen = () => {
       const allUsers = await getAllUsers();
       setUsers(allUsers || []);
       // Default paidBy to current user
-      setExpenseForm(prev => ({ ...prev, paidBy: user.$id }));
+      setExpenseForm((prev) => ({ ...prev, paidBy: user.$id }));
       return allUsers;
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -103,7 +106,7 @@ const ExpensesScreen = () => {
 
   const fetchExpenses = async () => {
     try {
-      const allExpenses = currentUserFilter 
+      const allExpenses = currentUserFilter
         ? await getUserExpenses(user.$id)
         : await getAllExpenses();
       setExpenses(allExpenses || []);
@@ -133,108 +136,127 @@ const ExpensesScreen = () => {
 
   const calculateBalances = () => {
     try {
-      console.log("Calculating balances with users:", users.length, "expenses:", expenses.length, "settlements:", settlements.length);
-      
+      console.log(
+        "Calculating balances with users:",
+        users.length,
+        "expenses:",
+        expenses.length,
+        "settlements:",
+        settlements.length
+      );
+
       const newBalances = {};
-      
+
       // Initialize balances for all users
-      users.forEach(u => {
-        newBalances[u.$id] = { 
-          userId: u.$id, 
-          username: u.username, 
+      users.forEach((u) => {
+        newBalances[u.$id] = {
+          userId: u.$id,
+          username: u.username,
           balance: 0,
           color: u.color,
         };
       });
-      
+
       // Process expenses
       if (expenses && expenses.length > 0) {
-        expenses.forEach(expense => {
+        expenses.forEach((expense) => {
           if (!expense.amount) {
             console.log("Invalid expense amount:", expense);
             return;
           }
-          
+
           const amount = parseFloat(expense.amount);
-          
+
           // Handle different ways paidBy might be structured
           let paidById;
           if (expense.paidBy) {
-            paidById = typeof expense.paidBy === 'object' ? expense.paidBy.$id : expense.paidBy;
+            paidById =
+              typeof expense.paidBy === "object"
+                ? expense.paidBy.$id
+                : expense.paidBy;
           } else {
             console.log("Invalid paidBy:", expense);
             return;
           }
-          
+
           // Handle different ways splitBetween might be structured
           let splitBetween = [];
           if (expense.splitBetween) {
-            splitBetween = Array.isArray(expense.splitBetween) 
-              ? expense.splitBetween 
+            splitBetween = Array.isArray(expense.splitBetween)
+              ? expense.splitBetween
               : [expense.splitBetween];
           }
-          
+
           const splitCount = splitBetween.length;
           if (splitCount === 0) return; // Skip if no split
-          
+
           const amountPerPerson = amount / splitCount;
-          
+
           // Add amount to the person who paid
           if (newBalances[paidById]) {
             newBalances[paidById].balance += amount;
           }
-          
+
           // Subtract from each person who owes
-          splitBetween.forEach(personId => {
-            const id = typeof personId === 'object' ? personId.$id : personId;
+          splitBetween.forEach((personId) => {
+            const id = typeof personId === "object" ? personId.$id : personId;
             if (newBalances[id]) {
               newBalances[id].balance -= amountPerPerson;
             }
           });
         });
       }
-      
+
       // Process settlements
       if (settlements && settlements.length > 0) {
-        settlements.forEach(settlement => {
+        settlements.forEach((settlement) => {
           if (!settlement.amount) {
             console.log("Invalid settlement amount:", settlement);
             return;
           }
-          
+
           const amount = parseFloat(settlement.amount);
-          
+
           // Handle different ways paidBy might be structured
           let paidById;
           if (settlement.paidBy) {
-            paidById = typeof settlement.paidBy === 'object' ? settlement.paidBy.$id : settlement.paidBy;
+            paidById =
+              typeof settlement.paidBy === "object"
+                ? settlement.paidBy.$id
+                : settlement.paidBy;
           } else {
             console.log("Invalid paidBy in settlement:", settlement);
             return;
           }
-          
+
           // Handle different ways paidTo might be structured
           let paidToId;
           if (settlement.paidTo) {
-            paidToId = typeof settlement.paidTo === 'object' ? settlement.paidTo.$id : settlement.paidTo;
+            paidToId =
+              typeof settlement.paidTo === "object"
+                ? settlement.paidTo.$id
+                : settlement.paidTo;
           } else {
             console.log("Invalid paidTo in settlement:", settlement);
             return;
           }
-          
+
           // The person who paid the settlement decreases their balance
           if (newBalances[paidById]) {
             newBalances[paidById].balance -= amount;
           }
-          
+
           // The person who received the settlement increases their balance
           if (newBalances[paidToId]) {
             newBalances[paidToId].balance += amount;
           }
         });
       }
-      
-      console.log("Balance calculation completed:", Object.keys(newBalances).length);
+
+      console.log(
+        "Balance calculation completed:",
+        Object.keys(newBalances).length
+      );
       setBalances(newBalances);
     } catch (error) {
       console.error("Error calculating balances:", error);
@@ -256,47 +278,51 @@ const ExpensesScreen = () => {
   const pickImage = async () => {
     try {
       // Request media library permissions
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
       if (!permissionResult.granted) {
-        Alert.alert('Permission Denied', 'You need to grant permission to access your photos');
+        Alert.alert(
+          "Permission Denied",
+          "You need to grant permission to access your photos"
+        );
         return;
       }
-      
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
       });
-      
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selectedAsset = result.assets[0];
-        
+
         // Create the image object in the format expected by appwrite.js
         const imageFile = {
           uri: selectedAsset.uri,
-          name: selectedAsset.fileName || 'expense_receipt.jpg',
-          mimeType: selectedAsset.mimeType || 'image/jpeg',
+          name: selectedAsset.fileName || "expense_receipt.jpg",
+          mimeType: selectedAsset.mimeType || "image/jpeg",
           size: selectedAsset.fileSize || 0,
         };
-        
-        setExpenseForm(prev => ({
+
+        setExpenseForm((prev) => ({
           ...prev,
-          image: imageFile
+          image: imageFile,
         }));
-        
+
         setImagePreview(selectedAsset.uri);
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select image. Please try again.');
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to select image. Please try again.");
     }
   };
 
   const handleAddExpense = async () => {
     if (
-      expenseForm.title.trim() === "" || 
+      expenseForm.title.trim() === "" ||
       expenseForm.amount.trim() === "" ||
       !expenseForm.paidBy ||
       expenseForm.splitBetween.length === 0
@@ -306,13 +332,13 @@ const ExpensesScreen = () => {
 
     try {
       setExpenseModalVisible(false); // Close modal first to show loading UI
-      
+
       await createExpense({
         ...expenseForm,
         amount: parseFloat(expenseForm.amount),
         date: new Date().toISOString(),
       });
-      
+
       setExpenseModalVisible(false);
       setExpenseForm({
         title: "",
@@ -324,7 +350,7 @@ const ExpensesScreen = () => {
         image: null,
       });
       setImagePreview(null);
-      
+
       await fetchExpenses();
     } catch (error) {
       Alert.alert("Error", error.message);
@@ -339,7 +365,7 @@ const ExpensesScreen = () => {
       settlementForm.paidBy === settlementForm.paidTo
     ) {
       return Alert.alert(
-        "Error", 
+        "Error",
         "Please fill in all fields and ensure payer and recipient are different"
       );
     }
@@ -350,7 +376,7 @@ const ExpensesScreen = () => {
         amount: parseFloat(settlementForm.amount),
         date: new Date().toISOString(),
       });
-      
+
       setSettlementModalVisible(false);
       setSettlementForm({
         amount: "",
@@ -358,7 +384,7 @@ const ExpensesScreen = () => {
         paidTo: "",
         notes: "",
       });
-      
+
       await Promise.all([fetchExpenses(), fetchSettlements()]);
     } catch (error) {
       Alert.alert("Error", error.message);
@@ -366,20 +392,20 @@ const ExpensesScreen = () => {
   };
 
   const toggleUserInSplit = (userId) => {
-    setExpenseForm(prev => {
+    setExpenseForm((prev) => {
       const splitBetween = [...prev.splitBetween];
-      
+
       if (splitBetween.includes(userId)) {
         // Remove user if already in split
         return {
           ...prev,
-          splitBetween: splitBetween.filter(id => id !== userId)
+          splitBetween: splitBetween.filter((id) => id !== userId),
         };
       } else {
         // Add user if not in split
         return {
           ...prev,
-          splitBetween: [...splitBetween, userId]
+          splitBetween: [...splitBetween, userId],
         };
       }
     });
@@ -387,7 +413,7 @@ const ExpensesScreen = () => {
 
   const getUsername = (userId) => {
     if (!userId) return "Unknown";
-    const user = users.find(u => u.$id === userId);
+    const user = users.find((u) => u.$id === userId);
     return user ? user.username : "Unknown";
   };
 
@@ -398,7 +424,7 @@ const ExpensesScreen = () => {
   // For showing expense image in a modal
   const [selectedImage, setSelectedImage] = useState(null);
   const [imageModalVisible, setImageModalVisible] = useState(false);
-  
+
   // Load expense image
   const getExpenseImage = async (imageId) => {
     if (!imageId) return null;
@@ -410,10 +436,10 @@ const ExpensesScreen = () => {
       return null;
     }
   };
-  
+
   const renderExpenseItem = ({ item }) => {
     const [receiptImage, setReceiptImage] = useState(null);
-    
+
     // Load receipt image if exists
     useEffect(() => {
       if (item.imageId) {
@@ -423,18 +449,21 @@ const ExpensesScreen = () => {
         })();
       }
     }, [item.imageId]);
-    
-    const paidByName = item.paidBy && item.paidBy.username 
-      ? item.paidBy.username 
-      : getUsername(item.paidBy);
-    
-    const splitNames = Array.isArray(item.splitBetween) 
-      ? item.splitBetween.map(id => {
-          const userId = id.$id || id;
-          return getUsername(userId);
-        }).join(", ")
+
+    const paidByName =
+      item.paidBy && item.paidBy.username
+        ? item.paidBy.username
+        : getUsername(item.paidBy);
+
+    const splitNames = Array.isArray(item.splitBetween)
+      ? item.splitBetween
+          .map((id) => {
+            const userId = id.$id || id;
+            return getUsername(userId);
+          })
+          .join(", ")
       : getUsername(item.splitBetween);
-    
+
     return (
       <View style={styles.itemContainer}>
         <View style={styles.itemHeader}>
@@ -442,20 +471,26 @@ const ExpensesScreen = () => {
           <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
         </View>
         <View style={styles.itemDetails}>
-          <Text style={styles.itemDetail}>Paid by: <Text style={styles.highlight}>{paidByName}</Text></Text>
-          <Text style={styles.itemDetail}>Split with: <Text style={styles.highlight}>{splitNames}</Text></Text>
+          <Text style={styles.itemDetail}>
+            Paid by: <Text style={styles.highlight}>{paidByName}</Text>
+          </Text>
+          <Text style={styles.itemDetail}>
+            Split with: <Text style={styles.highlight}>{splitNames}</Text>
+          </Text>
           {item.notes && <Text style={styles.itemNotes}>{item.notes}</Text>}
-          <Text style={styles.itemDate}>{new Date(item.date).toLocaleDateString()}</Text>
-          
+          <Text style={styles.itemDate}>
+            {new Date(item.date).toLocaleDateString()}
+          </Text>
+
           {receiptImage && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.receiptThumbnailContainer}
               onPress={() => {
                 setSelectedImage(receiptImage);
                 setImageModalVisible(true);
               }}
             >
-              <Image 
+              <Image
                 source={{ uri: receiptImage }}
                 style={styles.receiptThumbnail}
                 resizeMode="cover"
@@ -469,14 +504,16 @@ const ExpensesScreen = () => {
   };
 
   const renderSettlementItem = ({ item }) => {
-    const paidByName = item.paidBy && item.paidBy.username 
-      ? item.paidBy.username 
-      : getUsername(item.paidBy);
-    
-    const paidToName = item.paidTo && item.paidTo.username 
-      ? item.paidTo.username 
-      : getUsername(item.paidTo);
-    
+    const paidByName =
+      item.paidBy && item.paidBy.username
+        ? item.paidBy.username
+        : getUsername(item.paidBy);
+
+    const paidToName =
+      item.paidTo && item.paidTo.username
+        ? item.paidTo.username
+        : getUsername(item.paidTo);
+
     return (
       <View style={styles.itemContainer}>
         <View style={styles.itemHeader}>
@@ -485,10 +522,13 @@ const ExpensesScreen = () => {
         </View>
         <View style={styles.itemDetails}>
           <Text style={styles.itemDetail}>
-            <Text style={styles.highlight}>{paidByName}</Text> paid <Text style={styles.highlight}>{paidToName}</Text>
+            <Text style={styles.highlight}>{paidByName}</Text> paid{" "}
+            <Text style={styles.highlight}>{paidToName}</Text>
           </Text>
           {item.notes && <Text style={styles.itemNotes}>{item.notes}</Text>}
-          <Text style={styles.itemDate}>{new Date(item.date).toLocaleDateString()}</Text>
+          <Text style={styles.itemDate}>
+            {new Date(item.date).toLocaleDateString()}
+          </Text>
         </View>
       </View>
     );
@@ -499,23 +539,31 @@ const ExpensesScreen = () => {
     const isPositive = balance > 0;
     const isNegative = balance < 0;
     const isZero = balance === 0;
-    
+
     return (
-      <View style={[
-        styles.balanceItem,
-        { borderLeftColor: item.color || "#757575" }
-      ]}>
+      <View
+        style={[
+          styles.balanceItem,
+          { borderLeftColor: item.color || "#757575" },
+        ]}
+      >
         <Text style={styles.balanceUsername}>{item.username}</Text>
-        <Text style={[
-          styles.balanceAmount,
-          isPositive && styles.positiveBalance,
-          isNegative && styles.negativeBalance,
-          isZero && styles.zeroBalance,
-        ]}>
+        <Text
+          style={[
+            styles.balanceAmount,
+            isPositive && styles.positiveBalance,
+            isNegative && styles.negativeBalance,
+            isZero && styles.zeroBalance,
+          ]}
+        >
           {formatCurrency(balance)}
         </Text>
         <Text style={styles.balanceStatus}>
-          {isPositive ? "is owed money" : isNegative ? "owes money" : "settled up"}
+          {isPositive
+            ? "is owed money"
+            : isNegative
+            ? "owes money"
+            : "settled up"}
         </Text>
       </View>
     );
@@ -531,13 +579,13 @@ const ExpensesScreen = () => {
         onRequestClose={() => setImageModalVisible(false)}
       >
         <View style={styles.fullImageModalContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.closeImageButton}
             onPress={() => setImageModalVisible(false)}
           >
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
-          
+
           {selectedImage && (
             <Image
               source={{ uri: selectedImage }}
@@ -553,14 +601,14 @@ const ExpensesScreen = () => {
           <TouchableOpacity
             style={[
               styles.tabButton,
-              activeTab === "expenses" && styles.activeTabButton
+              activeTab === "expenses" && styles.activeTabButton,
             ]}
             onPress={() => setActiveTab("expenses")}
           >
             <Text
               style={[
                 styles.tabButtonText,
-                activeTab === "expenses" && styles.activeTabButtonText
+                activeTab === "expenses" && styles.activeTabButtonText,
               ]}
             >
               Expenses
@@ -569,14 +617,14 @@ const ExpensesScreen = () => {
           <TouchableOpacity
             style={[
               styles.tabButton,
-              activeTab === "balances" && styles.activeTabButton
+              activeTab === "balances" && styles.activeTabButton,
             ]}
             onPress={() => setActiveTab("balances")}
           >
             <Text
               style={[
                 styles.tabButtonText,
-                activeTab === "balances" && styles.activeTabButtonText
+                activeTab === "balances" && styles.activeTabButtonText,
               ]}
             >
               Balances
@@ -640,8 +688,8 @@ const ExpensesScreen = () => {
           <View style={styles.balanceSummary}>
             <Text style={styles.balanceSummaryTitle}>Current Balances</Text>
             <Text style={styles.balanceSummaryText}>
-              Positive balances indicate money owed to you.
-              Negative balances indicate money you owe others.
+              Positive balances indicate money owed to you. Negative balances
+              indicate money you owe others.
             </Text>
           </View>
 
@@ -661,7 +709,11 @@ const ExpensesScreen = () => {
 
           <View style={styles.balanceActions}>
             <TouchableOpacity
-              style={[styles.actionButton, styles.settlementButton, {flex: 1}]}
+              style={[
+                styles.actionButton,
+                styles.settlementButton,
+                { flex: 1 },
+              ]}
               onPress={() => {
                 setSettlementModalVisible(true);
                 setActiveTab("expenses");
@@ -681,160 +733,188 @@ const ExpensesScreen = () => {
         onRequestClose={() => setExpenseModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-      <View style={styles.modalContent}>
-        <Text style={styles.modalTitle}>Add New Expense</Text>
-        
-        <Text style={styles.inputLabel}>Title:</Text>
-        <TextInput
-          style={styles.input}
-          value={expenseForm.title}
-          onChangeText={(text) => setExpenseForm({ ...expenseForm, title: text })}
-          placeholder="Enter expense title"
-          placeholderTextColor="#AAAAAA"
-        />
-        
-        <Text style={styles.inputLabel}>Amount (€):</Text>
-        <TextInput
-          style={styles.input}
-          value={expenseForm.amount}
-          onChangeText={(text) => setExpenseForm({ ...expenseForm, amount: text })}
-          keyboardType="numeric"
-          placeholder="0.00"
-          placeholderTextColor="#AAAAAA"
-        />
-        
-        <Text style={styles.inputLabel}>Paid By:</Text>
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={expenseForm.paidBy}
-            style={styles.picker}
-            onValueChange={(value) => setExpenseForm({ ...expenseForm, paidBy: value })}
-            dropdownIconColor="#4F86C6"
-            mode="dropdown"
-          >
-            {users.map((user) => (
-              <Picker.Item
-                key={user.$id}
-                label={user.username}
-                value={user.$id}
-                color="#333333"
-              />
-            ))}
-          </Picker>
-        </View>
-        
-        <View style={styles.splitBetweenHeader}>
-          <Text style={styles.inputLabel}>Split Between: <Text style={styles.optionalText}>(Select who shares this expense)</Text></Text>
-          <TouchableOpacity
-            style={styles.selectAllButton}
-            onPress={() => {
-              const allUserIds = users.map(u => u.$id);
-              setExpenseForm(prev => ({
-                ...prev,
-                splitBetween: prev.splitBetween.length === users.length ? [] : allUserIds
-              }));
-            }}
-          >
-            <Text style={styles.selectAllButtonText}>
-              {expenseForm.splitBetween.length === users.length ? "Deselect All" : "Select All"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.splitUsers}>
-          {users.map((user) => (
-            <TouchableOpacity
-              key={user.$id}
-              style={[
-                styles.userChip,
-                expenseForm.splitBetween.includes(user.$id) && styles.selectedUserChip
-              ]}
-              onPress={() => toggleUserInSplit(user.$id)}
+          <View style={styles.modalContent}>
+            <ScrollView
+              style={{ width: "100%" }}
+              contentContainerStyle={{ flexGrow: 1 }}
+              showsVerticalScrollIndicator={false}
             >
-              <Text 
-                style={[
-                  styles.userChipText,
-                  expenseForm.splitBetween.includes(user.$id) && styles.selectedUserChipText
-                ]}
-              >
-                {user.username}
-                {expenseForm.paidBy === user.$id && " (Payer)"}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-            
-            <Text style={styles.inputLabel}>Category:</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={expenseForm.category}
-                style={styles.picker}
-                onValueChange={(value) => setExpenseForm({ ...expenseForm, category: value })}
-              >
-                <Picker.Item label="General" value="general" />
-                <Picker.Item label="Food" value="food" />
-                <Picker.Item label="Rent" value="rent" />
-                <Picker.Item label="Utilities" value="utilities" />
-                <Picker.Item label="Transportation" value="transportation" />
-                <Picker.Item label="Entertainment" value="entertainment" />
-                <Picker.Item label="Other" value="other" />
-              </Picker>
-            </View>
-            
-            <Text style={styles.inputLabel}>Receipt Image:</Text>
-            <View style={styles.imageUploadContainer}>
-              <TouchableOpacity 
-                style={styles.uploadButton}
-                onPress={pickImage}
-              >
-                <Text style={styles.uploadButtonText}>
-                  {imagePreview ? 'Change Image' : 'Attach Receipt'}
+              <Text style={styles.modalTitle}>Add New Expense</Text>
+
+              <Text style={styles.inputLabel}>Title:</Text>
+              <TextInput
+                style={styles.input}
+                value={expenseForm.title}
+                onChangeText={(text) =>
+                  setExpenseForm({ ...expenseForm, title: text })
+                }
+                placeholder="Enter expense title"
+                placeholderTextColor="#AAAAAA"
+              />
+
+              <Text style={styles.inputLabel}>Amount (€):</Text>
+              <TextInput
+                style={styles.input}
+                value={expenseForm.amount}
+                onChangeText={(text) =>
+                  setExpenseForm({ ...expenseForm, amount: text })
+                }
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor="#AAAAAA"
+              />
+
+              <Text style={styles.inputLabel}>Paid By:</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={expenseForm.paidBy}
+                  style={styles.picker}
+                  onValueChange={(value) =>
+                    setExpenseForm({ ...expenseForm, paidBy: value })
+                  }
+                  dropdownIconColor="#4F86C6"
+                  mode="dropdown"
+                >
+                  {users.map((user) => (
+                    <Picker.Item
+                      key={user.$id}
+                      label={user.username}
+                      value={user.$id}
+                      color="#333333"
+                    />
+                  ))}
+                </Picker>
+              </View>
+
+              <View style={styles.splitBetweenHeader}>
+                <Text style={styles.inputLabel}>
+                  Split Between:{" "}
+                  <Text style={styles.optionalText}>
+                    (Select who shares this expense)
+                  </Text>
                 </Text>
-              </TouchableOpacity>
-              
-              {imagePreview && (
-                <View style={styles.imagePreviewContainer}>
-                  <Image 
-                    source={{ uri: imagePreview }}
-                    style={styles.imagePreview}
-                    resizeMode="cover"
-                  />
+                <TouchableOpacity
+                  style={styles.selectAllButton}
+                  onPress={() => {
+                    const allUserIds = users.map((u) => u.$id);
+                    setExpenseForm((prev) => ({
+                      ...prev,
+                      splitBetween:
+                        prev.splitBetween.length === users.length
+                          ? []
+                          : allUserIds,
+                    }));
+                  }}
+                >
+                  <Text style={styles.selectAllButtonText}>
+                    {expenseForm.splitBetween.length === users.length
+                      ? "Deselect All"
+                      : "Select All"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.splitUsers}>
+                {users.map((user) => (
                   <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={() => {
-                      setImagePreview(null);
-                      setExpenseForm(prev => ({ ...prev, image: null }));
-                    }}
+                    key={user.$id}
+                    style={[
+                      styles.userChip,
+                      expenseForm.splitBetween.includes(user.$id) &&
+                        styles.selectedUserChip,
+                    ]}
+                    onPress={() => toggleUserInSplit(user.$id)}
                   >
-                    <Text style={styles.removeImageText}>✕</Text>
+                    <Text
+                      style={[
+                        styles.userChipText,
+                        expenseForm.splitBetween.includes(user.$id) &&
+                          styles.selectedUserChipText,
+                      ]}
+                    >
+                      {user.username}
+                      {expenseForm.paidBy === user.$id && " (Payer)"}
+                    </Text>
                   </TouchableOpacity>
-                </View>
-              )}
-            </View>
-            
-            <Text style={styles.inputLabel}>Notes:</Text>
-            <TextInput
-              style={[styles.input, styles.notesInput]}
-              value={expenseForm.notes}
-              onChangeText={(text) => setExpenseForm({ ...expenseForm, notes: text })}
-              placeholder="Add optional notes"
-              placeholderTextColor="#888"
-              multiline
-            />
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setExpenseModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleAddExpense}
-              >
-                <Text style={styles.modalButtonText}>Add</Text>
-              </TouchableOpacity>
-            </View>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Category:</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={expenseForm.category}
+                  style={styles.picker}
+                  onValueChange={(value) =>
+                    setExpenseForm({ ...expenseForm, category: value })
+                  }
+                >
+                  <Picker.Item label="General" value="general" />
+                  <Picker.Item label="Food" value="food" />
+                  <Picker.Item label="Rent" value="rent" />
+                  <Picker.Item label="Utilities" value="utilities" />
+                  <Picker.Item label="Transportation" value="transportation" />
+                  <Picker.Item label="Entertainment" value="entertainment" />
+                  <Picker.Item label="Other" value="other" />
+                </Picker>
+              </View>
+
+              <Text style={styles.inputLabel}>Receipt Image:</Text>
+              <View style={styles.imageUploadContainer}>
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={pickImage}
+                >
+                  <Text style={styles.uploadButtonText}>
+                    {imagePreview ? "Change Image" : "Attach Receipt"}
+                  </Text>
+                </TouchableOpacity>
+
+                {imagePreview && (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image
+                      source={{ uri: imagePreview }}
+                      style={styles.imagePreview}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => {
+                        setImagePreview(null);
+                        setExpenseForm((prev) => ({ ...prev, image: null }));
+                      }}
+                    >
+                      <Text style={styles.removeImageText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.inputLabel}>Notes:</Text>
+              <TextInput
+                style={[styles.input, styles.notesInput]}
+                value={expenseForm.notes}
+                onChangeText={(text) =>
+                  setExpenseForm({ ...expenseForm, notes: text })
+                }
+                placeholder="Add optional notes"
+                placeholderTextColor="#888"
+                multiline
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setExpenseModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={handleAddExpense}
+                >
+                  <Text style={styles.modalButtonText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -849,23 +929,27 @@ const ExpensesScreen = () => {
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Settle Up</Text>
-            
+
             <Text style={styles.inputLabel}>Amount (€):</Text>
             <TextInput
               style={styles.input}
               value={settlementForm.amount}
-              onChangeText={(text) => setSettlementForm({ ...settlementForm, amount: text })}
+              onChangeText={(text) =>
+                setSettlementForm({ ...settlementForm, amount: text })
+              }
               keyboardType="numeric"
               placeholder="0.00"
               placeholderTextColor="#AAAAAA"
             />
-            
+
             <Text style={styles.inputLabel}>Paid By:</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={settlementForm.paidBy}
                 style={styles.picker}
-                onValueChange={(value) => setSettlementForm({ ...settlementForm, paidBy: value })}
+                onValueChange={(value) =>
+                  setSettlementForm({ ...settlementForm, paidBy: value })
+                }
                 dropdownIconColor="#4F86C6"
                 mode="dropdown"
               >
@@ -879,13 +963,15 @@ const ExpensesScreen = () => {
                 ))}
               </Picker>
             </View>
-            
+
             <Text style={styles.inputLabel}>Paid To:</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={settlementForm.paidTo}
                 style={styles.picker}
-                onValueChange={(value) => setSettlementForm({ ...settlementForm, paidTo: value })}
+                onValueChange={(value) =>
+                  setSettlementForm({ ...settlementForm, paidTo: value })
+                }
                 dropdownIconColor="#4F86C6"
                 mode="dropdown"
               >
@@ -900,17 +986,19 @@ const ExpensesScreen = () => {
                 ))}
               </Picker>
             </View>
-            
+
             <Text style={styles.inputLabel}>Notes:</Text>
             <TextInput
               style={[styles.input, styles.notesInput]}
               value={settlementForm.notes}
-              onChangeText={(text) => setSettlementForm({ ...settlementForm, notes: text })}
+              onChangeText={(text) =>
+                setSettlementForm({ ...settlementForm, notes: text })
+              }
               placeholder="Add optional notes"
               placeholderTextColor="#AAAAAA"
               multiline
             />
-            
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -1245,20 +1333,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    paddingVertical: 20,
   },
   modalContent: {
     backgroundColor: "white",
-    borderRadius: 12,
-    padding: 24,
+    borderRadius: 20,
+    padding: 20,
     width: "90%",
-    maxWidth: 400,
-    maxHeight: "80%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    alignSelf: "center",
+    maxHeight: "100%",
   },
   modalTitle: {
     fontSize: 20,
