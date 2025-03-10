@@ -10,7 +10,6 @@ import {
   TextInput,
   StyleSheet,
   RefreshControl,
-  Pressable,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import BouncyCheckbox from "react-native-bouncy-checkbox";

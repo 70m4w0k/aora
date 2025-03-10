@@ -13,10 +13,10 @@ import { router } from "expo-router";
 
 import { useGlobalContext } from "../../context/GlobalProvider";
 import { 
-  getChores, 
-  getLatestChoresImplByChoreId,
   getAllShoppingItems,
-  getAllExpenses
+  getAllExpenses,
+  getAllTasks,
+  getLatestTasksImplByTaskId
 } from "../../lib/appwrite";
 
 const DashboardCard = ({ title, count, onPress, icon, color }) => (
@@ -50,14 +50,14 @@ const Home = () => {
 
   const fetchStats = async () => {
     try {
-      // Get chores stats
-      const chores = await getChores();
+      // Get tasks stats
+      const tasks = await getAllTasks();
       let pendingCount = 0;
       let completedCount = 0;
-      
-      if (chores && chores.length > 0) {
-        await Promise.all(chores.map(async (chore) => {
-          const latestImpl = await getLatestChoresImplByChoreId(chore.$id);
+
+      if (tasks && tasks.length > 0) {
+        await Promise.all(tasks.map(async (task) => {
+          const latestImpl = await getLatestTasksImplByTaskId(task.$id);
           if (latestImpl.length > 0) {
             completedCount++;
           } else {
@@ -65,7 +65,7 @@ const Home = () => {
           }
         }));
       }
-      
+
       // Get shopping items count
       let shoppingCount = 0;
       try {

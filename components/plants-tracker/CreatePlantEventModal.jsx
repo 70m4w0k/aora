@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
 import { useGlobalContext } from "../../context/GlobalProvider";
-import DateTimePicker from '@react-native-community/datetimepicker';
+// import DateTimePicker from '@react-native-community/datetimepicker';
 import { createPlantEvent, PlantEventTypes } from "../../lib/appwrite";
 
 const EventTypeButton = ({ label, value, selected, onPress }) => (
