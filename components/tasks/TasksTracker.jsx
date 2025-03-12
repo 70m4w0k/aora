@@ -60,6 +60,9 @@ const TasksTracker = ({ initialTasks }) => {
   // For animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Add state to track which stats are expanded
+  const [expandedStats, setExpandedStats] = useState({});
+
   useEffect(() => {
     // Fade in animation
     Animated.timing(fadeAnim, {
@@ -236,25 +239,55 @@ const TasksTracker = ({ initialTasks }) => {
 
     const stats = users.map((user) => {
       let totalCompleted = 0;
+      const completedTasks = [];
 
       tasks.forEach((task) => {
         const userCompletions = task.completedWeeks.filter(
           (completion) => completion && completion.$id === user.$id
-        ).length;
+        );
 
-        totalCompleted += userCompletions;
+        const completionCount = userCompletions.length;
+
+        if (completionCount > 0) {
+          // Store detailed info about this task completion
+          completedTasks.push({
+            taskId: task.id,
+            taskName: task.name,
+            completionCount: completionCount,
+            // Find the latest completion week
+            latestCompletionWeek: task.completedWeeks.findIndex(
+              (completion) => completion && completion.$id === user.$id
+            ),
+          });
+
+          totalCompleted += completionCount;
+        }
       });
 
       return {
         user,
         completedCount: totalCompleted,
         color: user.color || "#4F86C6",
+        completedTasks: completedTasks.sort(
+          (a, b) =>
+            // Sort by most recently completed
+            b.latestCompletionWeek - a.latestCompletionWeek
+        ),
       };
     });
 
     return stats.sort((a, b) => b.completedCount - a.completedCount);
   }, [tasks, users]);
 
+  // Toggle expanded state for a user
+  const toggleStatsExpanded = (userId) => {
+    setExpandedStats((prev) => ({
+      ...prev,
+      [userId]: !prev[userId],
+    }));
+  };
+
+  // Add this function back
   const toggleViewMode = () => {
     setViewMode((prevMode) =>
       prevMode === VIEW_MODES.CALENDAR ? VIEW_MODES.LIST : VIEW_MODES.CALENDAR
@@ -718,7 +751,7 @@ const TasksTracker = ({ initialTasks }) => {
             </View>
           </TouchableOpacity>
 
-          {/* User Stats Section with Enhanced UI */}
+          {/* Enhanced User Stats Section with Task Details */}
           <View style={styles.fancyStatsContainer}>
             <Text style={styles.fancyStatsSectionTitle}>
               <MaterialCommunityIcons
@@ -729,40 +762,95 @@ const TasksTracker = ({ initialTasks }) => {
               Task Completion Leaderboard
             </Text>
             {userStats.map((stat, index) => (
-              <View key={stat.user.$id} style={styles.fancyStatItem}>
-                <View
-                  style={[
-                    styles.fancyStatRank,
-                    index === 0 && styles.firstPlaceRank,
-                    index === 1 && styles.secondPlaceRank,
-                    index === 2 && styles.thirdPlaceRank,
-                  ]}
+              <View key={stat.user.$id}>
+                <TouchableOpacity
+                  onPress={() => toggleStatsExpanded(stat.user.$id)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.fancyStatRankText}>{index + 1}</Text>
-                </View>
-                <View
-                  style={[styles.fancyStatBar, { borderLeftColor: stat.color }]}
-                >
-                  <View style={styles.fancyStatBarHeader}>
-                    <Text style={styles.fancyStatUsername}>
-                      {stat.user.username}
-                    </Text>
-                    <Text style={styles.fancyStatCount}>
-                      {stat.completedCount} tasks
-                    </Text>
-                  </View>
-                  <View style={styles.progressBarContainer}>
+                  <View key={stat.user.$id} style={styles.fancyStatItem}>
                     <View
                       style={[
-                        styles.progressBar,
-                        {
-                          width: `${Math.min(100, stat.completedCount * 5)}%`,
-                          backgroundColor: stat.color,
-                        },
+                        styles.fancyStatRank,
+                        index === 0 && styles.firstPlaceRank,
+                        index === 1 && styles.secondPlaceRank,
+                        index === 2 && styles.thirdPlaceRank,
                       ]}
-                    />
+                    >
+                      <Text style={styles.fancyStatRankText}>{index + 1}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.fancyStatBar,
+                        { borderLeftColor: stat.color },
+                      ]}
+                    >
+                      <View style={styles.fancyStatBarHeader}>
+                        <Text style={styles.fancyStatUsername}>
+                          {stat.user.username}
+                        </Text>
+                        <View style={styles.statCountContainer}>
+                          <Text style={styles.fancyStatCount}>
+                            {stat.completedCount} tasks completed
+                          </Text>
+                          <MaterialCommunityIcons
+                            name={
+                              expandedStats[stat.user.$id]
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={18}
+                            color="#666"
+                            style={styles.expandIcon}
+                          />
+                        </View>
+                      </View>
+                      <View style={styles.progressBarContainer}>
+                        <View
+                          style={[
+                            styles.progressBar,
+                            {
+                              width: `${Math.min(
+                                100,
+                                stat.completedCount * 5
+                              )}%`,
+                              backgroundColor: stat.color,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
+
+                {/* Expanded Task Details */}
+                {expandedStats[stat.user.$id] && (
+                  <View style={styles.expandedTasksContainer}>
+                    {stat.completedTasks.length > 0 ? (
+                      stat.completedTasks.map((task) => (
+                        <View key={task.taskId} style={styles.expandedTaskItem}>
+                          <MaterialCommunityIcons
+                            name="check-circle"
+                            size={16}
+                            color={stat.color}
+                          />
+                          <View style={styles.expandedTaskDetails}>
+                            <Text style={styles.expandedTaskName}>
+                              {task.taskName}
+                            </Text>
+                            <Text style={styles.expandedTaskCompletions}>
+                              Completed {task.completionCount}{" "}
+                              {task.completionCount === 1 ? "time" : "times"}
+                            </Text>
+                          </View>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.noTasksText}>
+                        No tasks completed yet
+                      </Text>
+                    )}
+                  </View>
+                )}
               </View>
             ))}
           </View>
@@ -1673,6 +1761,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#4F86C6",
+  },
+  // Add new styles for the expanded task details
+  expandedTasksContainer: {
+    marginLeft: 44,
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    padding: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: "#E0E0E0",
+    marginTop: -8,
+  },
+  expandedTaskItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  expandedTaskDetails: {
+    marginLeft: 8,
+    flex: 1,
+  },
+  expandedTaskName: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#333",
+  },
+  expandedTaskCompletions: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 2,
+  },
+  noTasksText: {
+    fontSize: 14,
+    color: "#888",
+    fontStyle: "italic",
+    textAlign: "center",
+    paddingVertical: 12,
+  },
+  statCountContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  expandIcon: {
+    marginLeft: 4,
   },
 });
 
