@@ -414,6 +414,42 @@ const TasksTracker = ({ initialTasks }) => {
     return completions.sort((a, b) => b.weekNumber - a.weekNumber);
   };
 
+  // Add this new function to count completions by user for a specific task
+  const getTaskCompletionsByUser = (task) => {
+    if (!task || !task.completedWeeks || !users.length) return [];
+
+    // Create a counter object for each user
+    const completionCounts = {};
+
+    // Count completions for each user
+    task.completedWeeks.forEach((completion) => {
+      if (completion && completion.$id) {
+        const userId = completion.$id;
+        if (completionCounts[userId]) {
+          completionCounts[userId]++;
+        } else {
+          completionCounts[userId] = 1;
+        }
+      }
+    });
+
+    // Convert to array of user objects with counts
+    const userCompletions = Object.keys(completionCounts)
+      .map((userId) => {
+        const userObj = users.find((u) => u.$id === userId);
+        if (!userObj) return null;
+
+        return {
+          user: userObj,
+          count: completionCounts[userId],
+        };
+      })
+      .filter(Boolean); // Remove null entries
+
+    // Sort by count (highest first)
+    return userCompletions.sort((a, b) => b.count - a.count);
+  };
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.filterHeader}>
@@ -667,6 +703,29 @@ const TasksTracker = ({ initialTasks }) => {
                       >
                         <Text style={styles.deleteIconText}>✕</Text>
                       </TouchableOpacity>
+                    </View>
+
+                    {/* User Completion Avatars */}
+                    <View style={styles.userCompletionsContainer}>
+                      {getTaskCompletionsByUser(task).map(({ user, count }) => (
+                        <View key={user.$id} style={styles.userCompletionItem}>
+                          <View
+                            style={[
+                              styles.userCompletionAvatar,
+                              { backgroundColor: user.color || "#4F86C6" },
+                            ]}
+                          >
+                            <Text style={styles.userCompletionInitial}>
+                              {user.username.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={styles.userCompletionCount}>
+                            <Text style={styles.userCompletionCountText}>
+                              {count}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
                     </View>
 
                     <View style={styles.fancyListItemBody}>
@@ -1807,6 +1866,50 @@ const styles = StyleSheet.create({
   },
   expandIcon: {
     marginLeft: 4,
+  },
+  // New styles for user completions
+  userCompletionsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  userCompletionItem: {
+    marginRight: 12,
+    marginBottom: 8,
+    position: "relative",
+  },
+  userCompletionAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "white",
+  },
+  userCompletionInitial: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  userCompletionCount: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    backgroundColor: "#4F86C6",
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "white",
+  },
+  userCompletionCountText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "bold",
   },
 });
 
