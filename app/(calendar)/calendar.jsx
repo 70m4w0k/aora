@@ -82,7 +82,6 @@ const Calendar = () => {
   };
 
   console.log("tasksToDisplay", tasksToDisplay);
-  console.log("tasksToDisplay", tasksToDisplay);
 
   return <TasksTracker initialTasks={tasksToDisplay} />;
 };

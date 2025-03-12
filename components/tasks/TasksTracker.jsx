@@ -13,7 +13,12 @@ import LegendModal from "./LegendModal";
 import CreateTaskModal from "./CreateTaskModal";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import { getFirstDayOfWeek, getWeekNumberByDate } from "../../lib/utils";
-import { createTaskDone, deleteTaskDone, getAllUsers, getAllTasks } from "../../lib/appwrite";
+import {
+  createTaskDone,
+  deleteTaskDone,
+  getAllUsers,
+  getAllTasks,
+} from "../../lib/appwrite";
 
 const WEEKS_IN_YEAR = 52;
 const COLUMN_WIDTH = 60;
@@ -21,7 +26,7 @@ const ROW_HEIGHT = 45;
 const TASK_COLUMN_WIDTH = 150;
 const VIEW_MODES = {
   CALENDAR: "calendar",
-  LIST: "list"
+  LIST: "list",
 };
 
 const TasksTracker = ({ initialTasks }) => {
@@ -86,24 +91,27 @@ const TasksTracker = ({ initialTasks }) => {
     }
 
     const task = tasks.find((task) => task.id === taskId);
-    
+
     // Check if the task is completed by this user
-    const isCompletedByCurrentUser = task.completedWeeks[weekIndex]?.$id === user.$id;
+    const isCompletedByCurrentUser =
+      task.completedWeeks[weekIndex]?.$id === user.$id;
 
     // If completed by another user, show who completed it
     if (task.completedWeeks[weekIndex] && !isCompletedByCurrentUser) {
-      const completedByUser = users.find(u => u.$id === task.completedWeeks[weekIndex].$id);
+      const completedByUser = users.find(
+        (u) => u.$id === task.completedWeeks[weekIndex].$id
+      );
       const username = completedByUser?.username || "Another user";
-      
+
       Alert.alert(
         "Task Already Completed",
         `This task was completed by ${username}. You can mark it as completed by you as well.`,
         [
           { text: "Cancel", style: "cancel" },
-          { 
-            text: "Mark as done", 
-            onPress: () => addUserCompletion(taskId, weekIndex)
-          }
+          {
+            text: "Mark as done",
+            onPress: () => addUserCompletion(taskId, weekIndex),
+          },
         ]
       );
       return;
@@ -113,9 +121,9 @@ const TasksTracker = ({ initialTasks }) => {
     if (isCompletedByCurrentUser) {
       try {
         await deleteTaskDone(taskId, user.$id, weekIndex + 1);
-        
+
         // Update UI
-        const updatedTasks = tasks.map(t => {
+        const updatedTasks = tasks.map((t) => {
           if (t.id === taskId) {
             const updatedWeeks = [...t.completedWeeks];
             updatedWeeks[weekIndex] = ""; // Remove completion
@@ -123,7 +131,7 @@ const TasksTracker = ({ initialTasks }) => {
           }
           return t;
         });
-        
+
         setTasks(updatedTasks);
       } catch (error) {
         console.error("Error removing task completion:", error);
@@ -145,9 +153,9 @@ const TasksTracker = ({ initialTasks }) => {
 
     try {
       await createTaskDone(taskDoneToCreate);
-      
+
       // Update UI
-      const updatedTasks = tasks.map(task => {
+      const updatedTasks = tasks.map((task) => {
         if (task.id === taskId) {
           const updatedWeeks = [...task.completedWeeks];
           updatedWeeks[weekIndex] = user; // Mark as completed by current user
@@ -155,7 +163,7 @@ const TasksTracker = ({ initialTasks }) => {
         }
         return task;
       });
-      
+
       setTasks(updatedTasks);
     } catch (error) {
       console.error("Error creating task completion:", error);
@@ -170,29 +178,25 @@ const TasksTracker = ({ initialTasks }) => {
 
   const confirmDeleteTask = (taskId) => {
     setTaskToDelete(taskId);
-    Alert.alert(
-      "Delete Task",
-      "Are you sure you want to delete this task?",
-      [
-        { text: "Cancel", style: "cancel", onPress: () => setTaskToDelete(null) },
-        { 
-          text: "Delete", 
-          style: "destructive", 
-          onPress: () => deleteTask(taskId)
-        }
-      ]
-    );
+    Alert.alert("Delete Task", "Are you sure you want to delete this task?", [
+      { text: "Cancel", style: "cancel", onPress: () => setTaskToDelete(null) },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteTask(taskId),
+      },
+    ]);
   };
 
   const deleteTask = async (taskId) => {
     try {
       await deleteTaskDone(taskId, user.$id, 0); // This is a placeholder - not sure if this API works for task deletion
-      
+
       // Update UI
-      const updatedTasks = tasks.filter(t => t.id !== taskId);
+      const updatedTasks = tasks.filter((t) => t.id !== taskId);
       setTasks(updatedTasks);
       setTaskToDelete(null);
-      
+
       Alert.alert("Success", "Task deleted successfully");
     } catch (error) {
       console.error("Error deleting task:", error);
@@ -201,45 +205,47 @@ const TasksTracker = ({ initialTasks }) => {
     }
   };
 
-  const filteredTasks = tasks.filter(task => {
+  const filteredTasks = tasks.filter((task) => {
     if (filter === "all") return true;
-    
+
     // Check if any week is completed
-    const hasCompletions = task.completedWeeks.some(completion => completion !== "");
-    
+    const hasCompletions = task.completedWeeks.some(
+      (completion) => completion !== ""
+    );
+
     if (filter === "completed") return hasCompletions;
     if (filter === "pending") return !hasCompletions;
-    
+
     return true;
   });
 
   // Get completion stats by user
   const getTaskCompletionStats = useCallback(() => {
     if (!tasks.length || !users.length) return [];
-    
-    const stats = users.map(user => {
+
+    const stats = users.map((user) => {
       let totalCompleted = 0;
-      
-      tasks.forEach(task => {
+
+      tasks.forEach((task) => {
         const userCompletions = task.completedWeeks.filter(
-          completion => completion && completion.$id === user.$id
+          (completion) => completion && completion.$id === user.$id
         ).length;
-        
+
         totalCompleted += userCompletions;
       });
-      
+
       return {
         user,
         completedCount: totalCompleted,
-        color: user.color || "#4F86C6"
+        color: user.color || "#4F86C6",
       };
     });
-    
+
     return stats.sort((a, b) => b.completedCount - a.completedCount);
   }, [tasks, users]);
 
   const toggleViewMode = () => {
-    setViewMode(prevMode => 
+    setViewMode((prevMode) =>
       prevMode === VIEW_MODES.CALENDAR ? VIEW_MODES.LIST : VIEW_MODES.CALENDAR
     );
   };
@@ -254,52 +260,64 @@ const TasksTracker = ({ initialTasks }) => {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              filter === "all" && styles.activeFilterButton
+              filter === "all" && styles.activeFilterButton,
             ]}
             onPress={() => setFilter("all")}
           >
-            <Text style={[
-              styles.filterButtonText,
-              filter === "all" && styles.activeFilterText
-            ]}>All</Text>
+            <Text
+              style={[
+                styles.filterButtonText,
+                filter === "all" && styles.activeFilterText,
+              ]}
+            >
+              All
+            </Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[
               styles.filterButton,
-              filter === "pending" && styles.activeFilterButton
+              filter === "pending" && styles.activeFilterButton,
             ]}
             onPress={() => setFilter("pending")}
           >
-            <Text style={[
-              styles.filterButtonText,
-              filter === "pending" && styles.activeFilterText
-            ]}>Pending</Text>
+            <Text
+              style={[
+                styles.filterButtonText,
+                filter === "pending" && styles.activeFilterText,
+              ]}
+            >
+              Pending
+            </Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[
               styles.filterButton,
-              filter === "completed" && styles.activeFilterButton
+              filter === "completed" && styles.activeFilterButton,
             ]}
             onPress={() => setFilter("completed")}
           >
-            <Text style={[
-              styles.filterButtonText,
-              filter === "completed" && styles.activeFilterText
-            ]}>Completed</Text>
+            <Text
+              style={[
+                styles.filterButtonText,
+                filter === "completed" && styles.activeFilterText,
+              ]}
+            >
+              Completed
+            </Text>
           </TouchableOpacity>
         </View>
-        
+
         <View style={styles.rightButtonsContainer}>
           <TouchableOpacity
             style={styles.viewModeButton}
             onPress={toggleViewMode}
           >
-            <Ionicons 
-              name={viewMode === VIEW_MODES.CALENDAR ? "list" : "calendar"} 
-              size={18} 
-              color="#666666" 
+            <Ionicons
+              name={viewMode === VIEW_MODES.CALENDAR ? "list" : "calendar"}
+              size={18}
+              color="#666666"
             />
           </TouchableOpacity>
 
@@ -311,13 +329,11 @@ const TasksTracker = ({ initialTasks }) => {
           </TouchableOpacity>
         </View>
       </View>
-      
+
       {viewMode === VIEW_MODES.CALENDAR ? (
         <View style={styles.calendarContainer}>
           <View style={styles.taskColumn}>
-            <View
-              style={[styles.headerCell, { width: TASK_COLUMN_WIDTH }]}
-            >
+            <View style={[styles.headerCell, { width: TASK_COLUMN_WIDTH }]}>
               <Text style={styles.headerText}>Tasks</Text>
             </View>
             <ScrollView>
@@ -329,8 +345,8 @@ const TasksTracker = ({ initialTasks }) => {
                 >
                   <View style={styles.taskTextContainer}>
                     <Text style={styles.taskText}>{task.name}</Text>
-                    <TouchableOpacity 
-                      style={styles.deleteIcon} 
+                    <TouchableOpacity
+                      style={styles.deleteIcon}
                       onPress={() => confirmDeleteTask(task.id)}
                     >
                       <Text style={styles.deleteIconText}>✕</Text>
@@ -338,9 +354,15 @@ const TasksTracker = ({ initialTasks }) => {
                   </View>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity
+                style={styles.taskAddButton}
+                onPress={() => setCreateTaskModalVisible(true)}
+              >
+                <Text style={styles.taskAddButtonText}>+ Add Task</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
-          
+
           <ScrollView
             ref={scrollRef}
             horizontal={true}
@@ -359,15 +381,17 @@ const TasksTracker = ({ initialTasks }) => {
                   <View
                     key={index}
                     style={[
-                      styles.headerCell, 
+                      styles.headerCell,
                       { width: COLUMN_WIDTH },
-                      index + 1 === currentWeekNumber && styles.currentWeekHeader
+                      index + 1 === currentWeekNumber &&
+                        styles.currentWeekHeader,
                     ]}
                   >
-                    <Text 
+                    <Text
                       style={[
                         styles.headerText,
-                        index + 1 === currentWeekNumber && styles.currentWeekText
+                        index + 1 === currentWeekNumber &&
+                          styles.currentWeekText,
                       ]}
                     >
                       {getFirstDayOfWeek(index + 1)}
@@ -430,19 +454,21 @@ const TasksTracker = ({ initialTasks }) => {
 
           {filteredTasks.map((task) => {
             // Calculate completion percentage
-            const completedCount = task.completedWeeks.filter(week => week !== "").length;
+            const completedCount = task.completedWeeks.filter(
+              (week) => week !== ""
+            ).length;
             const completionPercent = (completedCount / WEEKS_IN_YEAR) * 100;
-            
+
             return (
               <View key={task.id} style={styles.listItemContainer}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.listItemTitleWrapper}
                   onLongPress={() => confirmDeleteTask(task.id)}
                 >
                   <View style={styles.listItemTitleContainer}>
                     <Text style={styles.listItemTitle}>{task.name}</Text>
-                    <TouchableOpacity 
-                      style={styles.deleteIcon} 
+                    <TouchableOpacity
+                      style={styles.deleteIcon}
                       onPress={() => confirmDeleteTask(task.id)}
                     >
                       <Text style={styles.deleteIconText}>✕</Text>
@@ -451,22 +477,34 @@ const TasksTracker = ({ initialTasks }) => {
                 </TouchableOpacity>
                 <View style={styles.listItemCompletionWrapper}>
                   <View style={styles.progressBarContainer}>
-                    <View 
+                    <View
                       style={[
-                        styles.progressBar, 
-                        { width: `${completionPercent}%` }
-                      ]} 
+                        styles.progressBar,
+                        { width: `${completionPercent}%` },
+                      ]}
                     />
                   </View>
-                  <Text style={styles.completionText}>{completedCount} weeks</Text>
+                  <Text style={styles.completionText}>
+                    {completedCount} weeks
+                  </Text>
                 </View>
               </View>
             );
           })}
-          
+
+          {/* Add button in list view */}
+          <TouchableOpacity
+            style={styles.listAddButton}
+            onPress={() => setCreateTaskModalVisible(true)}
+          >
+            <Text style={styles.listAddButtonText}>+ Add Task</Text>
+          </TouchableOpacity>
+
           {/* User Stats Section */}
           <View style={styles.statsContainer}>
-            <Text style={styles.statsSectionTitle}>Task Completion by User</Text>
+            <Text style={styles.statsSectionTitle}>
+              Task Completion by User
+            </Text>
             {userStats.map((stat, index) => (
               <View key={stat.user.$id} style={styles.statItem}>
                 <View style={styles.statRank}>
@@ -474,21 +512,16 @@ const TasksTracker = ({ initialTasks }) => {
                 </View>
                 <View style={[styles.statBar, { borderLeftColor: stat.color }]}>
                   <Text style={styles.statUsername}>{stat.user.username}</Text>
-                  <Text style={styles.statCount}>{stat.completedCount} tasks completed</Text>
+                  <Text style={styles.statCount}>
+                    {stat.completedCount} tasks completed
+                  </Text>
                 </View>
               </View>
             ))}
           </View>
         </ScrollView>
       )}
-      
-      <TouchableOpacity
-        style={styles.addTaskButton}
-        onPress={() => setCreateTaskModalVisible(true)}
-      >
-        <Text style={styles.addTaskButtonText}>+</Text>
-      </TouchableOpacity>
-      
+
       <LegendModal
         title="Users"
         users={users}
@@ -762,26 +795,38 @@ const styles = StyleSheet.create({
     color: "#666666",
     marginTop: 4,
   },
-  addTaskButton: {
-    position: "absolute",
-    bottom: 20,
-    right: 20,
-    width: 56,
-    height: 56,
-    backgroundColor: "#4F86C6",
+  // New styles for the add task buttons
+  taskAddButton: {
+    margin: 10,
+    padding: 10,
+    backgroundColor: "#F5F5F5",
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 28,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderStyle: "dashed",
   },
-  addTaskButtonText: {
-    color: "white",
-    fontSize: 28,
-    fontWeight: "bold",
+  taskAddButtonText: {
+    color: "#4F86C6",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  listAddButton: {
+    marginVertical: 16,
+    padding: 12,
+    backgroundColor: "#F5F5F5",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderStyle: "dashed",
+  },
+  listAddButtonText: {
+    color: "#4F86C6",
+    fontSize: 16,
+    fontWeight: "500",
   },
 });
 
