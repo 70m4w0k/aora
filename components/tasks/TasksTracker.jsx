@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import LegendModal from "./LegendModal";
@@ -16,6 +17,7 @@ import { getFirstDayOfWeek, getWeekNumberByDate } from "../../lib/utils";
 import {
   createTaskDone,
   deleteTaskDone,
+  deleteTask,
   getAllUsers,
   getAllTasks,
 } from "../../lib/appwrite";
@@ -48,6 +50,7 @@ const TasksTracker = ({ initialTasks }) => {
   const [legendModalVisible, setLegendModalVisible] = useState(false);
   const [createTaskModal, setCreateTaskModalVisible] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -178,20 +181,13 @@ const TasksTracker = ({ initialTasks }) => {
 
   const confirmDeleteTask = (taskId) => {
     setTaskToDelete(taskId);
-    Alert.alert("Delete Task", "Are you sure you want to delete this task?", [
-      { text: "Cancel", style: "cancel", onPress: () => setTaskToDelete(null) },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => deleteTask(taskId),
-      },
-    ]);
+    setDeleteModalVisible(true);
   };
 
-  const deleteTask = async (taskId) => {
+  const handleDeleteTask = async (taskId) => {
     try {
-      await deleteTaskDone(taskId, user.$id, 0); // This is a placeholder - not sure if this API works for task deletion
-
+      // await deleteTaskDone(taskId, user.$id, 0); // This is a placeholder - not sure if this API works for task deletion
+      await deleteTask(taskId);
       // Update UI
       const updatedTasks = tasks.filter((t) => t.id !== taskId);
       setTasks(updatedTasks);
@@ -533,6 +529,53 @@ const TasksTracker = ({ initialTasks }) => {
         onClose={() => setCreateTaskModalVisible(false)}
         onTaskCreated={handleTaskCreated}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={deleteModalVisible}
+        onRequestClose={() => {
+          setDeleteModalVisible(false);
+          setTaskToDelete(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContainer}>
+            <View style={styles.deleteModalHeader}>
+              <Text style={styles.deleteModalTitle}>Delete Task</Text>
+            </View>
+
+            <View style={styles.deleteModalBody}>
+              <Text style={styles.deleteModalMessage}>
+                Are you sure you want to delete this task?
+              </Text>
+            </View>
+
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.cancelButton]}
+                onPress={() => {
+                  setDeleteModalVisible(false);
+                  setTaskToDelete(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteButton]}
+                onPress={() => {
+                  setDeleteModalVisible(false);
+                  handleDeleteTask(taskToDelete);
+                }}
+              >
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -827,6 +870,73 @@ const styles = StyleSheet.create({
     color: "#4F86C6",
     fontSize: 16,
     fontWeight: "500",
+  },
+  // Delete modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteModalContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    width: "80%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  deleteModalHeader: {
+    backgroundColor: "#F8F8F8",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEEEEE",
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333333",
+  },
+  deleteModalBody: {
+    padding: 20,
+  },
+  deleteModalMessage: {
+    fontSize: 16,
+    color: "#666666",
+    textAlign: "center",
+  },
+  deleteModalActions: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: "#EEEEEE",
+  },
+  deleteModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelButton: {
+    borderRightWidth: 1,
+    borderRightColor: "#EEEEEE",
+  },
+  deleteButton: {
+    backgroundColor: "#FFEFEF",
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: "#666666",
+    fontWeight: "500",
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    color: "#FF6B6B",
+    fontWeight: "600",
   },
 });
 
