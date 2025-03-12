@@ -8,8 +8,10 @@ import {
   RefreshControl,
   Alert,
   Modal,
+  Animated,
+  Image,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import LegendModal from "./LegendModal";
 import CreateTaskModal from "./CreateTaskModal";
 import { useGlobalContext } from "../../context/GlobalProvider";
@@ -52,7 +54,17 @@ const TasksTracker = ({ initialTasks }) => {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
+  // For animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
+    // Fade in animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+
     setTasks(initialTasks);
     fetchUsers();
     scrollToCurrentWeek();
@@ -337,7 +349,7 @@ const TasksTracker = ({ initialTasks }) => {
   });
 
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.filterHeader}>
         <View style={styles.filterButtonsContainer}>
           <TouchableOpacity
@@ -529,7 +541,7 @@ const TasksTracker = ({ initialTasks }) => {
           }
           style={styles.listContainer}
         >
-          {/* Task List View */}
+          {/* Task List View with Enhanced UI */}
           <View style={styles.listHeader}>
             <Text style={styles.listHeaderText}>Tasks</Text>
             <Text style={styles.listHeaderText}>Last Completed</Text>
@@ -537,87 +549,180 @@ const TasksTracker = ({ initialTasks }) => {
 
           {sortedTasks.map((task) => {
             const lastCompletion = getLastCompletionInfo(task);
-
-            // Apply different styles based on urgency level
             const urgencyLevel = lastCompletion.urgencyLevel;
+
+            // Get urgency icon
+            let urgencyIcon;
+            switch (urgencyLevel) {
+              case "overdue":
+                urgencyIcon = "alarm-light";
+                break;
+              case "urgent":
+                urgencyIcon = "alert-circle-outline";
+                break;
+              case "soon":
+                urgencyIcon = "clock-time-four-outline";
+                break;
+              default:
+                urgencyIcon = "check-circle-outline";
+            }
 
             return (
               <View
                 key={task.id}
-                style={[
-                  styles.listItemContainer,
-                  styles[`${urgencyLevel}Item`],
-                ]}
+                style={[styles.fancyListItem, styles[`${urgencyLevel}Item`]]}
               >
-                <TouchableOpacity
-                  style={styles.listItemTitleWrapper}
-                  onLongPress={() => confirmDeleteTask(task.id)}
-                >
-                  <View style={styles.listItemTitleContainer}>
-                    <Text
-                      style={[
-                        styles.listItemTitle,
-                        styles[`${urgencyLevel}Text`],
-                      ]}
-                    >
-                      {task.name}
-                    </Text>
+                <View style={styles.fancyListItemContent}>
+                  <View style={styles.fancyListItemHeader}>
+                    <View style={styles.taskTitleContainer}>
+                      <MaterialCommunityIcons
+                        name={urgencyIcon}
+                        size={20}
+                        color={styles[`${urgencyLevel}Text`].color}
+                        style={styles.urgencyIcon}
+                      />
+                      <Text
+                        style={[
+                          styles.fancyListItemTitle,
+                          styles[`${urgencyLevel}Text`],
+                        ]}
+                      >
+                        {task.name}
+                      </Text>
+                    </View>
+
                     <TouchableOpacity
-                      style={styles.deleteIcon}
+                      style={styles.fancyDeleteIcon}
                       onPress={() => confirmDeleteTask(task.id)}
                     >
                       <Text style={styles.deleteIconText}>✕</Text>
                     </TouchableOpacity>
                   </View>
-                </TouchableOpacity>
-                <View style={styles.listItemCompletionWrapper}>
-                  <View style={styles.lastCompletionContainer}>
-                    <Text style={styles.lastCompletionText}>
-                      {lastCompletion.text}
-                    </Text>
-                    {lastCompletion.user && (
-                      <View style={styles.lastCompletionUserContainer}>
-                        <Text style={styles.lastCompletionByText}>by: </Text>
-                        <View
-                          style={[
-                            styles.userColorDot,
-                            { backgroundColor: lastCompletion.color },
-                          ]}
-                        />
-                        <Text style={styles.lastCompletionUserText}>
-                          {lastCompletion.user}
-                        </Text>
-                      </View>
-                    )}
+
+                  <View style={styles.fancyListItemBody}>
+                    <View style={styles.lastCompletionInfoCard}>
+                      <Text style={styles.lastCompletionHeading}>
+                        Last Completed
+                      </Text>
+                      <Text
+                        style={[
+                          styles.lastCompletionText,
+                          styles[`${urgencyLevel}CompletionText`],
+                        ]}
+                      >
+                        {lastCompletion.text}
+                      </Text>
+
+                      {lastCompletion.user && (
+                        <View style={styles.userInfoContainer}>
+                          <View
+                            style={[
+                              styles.userAvatar,
+                              { backgroundColor: lastCompletion.color },
+                            ]}
+                          >
+                            <Text style={styles.userInitial}>
+                              {lastCompletion.user.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={styles.userName}>
+                            {lastCompletion.user}
+                          </Text>
+                        </View>
+                      )}
+
+                      {!lastCompletion.user && (
+                        <View style={styles.neverCompletedMessage}>
+                          <MaterialCommunityIcons
+                            name="alert-outline"
+                            size={16}
+                            color="#888"
+                          />
+                          <Text style={styles.neverCompletedText}>
+                            Never been completed
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.quickActionButton,
+                        styles[`${urgencyLevel}ActionButton`],
+                      ]}
+                      onPress={() => {
+                        const currentWeek = getWeekNumberByDate(new Date()) - 1;
+                        toggleTask(task.id, currentWeek);
+                      }}
+                    >
+                      <MaterialCommunityIcons
+                        name="checkbox-marked-circle-outline"
+                        size={18}
+                        color="#fff"
+                      />
+                      <Text style={styles.quickActionText}>Mark Done</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
             );
           })}
 
-          {/* Add button in list view */}
+          {/* Fancy Add Button */}
           <TouchableOpacity
-            style={styles.listAddButton}
+            style={styles.fancyAddButton}
             onPress={() => setCreateTaskModalVisible(true)}
           >
-            <Text style={styles.listAddButtonText}>+ Add Task</Text>
+            <View style={styles.fancyAddButtonInner}>
+              <MaterialCommunityIcons name="plus" size={24} color="#fff" />
+              <Text style={styles.fancyAddButtonText}>Add New Task</Text>
+            </View>
           </TouchableOpacity>
 
-          {/* User Stats Section */}
-          <View style={styles.statsContainer}>
-            <Text style={styles.statsSectionTitle}>
-              Task Completion by User
+          {/* User Stats Section with Enhanced UI */}
+          <View style={styles.fancyStatsContainer}>
+            <Text style={styles.fancyStatsSectionTitle}>
+              <MaterialCommunityIcons
+                name="trophy-outline"
+                size={20}
+                color="#333"
+              />{" "}
+              Task Completion Leaderboard
             </Text>
             {userStats.map((stat, index) => (
-              <View key={stat.user.$id} style={styles.statItem}>
-                <View style={styles.statRank}>
-                  <Text style={styles.statRankText}>{index + 1}</Text>
+              <View key={stat.user.$id} style={styles.fancyStatItem}>
+                <View
+                  style={[
+                    styles.fancyStatRank,
+                    index === 0 && styles.firstPlaceRank,
+                    index === 1 && styles.secondPlaceRank,
+                    index === 2 && styles.thirdPlaceRank,
+                  ]}
+                >
+                  <Text style={styles.fancyStatRankText}>{index + 1}</Text>
                 </View>
-                <View style={[styles.statBar, { borderLeftColor: stat.color }]}>
-                  <Text style={styles.statUsername}>{stat.user.username}</Text>
-                  <Text style={styles.statCount}>
-                    {stat.completedCount} tasks completed
-                  </Text>
+                <View
+                  style={[styles.fancyStatBar, { borderLeftColor: stat.color }]}
+                >
+                  <View style={styles.fancyStatBarHeader}>
+                    <Text style={styles.fancyStatUsername}>
+                      {stat.user.username}
+                    </Text>
+                    <Text style={styles.fancyStatCount}>
+                      {stat.completedCount} tasks
+                    </Text>
+                  </View>
+                  <View style={styles.progressBarContainer}>
+                    <View
+                      style={[
+                        styles.progressBar,
+                        {
+                          width: `${Math.min(100, stat.completedCount * 5)}%`,
+                          backgroundColor: stat.color,
+                        },
+                      ]}
+                    />
+                  </View>
                 </View>
               </View>
             ))}
@@ -683,7 +788,7 @@ const TasksTracker = ({ initialTasks }) => {
           </View>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -1088,6 +1193,231 @@ const styles = StyleSheet.create({
     color: "#C62828",
     fontWeight: "600",
   },
+
+  // Enhanced list item styles
+  fancyListItem: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  fancyListItemContent: {
+    padding: 16,
+  },
+  fancyListItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  taskTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  urgencyIcon: {
+    marginRight: 8,
+  },
+  fancyListItemTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  fancyDeleteIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#f5f5f5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fancyListItemBody: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+  },
+  lastCompletionInfoCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    width: "100%",
+  },
+  lastCompletionHeading: {
+    fontSize: 12,
+    color: "#888",
+    marginBottom: 4,
+  },
+  lastCompletionText: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 8,
+  },
+  normalCompletionText: {
+    color: "#2E7D32",
+  },
+  soonCompletionText: {
+    color: "#F57F17",
+  },
+  urgentCompletionText: {
+    color: "#E65100",
+  },
+  overdueCompletionText: {
+    color: "#C62828",
+  },
+  userInfoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  userAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  userInitial: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  userName: {
+    fontSize: 14,
+    color: "#333",
+  },
+  neverCompletedMessage: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  neverCompletedText: {
+    marginLeft: 4,
+    fontSize: 14,
+    color: "#888",
+    fontStyle: "italic",
+  },
+  quickActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: "flex-end",
+  },
+  normalActionButton: {
+    backgroundColor: "#4CAF50",
+  },
+  soonActionButton: {
+    backgroundColor: "#FF9800",
+  },
+  urgentActionButton: {
+    backgroundColor: "#F57C00",
+  },
+  overdueActionButton: {
+    backgroundColor: "#E53935",
+  },
+  quickActionText: {
+    color: "#fff",
+    marginLeft: 6,
+    fontWeight: "500",
+  },
+
+  // Fancy add button
+  fancyAddButton: {
+    backgroundColor: "#4F86C6",
+    borderRadius: 12,
+    marginVertical: 16,
+    overflow: "hidden",
+  },
+  fancyAddButtonInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+  },
+  fancyAddButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+    marginLeft: 8,
+  },
+
+  // Enhanced stats container
+  fancyStatsContainer: {
+    marginTop: 24,
+    paddingTop: 16,
+    paddingBottom: 20,
+    backgroundColor: "#F5F7FA",
+    borderRadius: 16,
+    padding: 16,
+  },
+  fancyStatsSectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333333",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  fancyStatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  fancyStatRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#E0E0E0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  firstPlaceRank: {
+    backgroundColor: "#FFD700",
+  },
+  secondPlaceRank: {
+    backgroundColor: "#C0C0C0",
+  },
+  thirdPlaceRank: {
+    backgroundColor: "#CD7F32",
+  },
+  fancyStatRankText: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  fancyStatBar: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  fancyStatBarHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  fancyStatUsername: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333333",
+  },
+  fancyStatCount: {
+    fontSize: 14,
+    color: "#666666",
+    fontWeight: "500",
+  },
+
+  // ... existing urgency styles ...
 });
 
 export default TasksTracker;
