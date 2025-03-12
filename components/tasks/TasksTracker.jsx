@@ -249,6 +249,93 @@ const TasksTracker = ({ initialTasks }) => {
   // Task completion stats
   const userStats = getTaskCompletionStats();
 
+  // Function to get the last completion info for a task
+  const getLastCompletionInfo = (task) => {
+    if (!task.completedWeeks || !task.completedWeeks.length) {
+      return { text: "Never completed", user: null, weeksAgo: null };
+    }
+
+    // Find the last completed week (going backwards from current week)
+    const currentWeek = getWeekNumberByDate(new Date());
+    let lastCompletedWeekIndex = -1;
+    let lastCompletedUser = null;
+
+    // Start from current week and go backwards
+    for (let i = currentWeek - 1; i >= 0; i--) {
+      const completion = task.completedWeeks[i];
+      if (
+        completion &&
+        ((Array.isArray(completion) && completion.length > 0) ||
+          (!Array.isArray(completion) && completion))
+      ) {
+        lastCompletedWeekIndex = i;
+        lastCompletedUser = Array.isArray(completion)
+          ? completion[0]
+          : completion;
+        break;
+      }
+    }
+
+    if (lastCompletedWeekIndex === -1) {
+      return { text: "Never completed", user: null, weeksAgo: null };
+    }
+
+    const weeksAgo = currentWeek - lastCompletedWeekIndex - 1;
+    let timeText;
+
+    if (weeksAgo === 0) {
+      timeText = "This week";
+    } else if (weeksAgo === 1) {
+      timeText = "Last week";
+    } else {
+      timeText = `${weeksAgo} weeks ago`;
+    }
+
+    const username = lastCompletedUser.username || "Unknown user";
+
+    // Add a status message and urgency level based on how long ago it was completed
+    let statusMessage = "";
+    let urgencyLevel = "normal"; // "normal", "soon", "urgent", "overdue"
+
+    // Task urgency levels based on weeks since last completion
+    if (weeksAgo > 6) {
+      statusMessage = " (it's really overdue!)";
+      urgencyLevel = "overdue";
+    } else if (weeksAgo > 3) {
+      statusMessage = " (it's starting to get sticky)";
+      urgencyLevel = "urgent";
+    } else if (weeksAgo > 1) {
+      urgencyLevel = "soon";
+    }
+
+    return {
+      text: `${timeText}${statusMessage}`,
+      user: username,
+      weeksAgo: weeksAgo,
+      color: lastCompletedUser.color || "#4F86C6",
+      urgencyLevel: urgencyLevel,
+    };
+  };
+
+  // Calculate task urgency score for sorting
+  const getTaskUrgencyScore = (task) => {
+    const lastCompletion = getLastCompletionInfo(task);
+
+    // Tasks never completed have highest urgency
+    if (!lastCompletion.user) {
+      return 1000;
+    }
+
+    // Otherwise base urgency on how long since last completion
+    const weeksAgo = lastCompletion.weeksAgo || 0;
+    return weeksAgo * 10;
+  };
+
+  // Sort filtered tasks by urgency
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    return getTaskUrgencyScore(b) - getTaskUrgencyScore(a);
+  });
+
   return (
     <View style={styles.container}>
       <View style={styles.filterHeader}>
@@ -445,24 +532,36 @@ const TasksTracker = ({ initialTasks }) => {
           {/* Task List View */}
           <View style={styles.listHeader}>
             <Text style={styles.listHeaderText}>Tasks</Text>
-            <Text style={styles.listHeaderText}>Completion</Text>
+            <Text style={styles.listHeaderText}>Last Completed</Text>
           </View>
 
-          {filteredTasks.map((task) => {
-            // Calculate completion percentage
-            const completedCount = task.completedWeeks.filter(
-              (week) => week !== ""
-            ).length;
-            const completionPercent = (completedCount / WEEKS_IN_YEAR) * 100;
+          {sortedTasks.map((task) => {
+            const lastCompletion = getLastCompletionInfo(task);
+
+            // Apply different styles based on urgency level
+            const urgencyLevel = lastCompletion.urgencyLevel;
 
             return (
-              <View key={task.id} style={styles.listItemContainer}>
+              <View
+                key={task.id}
+                style={[
+                  styles.listItemContainer,
+                  styles[`${urgencyLevel}Item`],
+                ]}
+              >
                 <TouchableOpacity
                   style={styles.listItemTitleWrapper}
                   onLongPress={() => confirmDeleteTask(task.id)}
                 >
                   <View style={styles.listItemTitleContainer}>
-                    <Text style={styles.listItemTitle}>{task.name}</Text>
+                    <Text
+                      style={[
+                        styles.listItemTitle,
+                        styles[`${urgencyLevel}Text`],
+                      ]}
+                    >
+                      {task.name}
+                    </Text>
                     <TouchableOpacity
                       style={styles.deleteIcon}
                       onPress={() => confirmDeleteTask(task.id)}
@@ -472,17 +571,25 @@ const TasksTracker = ({ initialTasks }) => {
                   </View>
                 </TouchableOpacity>
                 <View style={styles.listItemCompletionWrapper}>
-                  <View style={styles.progressBarContainer}>
-                    <View
-                      style={[
-                        styles.progressBar,
-                        { width: `${completionPercent}%` },
-                      ]}
-                    />
+                  <View style={styles.lastCompletionContainer}>
+                    <Text style={styles.lastCompletionText}>
+                      {lastCompletion.text}
+                    </Text>
+                    {lastCompletion.user && (
+                      <View style={styles.lastCompletionUserContainer}>
+                        <Text style={styles.lastCompletionByText}>by: </Text>
+                        <View
+                          style={[
+                            styles.userColorDot,
+                            { backgroundColor: lastCompletion.color },
+                          ]}
+                        />
+                        <Text style={styles.lastCompletionUserText}>
+                          {lastCompletion.user}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.completionText}>
-                    {completedCount} weeks
-                  </Text>
                 </View>
               </View>
             );
@@ -768,21 +875,33 @@ const styles = StyleSheet.create({
     flex: 0.6,
     alignItems: "flex-end",
   },
-  progressBarContainer: {
-    width: "100%",
-    height: 8,
-    backgroundColor: "#F0F0F0",
-    borderRadius: 4,
-    overflow: "hidden",
+  lastCompletionContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  lastCompletionText: {
+    fontSize: 14,
+    color: "#666666",
     marginBottom: 4,
   },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#4F86C6",
+  lastCompletionUserContainer: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  completionText: {
+  lastCompletionByText: {
     fontSize: 12,
-    color: "#666666",
+    color: "#888888",
+  },
+  lastCompletionUserText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#444444",
+  },
+  userColorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
   },
   // User stats section
   statsContainer: {
@@ -936,6 +1055,37 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontSize: 16,
     color: "#FF6B6B",
+    fontWeight: "600",
+  },
+  // Urgency styles for task items
+  normalItem: {
+    backgroundColor: "#E8F5E9", // Stronger light green
+  },
+  soonItem: {
+    backgroundColor: "#FFF8E1", // Stronger light yellow
+  },
+  urgentItem: {
+    backgroundColor: "#FFE0B2", // Stronger light orange
+  },
+  overdueItem: {
+    backgroundColor: "#FFCDD2", // Stronger light red
+  },
+
+  // Text styles for different urgency levels
+  normalText: {
+    color: "#2E7D32",
+    fontWeight: "500",
+  },
+  soonText: {
+    color: "#F57F17",
+    fontWeight: "500",
+  },
+  urgentText: {
+    color: "#E65100",
+    fontWeight: "500",
+  },
+  overdueText: {
+    color: "#C62828",
     fontWeight: "600",
   },
 });
