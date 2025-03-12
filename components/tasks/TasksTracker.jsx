@@ -10,6 +10,7 @@ import {
   Modal,
   Animated,
   Image,
+  FlatList,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import LegendModal from "./LegendModal";
@@ -53,6 +54,8 @@ const TasksTracker = ({ initialTasks }) => {
   const [createTaskModal, setCreateTaskModalVisible] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [taskToViewHistory, setTaskToViewHistory] = useState(null);
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
 
   // For animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -348,6 +351,36 @@ const TasksTracker = ({ initialTasks }) => {
     return getTaskUrgencyScore(b) - getTaskUrgencyScore(a);
   });
 
+  // Function to handle task click for viewing history
+  const showTaskHistory = (task) => {
+    setTaskToViewHistory(task);
+    setHistoryModalVisible(true);
+  };
+
+  // Function to get all completions for a task
+  const getTaskCompletions = (task) => {
+    if (!task || !task.completedWeeks) return [];
+
+    const completions = [];
+
+    task.completedWeeks.forEach((completion, weekIndex) => {
+      if (completion && completion.$id) {
+        const weekNumber = weekIndex + 1;
+        const dateString = getFirstDayOfWeek(weekNumber);
+
+        completions.push({
+          id: `${weekNumber}-${completion.$id}`,
+          weekNumber,
+          dateString,
+          user: users.find((u) => u.$id === completion.$id) || completion,
+        });
+      }
+    });
+
+    // Sort by most recent first
+    return completions.sort((a, b) => b.weekNumber - a.weekNumber);
+  };
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.filterHeader}>
@@ -568,103 +601,109 @@ const TasksTracker = ({ initialTasks }) => {
             }
 
             return (
-              <View
+              <TouchableOpacity
                 key={task.id}
-                style={[styles.fancyListItem, styles[`${urgencyLevel}Item`]]}
+                onPress={() => showTaskHistory(task)}
+                activeOpacity={0.7}
               >
-                <View style={styles.fancyListItemContent}>
-                  <View style={styles.fancyListItemHeader}>
-                    <View style={styles.taskTitleContainer}>
-                      <MaterialCommunityIcons
-                        name={urgencyIcon}
-                        size={20}
-                        color={styles[`${urgencyLevel}Text`].color}
-                        style={styles.urgencyIcon}
-                      />
-                      <Text
-                        style={[
-                          styles.fancyListItemTitle,
-                          styles[`${urgencyLevel}Text`],
-                        ]}
+                <View
+                  style={[styles.fancyListItem, styles[`${urgencyLevel}Item`]]}
+                >
+                  <View style={styles.fancyListItemContent}>
+                    <View style={styles.fancyListItemHeader}>
+                      <View style={styles.taskTitleContainer}>
+                        <MaterialCommunityIcons
+                          name={urgencyIcon}
+                          size={20}
+                          color={styles[`${urgencyLevel}Text`].color}
+                          style={styles.urgencyIcon}
+                        />
+                        <Text
+                          style={[
+                            styles.fancyListItemTitle,
+                            styles[`${urgencyLevel}Text`],
+                          ]}
+                        >
+                          {task.name}
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.fancyDeleteIcon}
+                        onPress={() => confirmDeleteTask(task.id)}
                       >
-                        {task.name}
-                      </Text>
+                        <Text style={styles.deleteIconText}>✕</Text>
+                      </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity
-                      style={styles.fancyDeleteIcon}
-                      onPress={() => confirmDeleteTask(task.id)}
-                    >
-                      <Text style={styles.deleteIconText}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
+                    <View style={styles.fancyListItemBody}>
+                      <View style={styles.lastCompletionInfoCard}>
+                        <Text style={styles.lastCompletionHeading}>
+                          Last Completed
+                        </Text>
+                        <Text
+                          style={[
+                            styles.lastCompletionText,
+                            styles[`${urgencyLevel}CompletionText`],
+                          ]}
+                        >
+                          {lastCompletion.text}
+                        </Text>
 
-                  <View style={styles.fancyListItemBody}>
-                    <View style={styles.lastCompletionInfoCard}>
-                      <Text style={styles.lastCompletionHeading}>
-                        Last Completed
-                      </Text>
-                      <Text
-                        style={[
-                          styles.lastCompletionText,
-                          styles[`${urgencyLevel}CompletionText`],
-                        ]}
-                      >
-                        {lastCompletion.text}
-                      </Text>
-
-                      {lastCompletion.user && (
-                        <View style={styles.userInfoContainer}>
-                          <View
-                            style={[
-                              styles.userAvatar,
-                              { backgroundColor: lastCompletion.color },
-                            ]}
-                          >
-                            <Text style={styles.userInitial}>
-                              {lastCompletion.user.charAt(0).toUpperCase()}
+                        {lastCompletion.user && (
+                          <View style={styles.userInfoContainer}>
+                            <View
+                              style={[
+                                styles.userAvatar,
+                                { backgroundColor: lastCompletion.color },
+                              ]}
+                            >
+                              <Text style={styles.userInitial}>
+                                {lastCompletion.user.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                            <Text style={styles.userName}>
+                              {lastCompletion.user}
                             </Text>
                           </View>
-                          <Text style={styles.userName}>
-                            {lastCompletion.user}
-                          </Text>
-                        </View>
-                      )}
+                        )}
 
-                      {!lastCompletion.user && (
-                        <View style={styles.neverCompletedMessage}>
-                          <MaterialCommunityIcons
-                            name="alert-outline"
-                            size={16}
-                            color="#888"
-                          />
-                          <Text style={styles.neverCompletedText}>
-                            Never been completed
-                          </Text>
-                        </View>
-                      )}
+                        {!lastCompletion.user && (
+                          <View style={styles.neverCompletedMessage}>
+                            <MaterialCommunityIcons
+                              name="alert-outline"
+                              size={16}
+                              color="#888"
+                            />
+                            <Text style={styles.neverCompletedText}>
+                              Never been completed
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.quickActionButton,
+                          styles[`${urgencyLevel}ActionButton`],
+                        ]}
+                        onPress={() => {
+                          const currentWeek =
+                            getWeekNumberByDate(new Date()) - 1;
+                          toggleTask(task.id, currentWeek);
+                        }}
+                      >
+                        <MaterialCommunityIcons
+                          name="checkbox-marked-circle-outline"
+                          size={18}
+                          color="#fff"
+                        />
+                        <Text style={styles.quickActionText}>Mark Done</Text>
+                      </TouchableOpacity>
                     </View>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.quickActionButton,
-                        styles[`${urgencyLevel}ActionButton`],
-                      ]}
-                      onPress={() => {
-                        const currentWeek = getWeekNumberByDate(new Date()) - 1;
-                        toggleTask(task.id, currentWeek);
-                      }}
-                    >
-                      <MaterialCommunityIcons
-                        name="checkbox-marked-circle-outline"
-                        size={18}
-                        color="#fff"
-                      />
-                      <Text style={styles.quickActionText}>Mark Done</Text>
-                    </TouchableOpacity>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
 
@@ -785,6 +824,108 @@ const TasksTracker = ({ initialTasks }) => {
                 <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Task History Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={historyModalVisible}
+        onRequestClose={() => {
+          setHistoryModalVisible(false);
+          setTaskToViewHistory(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.historyModalContainer}>
+            <View style={styles.historyModalHeader}>
+              <Text style={styles.historyModalTitle}>
+                {taskToViewHistory?.name} History
+              </Text>
+              <TouchableOpacity
+                style={styles.historyModalCloseButton}
+                onPress={() => {
+                  setHistoryModalVisible(false);
+                  setTaskToViewHistory(null);
+                }}
+              >
+                <MaterialCommunityIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.historyModalBody}>
+              {taskToViewHistory ? (
+                <>
+                  <Text style={styles.historyModalSubtitle}>
+                    Completion Timeline
+                  </Text>
+
+                  {getTaskCompletions(taskToViewHistory).length > 0 ? (
+                    <FlatList
+                      data={getTaskCompletions(taskToViewHistory)}
+                      keyExtractor={(item) => item.id}
+                      renderItem={({ item }) => (
+                        <View style={styles.historyItem}>
+                          <View style={styles.historyItemLeft}>
+                            <View
+                              style={[
+                                styles.historyUserAvatar,
+                                {
+                                  backgroundColor: item.user.color || "#4F86C6",
+                                },
+                              ]}
+                            >
+                              <Text style={styles.historyUserInitial}>
+                                {item.user.username
+                                  ? item.user.username.charAt(0).toUpperCase()
+                                  : "?"}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.historyItemContent}>
+                            <Text style={styles.historyItemDate}>
+                              Week {item.weekNumber} ({item.dateString})
+                            </Text>
+                            <Text style={styles.historyItemUser}>
+                              Completed by{" "}
+                              {item.user.username || "Unknown user"}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                      style={styles.historyList}
+                      contentContainerStyle={styles.historyListContent}
+                    />
+                  ) : (
+                    <View style={styles.emptyHistoryContainer}>
+                      <MaterialCommunityIcons
+                        name="calendar-alert"
+                        size={48}
+                        color="#DDD"
+                      />
+                      <Text style={styles.emptyHistoryText}>
+                        No completion history found for this task
+                      </Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.loadingText}>Loading history...</Text>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.historyModalCloseFullButton}
+              onPress={() => {
+                setHistoryModalVisible(false);
+                setTaskToViewHistory(null);
+              }}
+            >
+              <Text style={styles.historyModalCloseFullButtonText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1417,7 +1558,122 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ... existing urgency styles ...
+  // Task History Modal styles
+  historyModalContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    width: "90%",
+    maxWidth: 500,
+    maxHeight: "80%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  historyModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEEEEE",
+    backgroundColor: "#F8F8F8",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  historyModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333333",
+    flex: 1,
+  },
+  historyModalCloseButton: {
+    padding: 4,
+  },
+  historyModalBody: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  historyModalSubtitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#555555",
+    marginBottom: 16,
+  },
+  historyList: {
+    maxHeight: 320,
+  },
+  historyListContent: {
+    paddingBottom: 16,
+  },
+  historyItem: {
+    flexDirection: "row",
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: "#F5F7FA",
+    borderRadius: 8,
+  },
+  historyItemLeft: {
+    marginRight: 12,
+  },
+  historyUserAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  historyUserInitial: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+  },
+  historyItemContent: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  historyItemDate: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#333333",
+    marginBottom: 4,
+  },
+  historyItemUser: {
+    fontSize: 13,
+    color: "#666666",
+  },
+  emptyHistoryContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  emptyHistoryText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#888888",
+    textAlign: "center",
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#666666",
+    textAlign: "center",
+    paddingVertical: 40,
+  },
+  historyModalCloseFullButton: {
+    backgroundColor: "#F5F5F5",
+    padding: 16,
+    alignItems: "center",
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#EEEEEE",
+  },
+  historyModalCloseFullButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#4F86C6",
+  },
 });
 
 export default TasksTracker;
