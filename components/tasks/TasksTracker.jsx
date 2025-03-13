@@ -11,6 +11,9 @@ import {
   Animated,
   Image,
   FlatList,
+  Dimensions,
+  Pressable,
+  Easing,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import LegendModal from "./LegendModal";
@@ -62,6 +65,13 @@ const TasksTracker = ({ initialTasks }) => {
 
   // Add state to track which stats are expanded
   const [expandedStats, setExpandedStats] = useState({});
+
+  // Replace long press state with double tap state
+  const [tappedTaskId, setTappedTaskId] = useState(null);
+  const [doubleTapTaskId, setDoubleTapTaskId] = useState(null);
+  const lastTapTimeRef = useRef(0);
+  const doubleTapTimeoutRef = useRef(null);
+  const completeAnimationRef = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Fade in animation
@@ -450,6 +460,115 @@ const TasksTracker = ({ initialTasks }) => {
     return userCompletions.sort((a, b) => b.count - a.count);
   };
 
+  // Group tasks by urgency level for grid layout
+  const groupTasksByUrgency = (tasks) => {
+    const groupedTasks = {};
+
+    // First pass: group tasks by urgency level
+    tasks.forEach((task) => {
+      const lastCompletion = getLastCompletionInfo(task);
+      const urgencyLevel = lastCompletion.urgencyLevel;
+
+      if (!groupedTasks[urgencyLevel]) {
+        groupedTasks[urgencyLevel] = [];
+      }
+
+      groupedTasks[urgencyLevel].push(task);
+    });
+
+    // Return an array of sections with title and data
+    return Object.keys(groupedTasks).map((urgencyLevel) => ({
+      urgencyLevel,
+      data: groupedTasks[urgencyLevel],
+      // Create pairs of tasks for the grid
+      pairs: chunk(groupedTasks[urgencyLevel], 2),
+    }));
+  };
+
+  // Helper function to split array into chunks of specified size
+  const chunk = (array, size) => {
+    const chunked = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunked.push(array.slice(i, i + size));
+    }
+    return chunked;
+  };
+
+  // Group the sorted tasks for grid layout
+  const groupedTasks = groupTasksByUrgency(sortedTasks);
+
+  // Get the screen width to calculate item width
+  const screenWidth = Dimensions.get("window").width;
+  const itemWidth = (screenWidth - 32) / 2; // 32 accounts for margins/padding
+
+  // Function to handle tap on a task
+  const handleTaskTap = (taskId) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300; // ms between taps to count as double-tap
+
+    // If this is the first tap or tap on a different task
+    if (tappedTaskId !== taskId) {
+      // Clear any existing timeout
+      if (doubleTapTimeoutRef.current) {
+        clearTimeout(doubleTapTimeoutRef.current);
+      }
+
+      // Set this task as tapped
+      setTappedTaskId(taskId);
+      lastTapTimeRef.current = now;
+
+      // Clear the tapped state after a delay if no second tap happens
+      doubleTapTimeoutRef.current = setTimeout(() => {
+        setTappedTaskId(null);
+      }, DOUBLE_TAP_DELAY);
+
+      return;
+    }
+
+    // If tapping the same task that was just tapped
+    const timeSinceLastTap = now - lastTapTimeRef.current;
+
+    if (timeSinceLastTap < DOUBLE_TAP_DELAY) {
+      // This is a double tap - mark task as complete
+      clearTimeout(doubleTapTimeoutRef.current);
+      setDoubleTapTaskId(taskId);
+      setTappedTaskId(null);
+
+      // Show completion animation
+      completeAnimationRef.setValue(0);
+      Animated.timing(completeAnimationRef, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+        easing: Easing.bezier(0.175, 0.885, 0.32, 1.275), // Bounce-like easing
+      }).start(() => {
+        // Actually complete the task after animation finishes
+        const currentWeek = getWeekNumberByDate(new Date()) - 1;
+        toggleTask(taskId, currentWeek);
+
+        // Reset animation state after a brief delay
+        setTimeout(() => {
+          setDoubleTapTaskId(null);
+        }, 200);
+      });
+    } else {
+      // If the second tap was too slow, treat as a new first tap
+      clearTimeout(doubleTapTimeoutRef.current);
+      lastTapTimeRef.current = now;
+
+      doubleTapTimeoutRef.current = setTimeout(() => {
+        setTappedTaskId(null);
+      }, DOUBLE_TAP_DELAY);
+    }
+
+    // Function to show task history on a new single tap
+    const showHistory = (taskId) => {
+      if (tappedTaskId === null && doubleTapTaskId === null) {
+        showTaskHistory(taskId);
+      }
+    };
+  };
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.filterHeader}>
@@ -538,7 +657,7 @@ const TasksTracker = ({ initialTasks }) => {
                 <TouchableOpacity
                   key={task.id}
                   style={[styles.cell, { width: TASK_COLUMN_WIDTH }]}
-                  onLongPress={() => confirmDeleteTask(task.id)}
+                  onPress={() => handleTaskTap(task.id)}
                 >
                   <View style={styles.taskTextContainer}>
                     <Text style={styles.taskText}>{task.name}</Text>
@@ -613,7 +732,7 @@ const TasksTracker = ({ initialTasks }) => {
                           { width: COLUMN_WIDTH },
                           index + 1 === currentWeekNumber && styles.currentCell,
                         ]}
-                        onPress={() => toggleTask(task.id, index)}
+                        onPress={() => handleTaskTap(task.id)}
                       >
                         <View
                           style={[
@@ -643,161 +762,166 @@ const TasksTracker = ({ initialTasks }) => {
           }
           style={styles.listContainer}
         >
-          {/* Task List View with Enhanced UI */}
           <View style={styles.listHeader}>
             <Text style={styles.listHeaderText}>Tasks</Text>
-            <Text style={styles.listHeaderText}>Last Completed</Text>
           </View>
 
-          {sortedTasks.map((task) => {
-            const lastCompletion = getLastCompletionInfo(task);
-            const urgencyLevel = lastCompletion.urgencyLevel;
+          {/* Render tasks grouped by urgency */}
+          {groupedTasks.map((group, groupIndex) => (
+            <View key={`group-${groupIndex}-${group.urgencyLevel}`}>
+              <View style={styles.urgencyHeader}>
+                <Text style={styles.urgencyHeaderText}>
+                  {group.urgencyLevel === "overdue" && "Overdue Tasks"}
+                  {group.urgencyLevel === "urgent" && "Urgent Tasks"}
+                  {group.urgencyLevel === "soon" && "Tasks Due Soon"}
+                  {group.urgencyLevel === "normal" && "Normal Tasks"}
+                </Text>
+              </View>
 
-            // Get urgency icon
-            let urgencyIcon;
-            switch (urgencyLevel) {
-              case "overdue":
-                urgencyIcon = "alarm-light";
-                break;
-              case "urgent":
-                urgencyIcon = "alert-circle-outline";
-                break;
-              case "soon":
-                urgencyIcon = "clock-time-four-outline";
-                break;
-              default:
-                urgencyIcon = "check-circle-outline";
-            }
-
-            return (
-              <TouchableOpacity
-                key={task.id}
-                onPress={() => showTaskHistory(task)}
-                activeOpacity={0.7}
-              >
+              {/* Render each pair of tasks in a row */}
+              {group.pairs.map((pair, pairIndex) => (
                 <View
-                  style={[styles.fancyListItem, styles[`${urgencyLevel}Item`]]}
+                  key={`pair-${groupIndex}-${pairIndex}`}
+                  style={styles.taskRow}
                 >
-                  <View style={styles.fancyListItemContent}>
-                    <View style={styles.fancyListItemHeader}>
-                      <View style={styles.taskTitleContainer}>
-                        <MaterialCommunityIcons
-                          name={urgencyIcon}
-                          size={20}
-                          color={styles[`${urgencyLevel}Text`].color}
-                          style={styles.urgencyIcon}
-                        />
-                        <Text
-                          style={[
-                            styles.fancyListItemTitle,
-                            styles[`${urgencyLevel}Text`],
-                          ]}
-                        >
-                          {task.name}
-                        </Text>
-                      </View>
-
+                  {pair.map((task, taskIndex) => {
+                    const lastCompletion = getLastCompletionInfo(task);
+                    return (
                       <TouchableOpacity
-                        style={styles.fancyDeleteIcon}
-                        onPress={() => confirmDeleteTask(task.id)}
+                        key={task.id}
+                        onPress={() => handleTaskTap(task.id)}
+                        style={[
+                          styles.taskItemContainer,
+                          styles[`${group.urgencyLevel}Item`],
+                          { width: itemWidth },
+                          tappedTaskId === task.id && styles.taskItemTapped,
+                        ]}
+                        activeOpacity={0.7}
                       >
-                        <Text style={styles.deleteIconText}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* User Completion Avatars */}
-                    <View style={styles.userCompletionsContainer}>
-                      {getTaskCompletionsByUser(task).map(({ user, count }) => (
-                        <View key={user.$id} style={styles.userCompletionItem}>
-                          <View
-                            style={[
-                              styles.userCompletionAvatar,
-                              { backgroundColor: user.color || "#4F86C6" },
-                            ]}
-                          >
-                            <Text style={styles.userCompletionInitial}>
-                              {user.username.charAt(0).toUpperCase()}
-                            </Text>
-                          </View>
-                          <View style={styles.userCompletionCount}>
-                            <Text style={styles.userCompletionCountText}>
-                              {count}
-                            </Text>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-
-                    <View style={styles.fancyListItemBody}>
-                      <View style={styles.lastCompletionInfoCard}>
-                        <Text style={styles.lastCompletionHeading}>
-                          Last Completed
-                        </Text>
-                        <Text
-                          style={[
-                            styles.lastCompletionText,
-                            styles[`${urgencyLevel}CompletionText`],
-                          ]}
-                        >
-                          {lastCompletion.text}
-                        </Text>
-
-                        {lastCompletion.user && (
-                          <View style={styles.userInfoContainer}>
-                            <View
+                        {/* Large centered "Complete?" message on first tap */}
+                        {tappedTaskId === task.id && (
+                          <View style={styles.completePromptOverlay}>
+                            <Text
                               style={[
-                                styles.userAvatar,
-                                { backgroundColor: lastCompletion.color },
+                                styles.completePromptText,
+                                {
+                                  color:
+                                    styles[`${group.urgencyLevel}Text`].color ||
+                                    "#4F86C6",
+                                  textShadowColor: "rgba(255, 255, 255, 0.8)",
+                                  textShadowOffset: { width: 1, height: 1 },
+                                  textShadowRadius: 3,
+                                },
                               ]}
                             >
-                              <Text style={styles.userInitial}>
-                                {lastCompletion.user.charAt(0).toUpperCase()}
-                              </Text>
-                            </View>
-                            <Text style={styles.userName}>
-                              {lastCompletion.user}
+                              Complete?
+                            </Text>
+                            <Text style={styles.completePromptSubtext}>
+                              Tap again to confirm
                             </Text>
                           </View>
                         )}
 
-                        {!lastCompletion.user && (
-                          <View style={styles.neverCompletedMessage}>
+                        {/* Show completion animation when double-tapped */}
+                        {doubleTapTaskId === task.id && (
+                          <Animated.View
+                            style={[
+                              styles.completionOverlay,
+                              {
+                                opacity: completeAnimationRef,
+                                transform: [
+                                  {
+                                    scale: completeAnimationRef.interpolate({
+                                      inputRange: [0, 0.5, 1],
+                                      outputRange: [0.5, 1.2, 1],
+                                    }),
+                                  },
+                                ],
+                              },
+                            ]}
+                          >
                             <MaterialCommunityIcons
-                              name="alert-outline"
-                              size={16}
-                              color="#888"
+                              name="check-circle"
+                              size={60}
+                              color="#4CAF50"
                             />
-                            <Text style={styles.neverCompletedText}>
-                              Never been completed
-                            </Text>
-                          </View>
+                          </Animated.View>
                         )}
-                      </View>
 
-                      <TouchableOpacity
-                        style={[
-                          styles.quickActionButton,
-                          styles[`${urgencyLevel}ActionButton`],
-                        ]}
-                        onPress={() => {
-                          const currentWeek =
-                            getWeekNumberByDate(new Date()) - 1;
-                          toggleTask(task.id, currentWeek);
-                        }}
-                      >
-                        <MaterialCommunityIcons
-                          name="checkbox-marked-circle-outline"
-                          size={18}
-                          color="#fff"
-                        />
-                        <Text style={styles.quickActionText}>Mark Done</Text>
+                        <View style={styles.taskItemHeader}>
+                          <Text
+                            style={[
+                              styles.taskItemTitle,
+                              styles[`${group.urgencyLevel}Text`],
+                            ]}
+                          >
+                            {task.name}
+                          </Text>
+
+                          <View style={styles.taskItemActions}>
+                            {/* History button */}
+                            <TouchableOpacity
+                              style={styles.historyButton}
+                              onPress={() => showTaskHistory(task)}
+                            >
+                              <Text style={styles.historyButtonText}>?</Text>
+                            </TouchableOpacity>
+
+                            {/* Delete button */}
+                            <TouchableOpacity
+                              style={styles.deleteIcon}
+                              onPress={() => confirmDeleteTask(task.id)}
+                            >
+                              <Text style={styles.deleteIconText}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* User avatars and other content */}
+                        <View style={styles.userCompletionsContainer}>
+                          {getTaskCompletionsByUser(task).map(
+                            ({ user, count }) => (
+                              <View
+                                key={user.$id}
+                                style={styles.userCompletionItem}
+                              >
+                                <View
+                                  style={[
+                                    styles.userCompletionAvatar,
+                                    {
+                                      backgroundColor: user.color || "#4F86C6",
+                                    },
+                                  ]}
+                                >
+                                  <Text style={styles.userCompletionInitial}>
+                                    {user.username.charAt(0).toUpperCase()}
+                                  </Text>
+                                </View>
+                                <View style={styles.userCompletionCount}>
+                                  <Text style={styles.userCompletionCountText}>
+                                    {count}
+                                  </Text>
+                                </View>
+                              </View>
+                            )
+                          )}
+                        </View>
+
+                        <View style={styles.taskItemFooter}>
+                          <Text style={styles.taskItemCompletionInfo}>
+                            {lastCompletion.text}
+                          </Text>
+                        </View>
                       </TouchableOpacity>
-                    </View>
-                  </View>
+                    );
+                  })}
+
+                  {/* If there's only one item in the pair, add an empty view for layout */}
+                  {pair.length === 1 && <View style={{ width: itemWidth }} />}
                 </View>
-              </TouchableOpacity>
-            );
-          })}
+              ))}
+            </View>
+          ))}
 
           {/* Fancy Add Button */}
           <TouchableOpacity
@@ -1246,14 +1370,19 @@ const styles = StyleSheet.create({
     color: "#666666",
   },
   listItemContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEEEEE",
+    backgroundColor: "#FFFFFF",
+    marginVertical: 4,
+    marginHorizontal: 8,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+    padding: 8,
   },
   listItemTitleWrapper: {
-    flex: 0.4,
+    flex: 1,
   },
   listItemTitleContainer: {
     flexDirection: "row",
@@ -1261,126 +1390,75 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   listItemTitle: {
-    fontSize: 16,
-    color: "#333333",
-  },
-  listItemCompletionWrapper: {
-    flex: 0.6,
-    alignItems: "flex-end",
-  },
-  lastCompletionContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  lastCompletionText: {
-    fontSize: 14,
-    color: "#666666",
-    marginBottom: 4,
-  },
-  lastCompletionUserContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  lastCompletionByText: {
-    fontSize: 12,
-    color: "#888888",
-  },
-  lastCompletionUserText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#444444",
-  },
-  userColorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
-  // User stats section
-  statsContainer: {
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
-  },
-  statsSectionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#333333",
-    marginBottom: 16,
+    flex: 1,
   },
-  statItem: {
+  listItemBody: {
+    marginTop: 4,
+  },
+  listItemCompletionInfo: {
+    fontSize: 12,
+    color: "#666666",
+  },
+  // User completion avatars
+  userCompletionsContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
+    flexWrap: "wrap",
+    marginBottom: 6,
+    marginTop: 4,
+    paddingHorizontal: 0,
   },
-  statRank: {
+  userCompletionItem: {
+    marginRight: 8,
+    marginBottom: 4,
+    position: "relative",
+  },
+  userCompletionAvatar: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#F0F0F0",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "white",
   },
-  statRankText: {
+  userCompletionInitial: {
+    color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "bold",
-    color: "#666666",
   },
-  statBar: {
-    flex: 1,
-    padding: 12,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
+  userCompletionCount: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    backgroundColor: "#4F86C6",
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "white",
   },
-  statUsername: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333333",
+  userCompletionCountText: {
+    color: "white",
+    fontSize: 8,
+    fontWeight: "bold",
   },
-  statCount: {
+  // Quick action buttons
+  taskActionButton: {
+    backgroundColor: "#4F86C6",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+  },
+  taskActionButtonText: {
+    color: "#FFFFFF",
     fontSize: 12,
-    color: "#666666",
-    marginTop: 4,
-  },
-  // New styles for the add task buttons
-  taskAddButton: {
-    margin: 10,
-    padding: 10,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderStyle: "dashed",
-  },
-  taskAddButtonText: {
-    color: "#4F86C6",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  listAddButton: {
-    marginVertical: 16,
-    padding: 12,
-    backgroundColor: "#F5F5F5",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderStyle: "dashed",
-  },
-  listAddButtonText: {
-    color: "#4F86C6",
-    fontSize: 16,
     fontWeight: "500",
   },
   // Delete modal styles
@@ -1867,49 +1945,119 @@ const styles = StyleSheet.create({
   expandIcon: {
     marginLeft: 4,
   },
-  // New styles for user completions
-  userCompletionsContainer: {
+  // New styles for the grid layout
+  taskRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 12,
-    paddingHorizontal: 4,
+    justifyContent: "space-between",
+    marginHorizontal: 8,
+    marginBottom: 16,
   },
-  userCompletionItem: {
-    marginRight: 12,
+  taskItemContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+    padding: 12,
+    margin: 4,
+  },
+  taskItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
-    position: "relative",
   },
-  userCompletionAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  taskItemTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    flex: 1,
+  },
+  taskItemFooter: {
+    marginTop: 4,
+  },
+  taskItemCompletionInfo: {
+    fontSize: 12,
+    color: "#666666",
+  },
+  urgencyHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#F5F7FA",
+    marginVertical: 4,
+  },
+  urgencyHeaderText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#555555",
+  },
+  // Add styles for the double-tap functionality
+  taskItemTapped: {
+    backgroundColor: "#F5F9FF",
+  },
+  tappedIndicator: {
+    fontStyle: "italic",
+    color: "#4F86C6",
+  },
+  completionOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "white",
+    borderRadius: 8,
+    zIndex: 5,
   },
-  userCompletionInitial: {
-    color: "#FFFFFF",
+  completePromptOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+    zIndex: 5,
+  },
+  completePromptText: {
+    fontSize: 24,
+    fontWeight: "900",
+    marginBottom: 4,
+    textShadowColor: "rgba(255, 255, 255, 0.8)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  completePromptSubtext: {
+    fontSize: 12,
+    color: "#444",
+    fontWeight: "500",
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  taskItemActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  historyButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#EEF2F7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  historyButtonText: {
     fontSize: 14,
     fontWeight: "bold",
-  },
-  userCompletionCount: {
-    position: "absolute",
-    bottom: -4,
-    right: -4,
-    backgroundColor: "#4F86C6",
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "white",
-  },
-  userCompletionCountText: {
-    color: "white",
-    fontSize: 10,
-    fontWeight: "bold",
+    color: "#4F86C6",
   },
 });
 
