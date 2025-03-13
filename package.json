@@ -31,7 +31,8 @@
     "react-native-screens": "~4.4.0",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "~0.19.13",
-    "undefined": "react-native-community/datetimepicker"
+    "undefined": "react-native-community/datetimepicker",
+    "expo-linear-gradient": "~14.0.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
