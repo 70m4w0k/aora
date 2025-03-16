@@ -732,7 +732,7 @@ const TasksTracker = ({ initialTasks }) => {
                           { width: COLUMN_WIDTH },
                           index + 1 === currentWeekNumber && styles.currentCell,
                         ]}
-                        onPress={() => handleTaskTap(task.id)}
+                        onPress={() => toggleTask(task.id, index)}
                       >
                         <View
                           style={[
