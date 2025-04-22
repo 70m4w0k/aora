@@ -15,6 +15,7 @@ import calendar from "../assets/icons/calendar.png";
 import list from "../assets/icons/list.png";
 import calculator from "../assets/icons/calculator.png";
 import tipi from "../assets/icons/tipi.png";
+import seedOutline from "../assets/icons/seed-outline.png";
 
 export default {
   play,
@@ -34,4 +35,5 @@ export default {
   list,
   calculator,
   tipi,
+  seedOutline,
 };

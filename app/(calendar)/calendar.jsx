@@ -16,7 +16,7 @@ const Calendar = () => {
 
       // Get all tasks done
       const taskDoneList = await getAllTasksDone();
-      console.log("initTasksToDisplay() - taskDoneList", taskDoneList);
+      // console.log("initTasksToDisplay() - taskDoneList", taskDoneList);
 
       if (taskDoneList.length > 0) {
         tasksToDisplayInitializer = extractTasks(taskDoneList);
@@ -24,7 +24,7 @@ const Calendar = () => {
 
       // Get all tasks
       const tasks = await getAllTasks();
-      console.log("initTasksToDisplay() - tasks", tasks);
+      // console.log("initTasksToDisplay() - tasks", tasks);
 
       // Merge tasks that are not already in tasksToDisplayInitializer
       const finalTasksToDisplay = tasks.reduce((acc, task) => {
@@ -81,7 +81,7 @@ const Calendar = () => {
     return updatedTasks;
   };
 
-  console.log("tasksToDisplay", tasksToDisplay);
+  // console.log("tasksToDisplay", tasksToDisplay);
 
   return <TasksTracker initialTasks={tasksToDisplay} />;
 };

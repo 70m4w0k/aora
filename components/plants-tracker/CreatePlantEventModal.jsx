@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -35,19 +35,48 @@ const EventTypeButton = ({ label, value, selected, onPress }) => (
   </TouchableOpacity>
 );
 
-const CreatePlantEventModal = ({ visible, onClose, onEventCreated, plant }) => {
+const CreatePlantEventModal = ({ visible, onClose, onEventCreated, plant, weekNumber }) => {
   const { user } = useGlobalContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  // Get first day of the week (if weekNumber is provided)
+  const getFirstDayOfWeekDate = (week) => {
+    if (!week) return new Date(); // Default to today if no week specified
+    
+    const currentYear = new Date().getFullYear();
+    // Create a date for Jan 1 of current year
+    const firstDayOfYear = new Date(currentYear, 0, 1);
+    
+    // Calculate days to add: (week - 1) weeks * 7 days per week
+    // Adjust for day of week that Jan 1 falls on
+    const dayOfWeek = firstDayOfYear.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysToAdd = (week - 1) * 7 - dayOfWeek + 1; // +1 to start on Monday
+    
+    const result = new Date(firstDayOfYear);
+    result.setDate(firstDayOfYear.getDate() + daysToAdd);
+    return result;
+  };
+
+  // Initialize form with date from selected week if provided
   const [form, setForm] = useState({
     eventType: PlantEventTypes.WATER,
-    date: new Date(),
+    date: getFirstDayOfWeekDate(weekNumber),
     notes: "",
     images: [],
     includeWeather: true
   });
+
+  // Update form when weekNumber changes
+  useEffect(() => {
+    if (visible) {
+      setForm(prev => ({
+        ...prev,
+        date: getFirstDayOfWeekDate(weekNumber)
+      }));
+    }
+  }, [weekNumber, visible]);
 
   const pickImage = async () => {
     try {
@@ -169,6 +198,7 @@ const CreatePlantEventModal = ({ visible, onClose, onEventCreated, plant }) => {
           <ScrollView>
             <Text style={styles.modalTitle}>
               Record a {getEventTypeLabel(form.eventType)} Event
+              {weekNumber ? ` for Week ${weekNumber}` : ''}
             </Text>
             
             {plant && (
@@ -245,7 +275,10 @@ const CreatePlantEventModal = ({ visible, onClose, onEventCreated, plant }) => {
               style={styles.datePickerButton}
               onPress={() => setShowDatePicker(true)}
             >
-              <Text style={styles.dateText}>{formatDate(form.date)}</Text>
+              <Text style={styles.dateText}>
+                {formatDate(form.date)}
+                {weekNumber ? ` (Week ${weekNumber})` : ''}
+              </Text>
             </TouchableOpacity>
             
             {showDatePicker && (

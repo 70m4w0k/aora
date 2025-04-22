@@ -134,7 +134,7 @@ const Home = () => {
             title="Chores Calendar" 
             count={`${stats.pendingChores} pending`}
             icon="📅"
-            onPress={() => router.push("/calendar")}
+            onPress={() => router.push("/(tabs)/calendar")}
             color="#4F86C6"
           />
           
