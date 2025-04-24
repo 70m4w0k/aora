@@ -137,11 +137,13 @@ const GardenCalendar = () => {
   const fetchData = async () => {
     setRefreshing(true);
     try {
-      // Fetch user's plants
-      const userPlants = await getUserPlants(user.$id);
-      setPlants(userPlants);
-
-      // Fetch upcoming reminders
+      if(user && user.$id) {
+        // Fetch user's plants
+        const userPlants = await getUserPlants(user.$id);
+        setPlants(userPlants);
+        console.log("userPlants", userPlants);
+      
+        // Fetch upcoming reminders
       // const reminders = await getUpcomingReminders(user.$id);
       // console.log("reminders", reminders);
       // setUpcomingReminders(reminders);
@@ -154,6 +156,7 @@ const GardenCalendar = () => {
         eventsData[plant.$id] = processPlantEvents(events);
       }
       setPlantEvents(eventsData);
+    }
     } catch (error) {
       console.error("Error fetching garden data:", error);
       Alert.alert("Error", "Failed to load garden data. Pull down to refresh and try again.");
