@@ -1,7 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { Redirect, Tabs } from "expo-router";
 import { Text, View, Animated, StyleSheet, Image } from "react-native";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Ionicons } from "@expo/vector-icons";
 
 import Loader from "../../components/Loader";
@@ -38,20 +38,28 @@ const TAB_CONFIG = {
 
 const TabIcon = ({ name, focused, focusAnim }) => {
   const config = TAB_CONFIG[name];
+  const flashAnim = useRef(new Animated.Value(0)).current;
+  
+  // Flash effect on focus
+  useEffect(() => {
+    if (focused) {
+      flashAnim.setValue(0.3);
+      Animated.timing(flashAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [focused]);
   
   const iconScale = focusAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.1],
-  });
-
-  const bgOpacity = focusAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
+    outputRange: [1, 1.05],
   });
 
   return (
     <View style={styles.tabIconContainer}>
-      <Animated.View style={[styles.tabGlow, { backgroundColor: config.color, opacity: bgOpacity }]} />
+      <Animated.View style={[styles.tabGlow, { backgroundColor: config.color, opacity: flashAnim }]} />
       <Animated.View style={[styles.tabIconWrapper, { transform: [{ scale: iconScale }] }]}>
         {config.useCustomIcon ? (
           <Image 
@@ -68,18 +76,15 @@ const TabIcon = ({ name, focused, focusAnim }) => {
           />
         )}
       </Animated.View>
-      <Animated.Text 
+      <Text 
         style={[
           styles.tabLabel,
-          { 
-            color: focused ? config.color : COLORS.textTertiary,
-            opacity: focusAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }),
-          }
+          { color: focused ? config.color : COLORS.textTertiary }
         ]}
         numberOfLines={1}
       >
         {config.label}
-      </Animated.Text>
+      </Text>
     </View>
   );
 };
