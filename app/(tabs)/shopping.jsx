@@ -11,15 +11,14 @@ import {
   StyleSheet,
   RefreshControl,
   Animated,
-  Image,
   Platform,
   ScrollView,
   Dimensions,
   Easing,
+  KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
-import BouncyCheckbox from "react-native-bouncy-checkbox";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
@@ -38,6 +37,14 @@ const ShoppingScreen = () => {
   const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  
+  // Quick add state
+  const [quickAddText, setQuickAddText] = useState("");
+  const [quickAddCategory, setQuickAddCategory] = useState(ShoppingCategories.GROCERIES);
+  const [isAddingItem, setIsAddingItem] = useState(false);
+  const quickAddInputRef = useRef(null);
+  
+  // Edit form state (for modal)
   const [form, setForm] = useState({
     name: "",
     quantity: "1",
@@ -94,6 +101,31 @@ const ShoppingScreen = () => {
       }),
     ]).start();
   }, [household?.$id]);
+
+  // Quick add item handler - ultra fast addition
+  const handleQuickAdd = async () => {
+    if (quickAddText.trim() === "") return;
+    
+    setIsAddingItem(true);
+    try {
+      await createShoppingItem({
+        name: quickAddText.trim(),
+        quantity: "1",
+        category: quickAddCategory,
+        assignedTo: "",
+        userId: user.$id,
+        householdId: household.$id,
+      });
+      
+      setQuickAddText("");
+      Keyboard.dismiss();
+      await fetchItems();
+    } catch (error) {
+      Alert.alert("Error", error.message);
+    } finally {
+      setIsAddingItem(false);
+    }
+  };
 
   const fetchItems = async () => {
     if (!household?.$id) return;
@@ -255,8 +287,8 @@ const ShoppingScreen = () => {
     return true;
   });
 
-  // Create data with an "add item" card at the end
-  const listData = [...filteredItems, { isAddItemCard: true }];
+  // No more "add item" card - we use inline quick-add
+  const listData = filteredItems;
 
   // Function to handle tap on a shopping item
   const handleItemTap = (itemId) => {
@@ -321,27 +353,19 @@ const ShoppingScreen = () => {
     }
   };
 
+  // Update quantity inline
+  const handleQuantityChange = async (item, delta) => {
+    const newQty = Math.max(1, parseInt(item.quantity || "1") + delta);
+    try {
+      await updateShoppingItem(item.$id, { quantity: newQty.toString() });
+      await fetchItems();
+    } catch (error) {
+      console.error("Error updating quantity:", error);
+    }
+  };
+
   // Render the items in a 2-column grid
   const renderItem = ({ item, index }) => {
-    // If this is the "add item" card
-    if (item.isAddItemCard) {
-      return (
-        <TouchableOpacity
-          style={[styles.itemCard, styles.addItemCard, { width: itemWidth }]}
-          onPress={() => setModalVisible(true)}
-        >
-          <View style={styles.addItemContent}>
-            <MaterialCommunityIcons
-              name="plus-circle-outline"
-              size={32}
-              color="#4F86C6"
-            />
-            <Text style={styles.addItemText}>Add Item</Text>
-          </View>
-        </TouchableOpacity>
-      );
-    }
-
     // Regular shopping item
     return (
       <TouchableOpacity
@@ -453,8 +477,23 @@ const ShoppingScreen = () => {
                 {item.category}
               </Text>
             </View>
+          </View>
 
-            <Text style={styles.quantityText}>Qty: {item.quantity}</Text>
+          {/* Quantity stepper */}
+          <View style={styles.quantityStepper}>
+            <TouchableOpacity 
+              style={styles.stepperButton}
+              onPress={() => handleQuantityChange(item, -1)}
+            >
+              <Ionicons name="remove" size={16} color="#A1A1AA" />
+            </TouchableOpacity>
+            <Text style={styles.quantityValue}>{item.quantity || 1}</Text>
+            <TouchableOpacity 
+              style={styles.stepperButton}
+              onPress={() => handleQuantityChange(item, 1)}
+            >
+              <Ionicons name="add" size={16} color="#10B981" />
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -504,29 +543,103 @@ const ShoppingScreen = () => {
     );
   };
 
+  // Category chip data for quick add
+  const categoryChips = [
+    { id: ShoppingCategories.GROCERIES, icon: "cart", label: "Grocery" },
+    { id: ShoppingCategories.HOUSEHOLD, icon: "home", label: "Home" },
+    { id: ShoppingCategories.PERSONAL, icon: "person", label: "Personal" },
+    { id: ShoppingCategories.OTHER, icon: "apps", label: "Other" },
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={[styles.header, { backgroundColor: "#4F86C6" }]}>
-        <View style={styles.headerContent}>
-          <Text style={[styles.title, { color: "#FFFFFF" }]}>
-            Shopping List
-          </Text>
-        </View>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <Text style={styles.title}>Shopping List</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={styles.filterToggle}
+                onPress={() => setShowCompleted(!showCompleted)}
+              >
+                <Ionicons 
+                  name={showCompleted ? "eye" : "eye-off"} 
+                  size={20} 
+                  color={showCompleted ? "#10B981" : "#71717A"} 
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-        {renderCategoryTabs()}
+          {/* Quick Add Input */}
+          <View style={styles.quickAddContainer}>
+            <View style={styles.quickAddInputWrapper}>
+              <Ionicons name="add-circle" size={24} color="#10B981" style={styles.quickAddIcon} />
+              <TextInput
+                ref={quickAddInputRef}
+                style={styles.quickAddInput}
+                placeholder="Add item..."
+                placeholderTextColor="#71717A"
+                value={quickAddText}
+                onChangeText={setQuickAddText}
+                onSubmitEditing={handleQuickAdd}
+                returnKeyType="done"
+                blurOnSubmit={false}
+              />
+              {quickAddText.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.quickAddButton}
+                  onPress={handleQuickAdd}
+                  disabled={isAddingItem}
+                >
+                  <Ionicons 
+                    name={isAddingItem ? "hourglass" : "arrow-up-circle"} 
+                    size={28} 
+                    color="#10B981" 
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {/* Category chips for quick selection */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryChipsScroll}
+              contentContainerStyle={styles.categoryChipsContainer}
+            >
+              {categoryChips.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.categoryChip,
+                    quickAddCategory === cat.id && styles.categoryChipActive,
+                  ]}
+                  onPress={() => setQuickAddCategory(cat.id)}
+                >
+                  <Ionicons 
+                    name={cat.icon} 
+                    size={14} 
+                    color={quickAddCategory === cat.id ? "#FFFFFF" : "#71717A"} 
+                  />
+                  <Text style={[
+                    styles.categoryChipText,
+                    quickAddCategory === cat.id && styles.categoryChipTextActive,
+                  ]}>
+                    {cat.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
-        <View style={styles.showCompletedToggle}>
-          <BouncyCheckbox
-            size={24}
-            fillColor="#FFFFFF"
-            unfillColor="#3A6EA5"
-            text="Show completed items"
-            textStyle={{ color: "#FFFFFF", textDecorationLine: "none" }}
-            isChecked={showCompleted}
-            onPress={() => setShowCompleted(!showCompleted)}
-          />
+          {/* Filter tabs */}
+          {renderCategoryTabs()}
         </View>
-      </View>
 
       <Animated.View style={styles.content}>
         <FlatList
@@ -548,6 +661,7 @@ const ShoppingScreen = () => {
           }
         />
       </Animated.View>
+      </KeyboardAvoidingView>
 
       <Modal
         visible={modalVisible}
@@ -663,18 +777,85 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: Platform.OS === "android" ? 40 : 0,
     paddingBottom: 12,
-    backgroundColor: "#10B981",
+    backgroundColor: "#111114",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
-  headerContent: {
+  headerTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 16,
+    marginBottom: 12,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  filterToggle: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#1A1A1F",
   },
   title: {
     fontSize: 24,
     fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  // Quick Add Styles
+  quickAddContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  quickAddInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "rgba(16, 185, 129, 0.3)",
+  },
+  quickAddIcon: {
+    marginRight: 8,
+  },
+  quickAddInput: {
+    flex: 1,
+    height: 48,
+    color: "#FFFFFF",
+    fontSize: 16,
+  },
+  quickAddButton: {
+    padding: 4,
+  },
+  categoryChipsScroll: {
+    marginTop: 10,
+  },
+  categoryChipsContainer: {
+    gap: 8,
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "#1A1A1F",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    gap: 4,
+  },
+  categoryChipActive: {
+    backgroundColor: "#10B981",
+    borderColor: "#10B981",
+  },
+  categoryChipText: {
+    fontSize: 12,
+    color: "#71717A",
+    fontWeight: "500",
+  },
+  categoryChipTextActive: {
     color: "#FFFFFF",
   },
   content: {
@@ -746,6 +927,26 @@ const styles = StyleSheet.create({
   quantityText: {
     fontSize: 11,
     color: "#A1A1AA",
+  },
+  quantityStepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#111114",
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+  },
+  stepperButton: {
+    padding: 8,
+  },
+  quantityValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    minWidth: 24,
+    textAlign: "center",
   },
   deleteButton: {
     padding: 8,
@@ -870,25 +1071,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
-  },
-  addItemCard: {
-    borderStyle: "dashed",
-    borderWidth: 1.5,
-    borderColor: "#10B981",
-    backgroundColor: "rgba(16, 185, 129, 0.08)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  addItemContent: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  addItemText: {
-    color: "#10B981",
-    fontSize: 14,
-    fontWeight: "500",
-    marginTop: 8,
   },
   itemCardTapped: {
     backgroundColor: "#222228",
