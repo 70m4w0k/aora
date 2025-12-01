@@ -251,6 +251,15 @@ const Home = () => {
             gradient={[COLORS.accent.primary, '#7C3AED']}
             onPress={() => router.push("/(documents)")}
           />
+          
+          <FeatureCard 
+            title="Price Tracker"
+            subtitle="Compare prices & track spending"
+            icon="pricetag"
+            color="#F59E0B"
+            gradient={['#F59E0B', '#D97706']}
+            onPress={() => router.push("/(prices)")}
+          />
         </View>
 
         <View style={{ height: 100 }} />
