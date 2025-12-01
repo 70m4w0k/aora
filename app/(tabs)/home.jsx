@@ -19,7 +19,8 @@ import {
   getHouseholdShoppingItems,
   getHouseholdExpenses,
   getHouseholdTasks,
-  getLatestTasksImplByTaskId
+  getLatestTasksImplByTaskId,
+  getHouseholdDocuments
 } from "../../lib/appwrite";
 
 // Dark theme colors - consistent across app
@@ -86,7 +87,8 @@ const Home = () => {
     pendingChores: 0,
     completedChores: 0,
     shoppingItems: 0,
-    pendingExpenses: 0
+    pendingExpenses: 0,
+    documents: 0
   });
 
   const fetchStats = async () => {
@@ -123,12 +125,21 @@ const Home = () => {
       } catch (error) {
         console.error("Error fetching expenses:", error);
       }
+
+      let documentsCount = 0;
+      try {
+        const documents = await getHouseholdDocuments(household.$id);
+        documentsCount = documents?.length || 0;
+      } catch (error) {
+        console.error("Error fetching documents:", error);
+      }
       
       setStats({
         pendingChores: pendingCount,
         completedChores: completedCount,
         shoppingItems: shoppingCount,
-        pendingExpenses: expensesCount
+        pendingExpenses: expensesCount,
+        documents: documentsCount
       });
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -230,6 +241,15 @@ const Home = () => {
             color={COLORS.accent.expenses}
             gradient={[COLORS.accent.expenses, '#E11D48']}
             onPress={() => router.push("/(tabs)/expenses")}
+          />
+          
+          <FeatureCard 
+            title="Documents"
+            subtitle={stats.documents > 0 ? `${stats.documents} files stored` : "Store your household files"}
+            icon="folder"
+            color={COLORS.accent.primary}
+            gradient={[COLORS.accent.primary, '#7C3AED']}
+            onPress={() => router.push("/(documents)")}
           />
         </View>
 
