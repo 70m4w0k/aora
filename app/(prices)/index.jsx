@@ -10,6 +10,8 @@ import {
   Alert,
   RefreshControl,
   FlatList,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,10 +24,17 @@ import {
   getHouseholdStores,
   createProduct,
   createStore,
+  updateProduct,
+  deleteProduct,
+  updateStore,
+  deleteStore,
   getProductByBarcode,
   addPriceEntry,
+  updatePriceEntry,
+  deletePriceEntry,
   getProductPriceHistory,
   getProductLatestPrices,
+  lookupBarcode,
   ProductCategories,
 } from "../../lib/appwrite";
 
@@ -75,16 +84,25 @@ const PriceTracker = () => {
   const [addStoreModalVisible, setAddStoreModalVisible] = useState(false);
   const [addPriceModalVisible, setAddPriceModalVisible] = useState(false);
   const [productDetailVisible, setProductDetailVisible] = useState(false);
+  const [editStoreModalVisible, setEditStoreModalVisible] = useState(false);
 
   // Forms
-  const [newProduct, setNewProduct] = useState({ name: "", brand: "", barcode: "", category: "groceries", unit: "unit" });
+  const [newProduct, setNewProduct] = useState({ 
+    name: "", brand: "", barcode: "", category: "groceries", unit: "g", weight: "", imageUrl: "" 
+  });
   const [newStore, setNewStore] = useState({ name: "", address: "" });
-  const [newPrice, setNewPrice] = useState({ productId: "", storeId: "", price: "", quantity: "1" });
+  const [editStore, setEditStore] = useState(null);
+  const [newPrice, setNewPrice] = useState({ productId: "", storeId: "", price: "", quantity: "1", weight: "" });
   
   // Selected product for detail view
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productPriceHistory, setProductPriceHistory] = useState([]);
   const [productLatestPrices, setProductLatestPrices] = useState([]);
+  const [isEditingProduct, setIsEditingProduct] = useState(false);
+
+  // Open Food Facts lookup
+  const [lookingUp, setLookingUp] = useState(false);
+  const [offData, setOffData] = useState(null);
 
   const [activeTab, setActiveTab] = useState("products"); // products, stores
 
@@ -118,20 +136,43 @@ const PriceTracker = () => {
   // Handle barcode scan
   const handleBarcodeScan = async ({ data }) => {
     setScannerVisible(false);
+    setLookingUp(true);
+    setOffData(null);
     
     try {
-      // Check if product exists
+      // Check if product exists in our database
       const existingProduct = await getProductByBarcode(data, householdId);
       
       if (existingProduct) {
-        // Open product detail
+        setLookingUp(false);
         openProductDetail(existingProduct);
-      } else {
-        // Open add product modal with barcode prefilled
-        setNewProduct({ ...newProduct, barcode: data, name: "", brand: "", category: "groceries", unit: "unit" });
-        setAddProductModalVisible(true);
+        return;
       }
+      
+      // Lookup in Open Food Facts
+      const offProduct = await lookupBarcode(data);
+      
+      if (offProduct && offProduct.found) {
+        setOffData(offProduct);
+        setNewProduct({
+          barcode: data,
+          name: offProduct.name || "",
+          brand: offProduct.brand || "",
+          category: offProduct.category || "groceries",
+          unit: offProduct.unit || "g",
+          weight: offProduct.weight?.toString() || "",
+          imageUrl: offProduct.imageUrl || "",
+        });
+      } else {
+        setNewProduct({ 
+          barcode: data, name: "", brand: "", category: "groceries", unit: "g", weight: "", imageUrl: "" 
+        });
+      }
+      
+      setLookingUp(false);
+      setAddProductModalVisible(true);
     } catch (error) {
+      setLookingUp(false);
       Alert.alert("Error", "Failed to lookup barcode");
     }
   };
@@ -146,16 +187,69 @@ const PriceTracker = () => {
     try {
       await createProduct({
         ...newProduct,
+        weight: newProduct.weight ? parseFloat(newProduct.weight) : null,
         householdId,
         userId: user.$id,
       });
       setAddProductModalVisible(false);
-      setNewProduct({ name: "", brand: "", barcode: "", category: "groceries", unit: "unit" });
+      setNewProduct({ name: "", brand: "", barcode: "", category: "groceries", unit: "g", weight: "", imageUrl: "" });
+      setOffData(null);
       fetchData();
       Alert.alert("Success", "Product added!");
     } catch (error) {
       Alert.alert("Error", "Failed to add product");
     }
+  };
+
+  // Update product
+  const handleUpdateProduct = async () => {
+    if (!selectedProduct || !newProduct.name.trim()) {
+      Alert.alert("Error", "Please enter a product name");
+      return;
+    }
+
+    try {
+      await updateProduct(selectedProduct.$id, {
+        name: newProduct.name,
+        brand: newProduct.brand || null,
+        category: newProduct.category,
+        unit: newProduct.unit,
+        weight: newProduct.weight ? parseFloat(newProduct.weight) : null,
+        imageUrl: newProduct.imageUrl || null,
+      });
+      setIsEditingProduct(false);
+      setSelectedProduct({ ...selectedProduct, ...newProduct, weight: newProduct.weight ? parseFloat(newProduct.weight) : null });
+      fetchData();
+      Alert.alert("Success", "Product updated!");
+    } catch (error) {
+      Alert.alert("Error", "Failed to update product");
+    }
+  };
+
+  // Delete product
+  const handleDeleteProduct = () => {
+    Alert.alert(
+      "Delete Product",
+      `Are you sure you want to delete "${selectedProduct?.name}"? This will also delete all price history.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteProduct(selectedProduct.$id);
+              setProductDetailVisible(false);
+              setSelectedProduct(null);
+              fetchData();
+              Alert.alert("Success", "Product deleted!");
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete product");
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Add new store
@@ -180,6 +274,58 @@ const PriceTracker = () => {
     }
   };
 
+  // Edit store
+  const openEditStore = (store) => {
+    setEditStore(store);
+    setNewStore({ name: store.name, address: store.address || "" });
+    setEditStoreModalVisible(true);
+  };
+
+  const handleUpdateStore = async () => {
+    if (!editStore || !newStore.name.trim()) {
+      Alert.alert("Error", "Please enter a store name");
+      return;
+    }
+
+    try {
+      await updateStore(editStore.$id, {
+        name: newStore.name,
+        address: newStore.address || null,
+      });
+      setEditStoreModalVisible(false);
+      setEditStore(null);
+      setNewStore({ name: "", address: "" });
+      fetchData();
+      Alert.alert("Success", "Store updated!");
+    } catch (error) {
+      Alert.alert("Error", "Failed to update store");
+    }
+  };
+
+  // Delete store
+  const handleDeleteStore = (store) => {
+    Alert.alert(
+      "Delete Store",
+      `Are you sure you want to delete "${store.name}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteStore(store.$id);
+              fetchData();
+              Alert.alert("Success", "Store deleted!");
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete store");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Add price entry
   const handleAddPrice = async () => {
     if (!newPrice.productId || !newPrice.storeId || !newPrice.price) {
@@ -189,6 +335,7 @@ const PriceTracker = () => {
 
     const price = parseFloat(newPrice.price);
     const quantity = parseFloat(newPrice.quantity) || 1;
+    const weight = newPrice.weight ? parseFloat(newPrice.weight) : (selectedProduct?.weight || null);
 
     try {
       await addPriceEntry({
@@ -196,12 +343,12 @@ const PriceTracker = () => {
         storeId: newPrice.storeId,
         price,
         quantity,
-        pricePerUnit: price / quantity,
+        weight,
         userId: user.$id,
         householdId,
       });
       setAddPriceModalVisible(false);
-      setNewPrice({ productId: "", storeId: "", price: "", quantity: "1" });
+      setNewPrice({ productId: "", storeId: "", price: "", quantity: "1", weight: "" });
       
       // Refresh product detail if open
       if (selectedProduct) {
@@ -212,6 +359,33 @@ const PriceTracker = () => {
     } catch (error) {
       Alert.alert("Error", "Failed to record price");
     }
+  };
+
+  // Delete price entry
+  const handleDeletePriceEntry = (entry) => {
+    Alert.alert(
+      "Delete Price Entry",
+      "Are you sure you want to delete this price entry?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deletePriceEntry(entry.$id);
+              // Refresh product detail
+              if (selectedProduct) {
+                openProductDetail(selectedProduct);
+              }
+              Alert.alert("Success", "Price entry deleted!");
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete price entry");
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Open product detail
@@ -259,12 +433,18 @@ const PriceTracker = () => {
         style={styles.productCard}
         onPress={() => openProductDetail(product)}
       >
-        <View style={[styles.productIcon, { backgroundColor: `${categoryConfig.color}20` }]}>
-          <Ionicons name={categoryConfig.icon} size={20} color={categoryConfig.color} />
-        </View>
+        {product.imageUrl ? (
+          <Image source={{ uri: product.imageUrl }} style={styles.productImage} />
+        ) : (
+          <View style={[styles.productIcon, { backgroundColor: `${categoryConfig.color}20` }]}>
+            <Ionicons name={categoryConfig.icon} size={20} color={categoryConfig.color} />
+          </View>
+        )}
         <View style={styles.productInfo}>
           <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
-          {product.brand && <Text style={styles.productBrand}>{product.brand}</Text>}
+          <Text style={styles.productBrand} numberOfLines={1}>
+            {[product.brand, product.weight && `${product.weight}${product.unit || 'g'}`].filter(Boolean).join(' • ') || 'No details'}
+          </Text>
         </View>
         <TouchableOpacity 
           style={styles.addPriceButton}
@@ -286,6 +466,12 @@ const PriceTracker = () => {
         <Text style={styles.storeName}>{store.name}</Text>
         {store.address && <Text style={styles.storeAddress}>{store.address}</Text>}
       </View>
+      <TouchableOpacity style={styles.storeEditBtn} onPress={() => openEditStore(store)}>
+        <Ionicons name="pencil" size={16} color={COLORS.textSecondary} />
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.storeDeleteBtn} onPress={() => handleDeleteStore(store)}>
+        <Ionicons name="trash" size={16} color={COLORS.danger} />
+      </TouchableOpacity>
     </View>
   );
 
@@ -401,63 +587,135 @@ const PriceTracker = () => {
         onBarcodeScanned={handleBarcodeScan}
       />
 
+      {/* Lookup Loading Overlay */}
+      {lookingUp && (
+        <View style={styles.lookupOverlay}>
+          <View style={styles.lookupCard}>
+            <ActivityIndicator size="large" color={COLORS.accent} />
+            <Text style={styles.lookupText}>Looking up product...</Text>
+          </View>
+        </View>
+      )}
+
       {/* Add Product Modal */}
       <Modal visible={addProductModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Product</Text>
-              <TouchableOpacity onPress={() => setAddProductModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+          <ScrollView style={{ maxHeight: '90%' }}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Product</Text>
+                <TouchableOpacity onPress={() => {
+                  setAddProductModalVisible(false);
+                  setOffData(null);
+                  setNewProduct({ name: "", brand: "", barcode: "", category: "groceries", unit: "g", weight: "", imageUrl: "" });
+                }}>
+                  <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Open Food Facts result banner */}
+              {offData && (
+                <View style={styles.offBanner}>
+                  <View style={styles.offBannerHeader}>
+                    {offData.imageUrl && (
+                      <Image source={{ uri: offData.imageUrl }} style={styles.offImage} />
+                    )}
+                    <View style={styles.offBannerInfo}>
+                      <View style={styles.offBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
+                        <Text style={styles.offBadgeText}>Found in Open Food Facts</Text>
+                      </View>
+                      {offData.nutriScore && (
+                        <Text style={styles.offNutriScore}>
+                          Nutri-Score: {offData.nutriScore.toUpperCase()}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {offData.quantity && (
+                    <Text style={styles.offQuantity}>Package: {offData.quantity}</Text>
+                  )}
+                </View>
+              )}
+
+              {newProduct.barcode && (
+                <View style={styles.barcodePreview}>
+                  <Ionicons name="barcode" size={16} color={COLORS.accent} />
+                  <Text style={styles.barcodeText}>{newProduct.barcode}</Text>
+                </View>
+              )}
+
+              <TextInput
+                style={styles.input}
+                placeholder="Product name *"
+                placeholderTextColor={COLORS.textTertiary}
+                value={newProduct.name}
+                onChangeText={(text) => setNewProduct({ ...newProduct, name: text })}
+              />
+
+              <TextInput
+                style={styles.input}
+                placeholder="Brand (optional)"
+                placeholderTextColor={COLORS.textTertiary}
+                value={newProduct.brand}
+                onChangeText={(text) => setNewProduct({ ...newProduct, brand: text })}
+              />
+
+              {/* Weight / Volume */}
+              <View style={styles.weightRow}>
+                <View style={styles.weightInputContainer}>
+                  <Text style={styles.inputLabel}>Weight/Volume</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 500"
+                    placeholderTextColor={COLORS.textTertiary}
+                    keyboardType="decimal-pad"
+                    value={newProduct.weight}
+                    onChangeText={(text) => setNewProduct({ ...newProduct, weight: text })}
+                  />
+                </View>
+                <View style={styles.unitInputContainer}>
+                  <Text style={styles.inputLabel}>Unit</Text>
+                  <View style={styles.unitButtons}>
+                    {['g', 'kg', 'mL', 'L'].map(unit => (
+                      <TouchableOpacity
+                        key={unit}
+                        style={[styles.unitBtn, newProduct.unit === unit && styles.unitBtnActive]}
+                        onPress={() => setNewProduct({ ...newProduct, unit })}
+                      >
+                        <Text style={[styles.unitBtnText, newProduct.unit === unit && styles.unitBtnTextActive]}>
+                          {unit}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+                {Object.entries(CATEGORY_CONFIG).map(([key, config]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.categoryChip,
+                      newProduct.category === key && { backgroundColor: `${config.color}30`, borderColor: config.color },
+                    ]}
+                    onPress={() => setNewProduct({ ...newProduct, category: key })}
+                  >
+                    <Ionicons name={config.icon} size={16} color={newProduct.category === key ? config.color : COLORS.textSecondary} />
+                    <Text style={[styles.categoryChipText, newProduct.category === key && { color: config.color }]}>
+                      {key.replace("_", " ")}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <TouchableOpacity style={styles.submitButton} onPress={handleAddProduct}>
+                <Text style={styles.submitButtonText}>Add Product</Text>
               </TouchableOpacity>
             </View>
-
-            {newProduct.barcode && (
-              <View style={styles.barcodePreview}>
-                <Ionicons name="barcode" size={16} color={COLORS.accent} />
-                <Text style={styles.barcodeText}>{newProduct.barcode}</Text>
-              </View>
-            )}
-
-            <TextInput
-              style={styles.input}
-              placeholder="Product name *"
-              placeholderTextColor={COLORS.textTertiary}
-              value={newProduct.name}
-              onChangeText={(text) => setNewProduct({ ...newProduct, name: text })}
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Brand (optional)"
-              placeholderTextColor={COLORS.textTertiary}
-              value={newProduct.brand}
-              onChangeText={(text) => setNewProduct({ ...newProduct, brand: text })}
-            />
-
-            <Text style={styles.inputLabel}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-              {Object.entries(CATEGORY_CONFIG).map(([key, config]) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[
-                    styles.categoryChip,
-                    newProduct.category === key && { backgroundColor: `${config.color}30`, borderColor: config.color },
-                  ]}
-                  onPress={() => setNewProduct({ ...newProduct, category: key })}
-                >
-                  <Ionicons name={config.icon} size={16} color={newProduct.category === key ? config.color : COLORS.textSecondary} />
-                  <Text style={[styles.categoryChipText, newProduct.category === key && { color: config.color }]}>
-                    {key.replace("_", " ")}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <TouchableOpacity style={styles.submitButton} onPress={handleAddProduct}>
-              <Text style={styles.submitButtonText}>Add Product</Text>
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -490,6 +748,44 @@ const PriceTracker = () => {
 
             <TouchableOpacity style={styles.submitButton} onPress={handleAddStore}>
               <Text style={styles.submitButtonText}>Add Store</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Store Modal */}
+      <Modal visible={editStoreModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Store</Text>
+              <TouchableOpacity onPress={() => {
+                setEditStoreModalVisible(false);
+                setEditStore(null);
+                setNewStore({ name: "", address: "" });
+              }}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Store name *"
+              placeholderTextColor={COLORS.textTertiary}
+              value={newStore.name}
+              onChangeText={(text) => setNewStore({ ...newStore, name: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Address (optional)"
+              placeholderTextColor={COLORS.textTertiary}
+              value={newStore.address}
+              onChangeText={(text) => setNewStore({ ...newStore, address: text })}
+            />
+
+            <TouchableOpacity style={styles.submitButton} onPress={handleUpdateStore}>
+              <Text style={styles.submitButtonText}>Save Changes</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -574,77 +870,198 @@ const PriceTracker = () => {
       {/* Product Detail Modal */}
       <Modal visible={productDetailVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: "80%" }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle} numberOfLines={1}>{selectedProduct?.name}</Text>
-              <TouchableOpacity onPress={() => setProductDetailVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {selectedProduct?.brand && (
-              <Text style={styles.productDetailBrand}>{selectedProduct.brand}</Text>
-            )}
-
-            {/* Latest Prices by Store */}
-            <Text style={styles.sectionTitle}>Latest Prices</Text>
-            {productLatestPrices.length > 0 ? (
-              <View style={styles.latestPricesContainer}>
-                {productLatestPrices.map((entry, index) => {
-                  const isLowest = index === 0 || entry.pricePerUnit === Math.min(...productLatestPrices.map(e => e.pricePerUnit));
-                  return (
-                    <View key={entry.$id} style={[styles.priceCard, isLowest && styles.priceCardBest]}>
-                      <View style={styles.priceCardHeader}>
-                        <Ionicons name="storefront" size={14} color={COLORS.textSecondary} />
-                        <Text style={styles.priceCardStore}>{getStoreName(entry.storeId)}</Text>
-                        {isLowest && (
-                          <View style={styles.bestPriceBadge}>
-                            <Text style={styles.bestPriceText}>Best</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.priceCardPrice}>€{entry.pricePerUnit?.toFixed(2)}</Text>
-                      <Text style={styles.priceCardDate}>
-                        {new Date(entry.date).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={styles.noPricesText}>No prices recorded yet</Text>
-            )}
-
-            {/* Price History */}
-            <Text style={styles.sectionTitle}>Price History</Text>
-            <ScrollView style={styles.historyScroll} showsVerticalScrollIndicator={false}>
-              {productPriceHistory.map((entry) => (
-                <View key={entry.$id} style={styles.historyItem}>
-                  <View style={styles.historyItemLeft}>
-                    <Text style={styles.historyPrice}>€{entry.price?.toFixed(2)}</Text>
-                    <Text style={styles.historyStore}>{getStoreName(entry.storeId)}</Text>
-                  </View>
-                  <Text style={styles.historyDate}>
-                    {new Date(entry.date).toLocaleDateString()}
-                  </Text>
+          <View style={[styles.modalContent, { maxHeight: "85%" }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle} numberOfLines={1}>{selectedProduct?.name}</Text>
+                <View style={styles.modalHeaderActions}>
+                  <TouchableOpacity 
+                    style={styles.modalHeaderBtn}
+                    onPress={() => {
+                      setNewProduct({
+                        name: selectedProduct.name,
+                        brand: selectedProduct.brand || "",
+                        barcode: selectedProduct.barcode || "",
+                        category: selectedProduct.category || "groceries",
+                        unit: selectedProduct.unit || "g",
+                        weight: selectedProduct.weight?.toString() || "",
+                        imageUrl: selectedProduct.imageUrl || "",
+                      });
+                      setIsEditingProduct(true);
+                    }}
+                  >
+                    <Ionicons name="pencil" size={18} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalHeaderBtn} onPress={handleDeleteProduct}>
+                    <Ionicons name="trash" size={18} color={COLORS.danger} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => {
+                    setProductDetailVisible(false);
+                    setIsEditingProduct(false);
+                  }}>
+                    <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
                 </View>
-              ))}
-              {productPriceHistory.length === 0 && (
-                <Text style={styles.noPricesText}>No history yet</Text>
+              </View>
+
+              {/* Product Info */}
+              <View style={styles.productDetailInfo}>
+                {selectedProduct?.imageUrl && (
+                  <Image source={{ uri: selectedProduct.imageUrl }} style={styles.productDetailImage} />
+                )}
+                <View style={styles.productDetailMeta}>
+                  {selectedProduct?.brand && (
+                    <Text style={styles.productDetailBrand}>{selectedProduct.brand}</Text>
+                  )}
+                  {selectedProduct?.weight && (
+                    <Text style={styles.productDetailWeight}>
+                      {selectedProduct.weight}{selectedProduct.unit || 'g'}
+                    </Text>
+                  )}
+                  {selectedProduct?.barcode && (
+                    <Text style={styles.productDetailBarcode}>
+                      <Ionicons name="barcode-outline" size={12} color={COLORS.textTertiary} /> {selectedProduct.barcode}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Edit Form (conditional) */}
+              {isEditingProduct && (
+                <View style={styles.editProductForm}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Product name *"
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={newProduct.name}
+                    onChangeText={(text) => setNewProduct({ ...newProduct, name: text })}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Brand"
+                    placeholderTextColor={COLORS.textTertiary}
+                    value={newProduct.brand}
+                    onChangeText={(text) => setNewProduct({ ...newProduct, brand: text })}
+                  />
+                  <View style={styles.weightRow}>
+                    <View style={styles.weightInputContainer}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Weight"
+                        placeholderTextColor={COLORS.textTertiary}
+                        keyboardType="decimal-pad"
+                        value={newProduct.weight}
+                        onChangeText={(text) => setNewProduct({ ...newProduct, weight: text })}
+                      />
+                    </View>
+                    <View style={styles.unitInputContainer}>
+                      <View style={styles.unitButtons}>
+                        {['g', 'kg', 'mL', 'L'].map(unit => (
+                          <TouchableOpacity
+                            key={unit}
+                            style={[styles.unitBtn, newProduct.unit === unit && styles.unitBtnActive]}
+                            onPress={() => setNewProduct({ ...newProduct, unit })}
+                          >
+                            <Text style={[styles.unitBtnText, newProduct.unit === unit && styles.unitBtnTextActive]}>
+                              {unit}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.editButtonRow}>
+                    <TouchableOpacity 
+                      style={[styles.editCancelBtn]}
+                      onPress={() => setIsEditingProduct(false)}
+                    >
+                      <Text style={styles.editCancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.editSaveBtn} onPress={handleUpdateProduct}>
+                      <Text style={styles.editSaveBtnText}>Save</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {!isEditingProduct && (
+                <>
+                  {/* Latest Prices by Store */}
+                  <Text style={styles.sectionTitle}>Latest Prices</Text>
+                  {productLatestPrices.length > 0 ? (
+                    <View style={styles.latestPricesContainer}>
+                      {productLatestPrices.map((entry, index) => {
+                        const isLowest = index === 0 || entry.pricePerUnit === Math.min(...productLatestPrices.map(e => e.pricePerUnit));
+                        return (
+                          <View key={entry.$id} style={[styles.priceCard, isLowest && styles.priceCardBest]}>
+                            <View style={styles.priceCardHeader}>
+                              <Ionicons name="storefront" size={14} color={COLORS.textSecondary} />
+                              <Text style={styles.priceCardStore}>{getStoreName(entry.storeId)}</Text>
+                              {isLowest && (
+                                <View style={styles.bestPriceBadge}>
+                                  <Text style={styles.bestPriceText}>Best</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.priceCardPrice}>€{entry.pricePerUnit?.toFixed(2)}</Text>
+                            {entry.pricePerKg && (
+                              <Text style={styles.pricePerKg}>€{entry.pricePerKg.toFixed(2)}/kg</Text>
+                            )}
+                            <Text style={styles.priceCardDate}>
+                              {new Date(entry.date).toLocaleDateString()}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <Text style={styles.noPricesText}>No prices recorded yet</Text>
+                  )}
+
+                  {/* Price History */}
+                  <Text style={styles.sectionTitle}>Price History</Text>
+                  <View style={styles.historyList}>
+                    {productPriceHistory.map((entry) => (
+                      <View key={entry.$id} style={styles.historyItem}>
+                        <View style={styles.historyItemLeft}>
+                          <Text style={styles.historyPrice}>€{entry.price?.toFixed(2)}</Text>
+                          <Text style={styles.historyStore}>
+                            {getStoreName(entry.storeId)}
+                            {entry.pricePerKg && ` • €${entry.pricePerKg.toFixed(2)}/kg`}
+                          </Text>
+                        </View>
+                        <View style={styles.historyItemRight}>
+                          <Text style={styles.historyDate}>
+                            {new Date(entry.date).toLocaleDateString()}
+                          </Text>
+                          <TouchableOpacity 
+                            style={styles.historyDeleteBtn}
+                            onPress={() => handleDeletePriceEntry(entry)}
+                          >
+                            <Ionicons name="trash-outline" size={14} color={COLORS.danger} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                    {productPriceHistory.length === 0 && (
+                      <Text style={styles.noPricesText}>No history yet</Text>
+                    )}
+                  </View>
+
+                  {/* Add Price Button */}
+                  <TouchableOpacity 
+                    style={styles.submitButton} 
+                    onPress={() => {
+                      setProductDetailVisible(false);
+                      quickAddPrice(selectedProduct);
+                    }}
+                  >
+                    <Ionicons name="add" size={20} color="#FFF" />
+                    <Text style={styles.submitButtonText}>Record New Price</Text>
+                  </TouchableOpacity>
+                </>
               )}
             </ScrollView>
-
-            {/* Add Price Button */}
-            <TouchableOpacity 
-              style={styles.submitButton} 
-              onPress={() => {
-                setProductDetailVisible(false);
-                quickAddPrice(selectedProduct);
-              }}
-            >
-              <Ionicons name="add" size={20} color="#FFF" />
-              <Text style={styles.submitButtonText}>Record New Price</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1064,6 +1481,9 @@ const styles = StyleSheet.create({
   historyScroll: {
     maxHeight: 200,
   },
+  historyList: {
+    marginBottom: 12,
+  },
   historyItem: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1074,6 +1494,11 @@ const styles = StyleSheet.create({
   },
   historyItemLeft: {
     flex: 1,
+  },
+  historyItemRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   historyPrice: {
     fontSize: 16,
@@ -1088,6 +1513,197 @@ const styles = StyleSheet.create({
   historyDate: {
     fontSize: 12,
     color: COLORS.textTertiary,
+  },
+  historyDeleteBtn: {
+    padding: 6,
+  },
+  pricePerKg: {
+    fontSize: 11,
+    color: COLORS.warning,
+    marginTop: 2,
+  },
+
+  // Product Image
+  productImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+  },
+
+  // Store Card Actions
+  storeEditBtn: {
+    padding: 8,
+  },
+  storeDeleteBtn: {
+    padding: 8,
+  },
+
+  // Lookup Loading
+  lookupOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  lookupCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+  },
+  lookupText: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    marginTop: 12,
+  },
+
+  // Open Food Facts Banner
+  offBanner: {
+    backgroundColor: `${COLORS.success}15`,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: `${COLORS.success}30`,
+  },
+  offBannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  offImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  offBannerInfo: {
+    flex: 1,
+  },
+  offBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  offBadgeText: {
+    fontSize: 12,
+    color: COLORS.success,
+    fontWeight: "500",
+  },
+  offNutriScore: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  offQuantity: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    marginTop: 8,
+  },
+
+  // Weight Input
+  weightRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  weightInputContainer: {
+    flex: 2,
+  },
+  unitInputContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  unitButtons: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  unitBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+  },
+  unitBtnActive: {
+    backgroundColor: COLORS.accent,
+  },
+  unitBtnText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: "500",
+  },
+  unitBtnTextActive: {
+    color: "#FFF",
+  },
+
+  // Modal Header Actions
+  modalHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modalHeaderBtn: {
+    padding: 8,
+  },
+
+  // Product Detail
+  productDetailInfo: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  productDetailImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 10,
+    marginRight: 12,
+  },
+  productDetailMeta: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  productDetailWeight: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  productDetailBarcode: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    marginTop: 4,
+  },
+
+  // Edit Product Form
+  editProductForm: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  editButtonRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  editCancelBtn: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.elevated,
+    alignItems: "center",
+  },
+  editCancelBtnText: {
+    color: COLORS.textSecondary,
+    fontWeight: "500",
+  },
+  editSaveBtn: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+  },
+  editSaveBtnText: {
+    color: "#FFF",
+    fontWeight: "600",
   },
 });
 
