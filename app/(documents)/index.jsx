@@ -21,6 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
   DocumentCategories,
@@ -140,6 +141,43 @@ const DocumentsScreen = () => {
     } catch (error) {
       console.error("Error picking document:", error);
       Alert.alert("Error", "Could not select file");
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      // Request camera permission
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Camera permission is required to take photos");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const photo = result.assets[0];
+        const fileName = `photo_${Date.now()}.jpg`;
+        setSelectedFile({
+          uri: photo.uri,
+          name: fileName,
+          fileName: fileName,
+          mimeType: "image/jpeg",
+          type: "image/jpeg",
+          size: photo.fileSize || 0,
+        });
+        // Auto-fill name if empty
+        if (!form.name) {
+          setForm({ ...form, name: `Photo ${new Date().toLocaleDateString()}` });
+        }
+      }
+    } catch (error) {
+      console.error("Error taking photo:", error);
+      Alert.alert("Error", "Could not take photo");
     }
   };
 
@@ -518,20 +556,34 @@ const DocumentsScreen = () => {
 
               {/* File Upload */}
               <Text style={styles.inputLabel}>Attach File</Text>
-              <TouchableOpacity style={styles.filePickerButton} onPress={pickDocument}>
-                <Ionicons
-                  name={selectedFile ? "document-attach" : "cloud-upload"}
-                  size={24}
-                  color={selectedFile ? "#10B981" : "#8B5CF6"}
-                />
-                <Text style={styles.filePickerText}>
-                  {selectedFile
-                    ? selectedFile.name
-                    : editingDoc?.fileName
-                    ? `Current: ${editingDoc.fileName}`
-                    : "Tap to select a file"}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.filePickerRow}>
+                <TouchableOpacity style={styles.filePickerOption} onPress={takePhoto}>
+                  <Ionicons name="camera" size={24} color="#8B5CF6" />
+                  <Text style={styles.filePickerOptionText}>Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.filePickerOption} onPress={pickDocument}>
+                  <Ionicons name="document" size={24} color="#8B5CF6" />
+                  <Text style={styles.filePickerOptionText}>File</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {/* Selected file indicator */}
+              {(selectedFile || editingDoc?.fileName) && (
+                <View style={styles.selectedFileIndicator}>
+                  <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                  <Text style={styles.selectedFileName} numberOfLines={1}>
+                    {selectedFile?.name || editingDoc?.fileName}
+                  </Text>
+                  {selectedFile && (
+                    <TouchableOpacity onPress={() => setSelectedFile(null)}>
+                      <Ionicons name="close-circle" size={18} color="#F43F5E" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              
+              {/* Spacer for bottom padding */}
+              <View style={{ height: 20 }} />
             </ScrollView>
 
             {/* Actions */}
@@ -744,13 +796,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#1A1A1F",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "90%",
+    maxHeight: "85%",
+    flexDirection: "column",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.1)",
   },
@@ -760,76 +813,99 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   modalBody: {
-    padding: 20,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
     color: "#A1A1AA",
-    marginBottom: 8,
-    marginTop: 12,
+    marginBottom: 6,
+    marginTop: 10,
   },
   input: {
     backgroundColor: "#111114",
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 10,
+    padding: 12,
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 15,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
   textArea: {
-    minHeight: 80,
+    minHeight: 60,
     textAlignVertical: "top",
   },
   categoryChipsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
   },
   categoryChip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
     backgroundColor: "#111114",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    gap: 6,
+    gap: 4,
   },
   categoryChipText: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#71717A",
     fontWeight: "500",
   },
-  filePickerButton: {
+  filePickerRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  filePickerOption: {
+    flex: 1,
     backgroundColor: "#111114",
     borderRadius: 12,
     padding: 16,
-    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     borderStyle: "dashed",
-    gap: 12,
+    gap: 8,
   },
-  filePickerText: {
-    fontSize: 14,
+  filePickerOptionText: {
+    fontSize: 12,
     color: "#A1A1AA",
+    fontWeight: "500",
+  },
+  selectedFileIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 12,
+    gap: 8,
+  },
+  selectedFileName: {
     flex: 1,
+    fontSize: 13,
+    color: "#10B981",
   },
   modalActions: {
     flexDirection: "row",
-    padding: 20,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.1)",
     gap: 12,
+    backgroundColor: "#1A1A1F",
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
     backgroundColor: "#222228",
     alignItems: "center",
   },
@@ -840,8 +916,8 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
     backgroundColor: "#8B5CF6",
     alignItems: "center",
   },
