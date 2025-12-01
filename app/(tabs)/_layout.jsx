@@ -1,72 +1,85 @@
 import { StatusBar } from "expo-status-bar";
 import { Redirect, Tabs } from "expo-router";
-import { Image, Text, View, Animated } from "react-native";
+import { Text, View, Animated, StyleSheet, Image } from "react-native";
 import { useRef, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 
-import { icons } from "../../constants";
 import Loader from "../../components/Loader";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { icons } from "../../constants";
 
-const TabIcon = ({ icon, color, name, focused, focusAnim }) => {
-  // Width animation
-  const containerWidth = focusAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [50, 85], // Width range from 50px to 85px
-  });
+// Dark theme colors
+const COLORS = {
+  background: '#0A0A0C',
+  surface: '#111114',
+  card: '#1A1A1F',
+  border: 'rgba(255,255,255,0.1)',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#A1A1AA',
+  textTertiary: '#71717A',
+  accent: {
+    primary: '#8B5CF6',
+    home: '#8B5CF6',
+    chores: '#06B6D4',
+    shopping: '#10B981',
+    expenses: '#F43F5E',
+    profile: '#8B5CF6',
+  },
+};
 
-  // Reverse the scale animation (bigger when unfocused)
+// Tab configuration
+const TAB_CONFIG = {
+  home: { icon: 'home', label: 'Home', color: COLORS.accent.home, useCustomIcon: true },
+  calendar: { icon: 'calendar', label: 'Chores', color: COLORS.accent.chores },
+  shopping: { icon: 'cart', label: 'Shopping', color: COLORS.accent.shopping },
+  expenses: { icon: 'wallet', label: 'Expenses', color: COLORS.accent.expenses },
+  profile: { icon: 'person', label: 'Profile', color: COLORS.accent.profile },
+};
+
+const TabIcon = ({ name, focused, focusAnim }) => {
+  const config = TAB_CONFIG[name];
+  
   const iconScale = focusAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1.25, 1], // 25% larger when unfocused
+    outputRange: [1, 1.1],
   });
 
-  // Move the icon up when unfocused (center it vertically)
-  const iconTranslateY = focusAnim.interpolate({
+  const bgOpacity = focusAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [8, -2], // Increased from 0 to 8 to move it down more when unfocused
+    outputRange: [0, 1],
   });
 
   return (
-    <View style={{ width: 85,alignItems: 'center'}}>
-      <Animated.View 
-        className="items-center justify-center"
-        style={{
-          backgroundColor: focused ? '#f0f0f0' : 'transparent',
-          borderRadius: 12,
-          width: '100%',
-          height: focused ? 85 : 'auto', // Full height when focused
-          paddingVertical: focused ? 12 : 8, // Adjusted padding for better spacing
-          marginBottom: 0, // Adjusted margin for better spacing
-          marginTop: 11,
-        }}
-      >
-        <Animated.View
-          style={{
-            transform: [
-              { scale: iconScale },
-              { translateY: iconTranslateY }
-            ]
-          }}
-        >
-          <Image
-            source={icon}
+    <View style={styles.tabIconContainer}>
+      <Animated.View style={[styles.tabGlow, { backgroundColor: config.color, opacity: bgOpacity }]} />
+      <Animated.View style={[styles.tabIconWrapper, { transform: [{ scale: iconScale }] }]}>
+        {config.useCustomIcon ? (
+          <Image 
+            source={icons.tipi}
+            style={{ width: 24, height: 24 }}
             resizeMode="contain"
-            tintColor={color}
-            className="w-6 h-6 mb-1"
+            tintColor={focused ? config.color : COLORS.textTertiary}
           />
-        </Animated.View>
-        <Animated.Text
-          className="font-psemibold text-[14px] text-center"
-          style={{ 
-            color,
-            opacity: focusAnim,
-            width: '100%',
-          }}
-          numberOfLines={1}
-        >
-          {name}
-        </Animated.Text>
+        ) : (
+          <Ionicons 
+            name={focused ? config.icon : `${config.icon}-outline`}
+            size={24}
+            color={focused ? config.color : COLORS.textTertiary}
+          />
+        )}
       </Animated.View>
+      <Animated.Text 
+        style={[
+          styles.tabLabel,
+          { 
+            color: focused ? config.color : COLORS.textTertiary,
+            opacity: focusAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }),
+          }
+        ]}
+        numberOfLines={1}
+      >
+        {config.label}
+      </Animated.Text>
     </View>
   );
 };
@@ -74,6 +87,7 @@ const TabIcon = ({ icon, color, name, focused, focusAnim }) => {
 const TabLayout = () => {
   const { loading, isLogged, user, hasHousehold } = useGlobalContext();
   const [activeTab, setActiveTab] = useState('home');
+  
   const focusAnims = {
     home: useRef(new Animated.Value(1)).current,
     calendar: useRef(new Animated.Value(0)).current,
@@ -86,41 +100,28 @@ const TabLayout = () => {
     Animated.spring(focusAnims[tabName], {
       toValue: focused ? 1 : 0,
       useNativeDriver: true,
-      tension: 50,
-      friction: 7,
+      tension: 80,
+      friction: 10,
     }).start();
   };
 
-  // Redirect to sign-in if not logged in
   if (!loading && !isLogged) return <Redirect href="/sign-in" />;
-  
-  // Redirect to household onboarding if logged in but no household
   if (!loading && isLogged && !hasHousehold) return <Redirect href="/(household)/onboarding" />;
+
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.container}>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: "#4F86C6",
-          tabBarInactiveTintColor: "#666666",
+          tabBarActiveTintColor: COLORS.accent.primary,
+          tabBarInactiveTintColor: COLORS.textTertiary,
           tabBarShowLabel: false,
-          headerSafeAreaTop: true, // Ensure header respects safe area
-          
-          tabBarStyle: {
-            backgroundColor: "#FFFFFF",
-            borderTopWidth: 1,
-            borderTopColor: "#E0E0E0",
-            height: 65, // Reduced height
-            paddingHorizontal: 10,
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            elevation: 0,
-            shadowOpacity: 0,
-            marginBottom: 0,
-            paddingBottom: 0,
-            borderBottomWidth: 0,
-          },
+          headerShown: false,
+          tabBarStyle: styles.tabBar,
+          tabBarBackground: () => (
+            <View style={styles.tabBarBackground}>
+              <View style={styles.tabBarInner} />
+            </View>
+          ),
         }}
         screenListeners={{
           tabPress: (e) => {
@@ -136,15 +137,8 @@ const TabLayout = () => {
           name="home"
           options={{
             title: "Home",
-            headerShown: false,
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon
-                icon={icons.tipi}
-                color={color}
-                name="Home"
-                focused={focused}
-                focusAnim={focusAnims.home}
-              />
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="home" focused={focused} focusAnim={focusAnims.home} />
             ),
           }}
         />
@@ -152,15 +146,8 @@ const TabLayout = () => {
           name="calendar"
           options={{
             title: "Calendar",
-            headerShown: false,
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon
-                icon={icons.calendar}
-                color={color}
-                name="Calendar"
-                focused={focused}
-                focusAnim={focusAnims.calendar}
-              />
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="calendar" focused={focused} focusAnim={focusAnims.calendar} />
             ),
           }}
         />
@@ -168,15 +155,8 @@ const TabLayout = () => {
           name="shopping"
           options={{
             title: "Shopping",
-            headerShown: false,
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon
-                icon={icons.list}
-                color={color}
-                name="Shopping"
-                focused={focused}
-                focusAnim={focusAnims.shopping}
-              />
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="shopping" focused={focused} focusAnim={focusAnims.shopping} />
             ),
           }}
         />
@@ -184,15 +164,8 @@ const TabLayout = () => {
           name="expenses"
           options={{
             title: "Expenses",
-            headerShown: false,
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon
-                icon={icons.calculator}
-                color={color}
-                name="Expenses"
-                focused={focused}
-                focusAnim={focusAnims.expenses}
-              />
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="expenses" focused={focused} focusAnim={focusAnims.expenses} />
             ),
           }}
         />
@@ -200,24 +173,78 @@ const TabLayout = () => {
           name="profile"
           options={{
             title: "Profile",
-            headerShown: false,
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon
-                icon={icons.profile}
-                color={color}
-                name="Profile"
-                focused={focused}
-                focusAnim={focusAnims.profile}
-              />
+            tabBarIcon: ({ focused }) => (
+              <TabIcon name="profile" focused={focused} focusAnim={focusAnims.profile} />
             ),
           }}
         />
       </Tabs>
 
       <Loader isLoading={loading} />
-      <StatusBar backgroundColor="#FFFFFF" style="dark" />
+      <StatusBar backgroundColor={COLORS.background} style="light" />
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  tabBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 85,
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    elevation: 0,
+    paddingBottom: 20,
+    paddingTop: 8,
+  },
+  tabBarBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 12,
+    paddingBottom: 20,
+  },
+  tabBarInner: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  tabIconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 64,
+    height: 56,
+    position: 'relative',
+  },
+  tabGlow: {
+    position: 'absolute',
+    top: 4,
+    left: 12,
+    right: 12,
+    height: 32,
+    borderRadius: 16,
+    opacity: 0.15,
+  },
+  tabIconWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+});
 
 export default TabLayout;

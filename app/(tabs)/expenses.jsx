@@ -559,7 +559,7 @@ const ExpensesScreen = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0A0C" }}>
       <View style={styles.header}>
         <Text style={styles.title}>Expense Sharing</Text>
         <View style={styles.tabButtons}>
@@ -989,7 +989,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   viewReceiptText: {
-    color: "#4F86C6",
+    color: "#F43F5E",
     fontSize: 12,
     fontWeight: "500",
   },
@@ -1025,9 +1025,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   uploadButton: {
-    backgroundColor: "#4F86C6",
+    backgroundColor: "#F43F5E",
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: "center",
     marginBottom: 8,
   },
@@ -1043,9 +1043,9 @@ const styles = StyleSheet.create({
   imagePreview: {
     width: "100%",
     height: 200,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "rgba(255,255,255,0.1)",
   },
   removeImageButton: {
     position: "absolute",
@@ -1070,37 +1070,37 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   selectAllButton: {
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#222228",
     borderRadius: 15,
     paddingVertical: 6,
     paddingHorizontal: 12,
   },
   selectAllButtonText: {
     fontSize: 12,
-    color: "#666666",
+    color: "#A1A1AA",
     fontWeight: "500",
   },
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0A0A0C",
   },
   header: {
     marginTop: 50,
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   title: {
     fontSize: 20,
     fontWeight: "600",
-    color: "#333333",
+    color: "#FFFFFF",
     marginBottom: 10,
   },
   tabButtons: {
     flexDirection: "row",
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#1A1A1F",
   },
   tabButton: {
     flex: 1,
@@ -1108,10 +1108,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   activeTabButton: {
-    backgroundColor: "#4F86C6",
+    backgroundColor: "#F43F5E",
   },
   tabButtonText: {
-    color: "#666666",
+    color: "#71717A",
     fontWeight: "500",
   },
   activeTabButtonText: {
@@ -1122,20 +1122,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     padding: 16,
-    backgroundColor: "#F9F9F9",
+    backgroundColor: "#111114",
     borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   filterButton: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: "#EEEEEE",
+    backgroundColor: "#1A1A1F",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "rgba(255,255,255,0.1)",
   },
   filterButtonText: {
-    color: "#666666",
+    color: "#A1A1AA",
     fontWeight: "500",
   },
   actionButtons: {
@@ -1148,10 +1148,10 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   expenseButton: {
-    backgroundColor: "#4F86C6",
+    backgroundColor: "#F43F5E",
   },
   settlementButton: {
-    backgroundColor: "#5D87B7",
+    backgroundColor: "#8B5CF6",
   },
   actionButtonText: {
     color: "white",
@@ -1161,17 +1161,17 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   itemContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
     marginBottom: 16,
     padding: 16,
-    elevation: 2,
+    elevation: 3,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "rgba(255,255,255,0.05)",
   },
   itemHeader: {
     flexDirection: "row",
@@ -1182,55 +1182,55 @@ const styles = StyleSheet.create({
   itemTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333333",
+    color: "#FFFFFF",
   },
   itemAmount: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#4F86C6",
+    color: "#F43F5E",
   },
   itemDetails: {
     borderTopWidth: 1,
-    borderTopColor: "#EEEEEE",
+    borderTopColor: "rgba(255,255,255,0.1)",
     paddingTop: 8,
   },
   itemDetail: {
-    color: "#666666",
+    color: "#A1A1AA",
     marginBottom: 4,
   },
   highlight: {
-    color: "#333333",
+    color: "#FFFFFF",
     fontWeight: "600",
   },
   itemNotes: {
     fontStyle: "italic",
-    color: "#888888",
+    color: "#71717A",
     marginTop: 4,
     marginBottom: 4,
   },
   itemDate: {
-    color: "#AAAAAA",
+    color: "#71717A",
     fontSize: 12,
     marginTop: 4,
   },
   balancesContainer: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0A0A0C",
   },
   balanceSummary: {
     padding: 16,
-    backgroundColor: "#F9F9F9",
+    backgroundColor: "#111114",
     borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   balanceSummaryTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333333",
+    color: "#FFFFFF",
     marginBottom: 8,
   },
   balanceSummaryText: {
-    color: "#666666",
+    color: "#A1A1AA",
     fontSize: 12,
     lineHeight: 18,
   },
@@ -1238,8 +1238,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   balanceItem: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
     marginBottom: 12,
     padding: 16,
     flexDirection: "row",
@@ -1247,37 +1247,37 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderLeftWidth: 4,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "rgba(255,255,255,0.05)",
   },
   balanceUsername: {
     fontWeight: "600",
-    color: "#333333",
+    color: "#FFFFFF",
     flex: 1,
   },
   balanceAmount: {
     fontWeight: "600",
-    color: "#333333",
+    color: "#FFFFFF",
     marginHorizontal: 16,
     minWidth: 80,
     textAlign: "right",
   },
   positiveBalance: {
-    color: "#4CAF50",
+    color: "#22C55E",
   },
   negativeBalance: {
-    color: "#F44336",
+    color: "#EF4444",
   },
   zeroBalance: {
-    color: "#9E9E9E",
+    color: "#71717A",
   },
   balanceStatus: {
     fontSize: 12,
-    color: "#666666",
+    color: "#71717A",
     fontStyle: "italic",
     width: 80,
   },
@@ -1289,42 +1289,45 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
     paddingVertical: 20,
   },
   modalContent: {
-    backgroundColor: "white",
+    backgroundColor: "#1A1A1F",
     borderRadius: 20,
     padding: 20,
     width: "90%",
     alignSelf: "center",
     maxHeight: "100%",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: "600",
     marginBottom: 16,
-    color: "#333333",
+    color: "#FFFFFF",
     textAlign: "center",
   },
   inputLabel: {
-    color: "#666666",
+    color: "#A1A1AA",
     marginBottom: 4,
     fontWeight: "500",
   },
   optionalText: {
     fontSize: 12,
     fontStyle: "italic",
-    color: "#999999",
+    color: "#71717A",
   },
   input: {
-    backgroundColor: "#F9F9F9",
-    borderRadius: 8,
+    backgroundColor: "#111114",
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
-    padding: 12,
+    borderColor: "rgba(255,255,255,0.1)",
+    padding: 14,
     marginBottom: 16,
-    color: "#333333",
+    color: "#FFFFFF",
+    fontSize: 16,
   },
   notesInput: {
     minHeight: 80,
@@ -1332,13 +1335,13 @@ const styles = StyleSheet.create({
   },
   pickerContainer: {
     borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
-    backgroundColor: "#F9F9F9",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    backgroundColor: "#111114",
     marginBottom: 16,
   },
   picker: {
-    color: "#333333",
+    color: "#FFFFFF",
   },
   splitUsers: {
     flexDirection: "row",
@@ -1346,20 +1349,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   userChip: {
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#222228",
     borderRadius: 20,
     paddingVertical: 8,
     paddingHorizontal: 12,
     margin: 4,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "rgba(255,255,255,0.1)",
   },
   selectedUserChip: {
-    backgroundColor: "#4F86C6",
-    borderColor: "#3A6FA5",
+    backgroundColor: "#F43F5E",
+    borderColor: "#F43F5E",
   },
   userChipText: {
-    color: "#666666",
+    color: "#A1A1AA",
   },
   selectedUserChipText: {
     color: "white",
@@ -1373,19 +1376,20 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     padding: 14,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#222228",
     marginRight: 8,
   },
   saveButton: {
-    backgroundColor: "#4F86C6",
+    backgroundColor: "#F43F5E",
     marginLeft: 8,
   },
   modalButtonText: {
     fontWeight: "600",
+    color: "#FFFFFF",
   },
 });
 

@@ -1,10 +1,11 @@
 import React from 'react';
 import CalendarView from "../(calendar)/calendar";
-import { SafeAreaView, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StyleSheet } from 'react-native';
 
 const CalendarTab = () => {
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <CalendarView />
     </SafeAreaView>
   );
@@ -13,7 +14,7 @@ const CalendarTab = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0A0A0C',
   },
 });
 

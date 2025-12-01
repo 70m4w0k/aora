@@ -605,6 +605,17 @@ const TasksTracker = ({ initialTasks, householdId }) => {
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      {/* Page Header */}
+      <View style={styles.pageHeader}>
+        <Text style={styles.pageTitle}>Chores Calendar</Text>
+        <TouchableOpacity
+          style={styles.addTaskButton}
+          onPress={() => setCreateTaskModalVisible(true)}
+        >
+          <Ionicons name="add" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.filterHeader}>
         <View style={styles.filterButtonsContainer}>
           <TouchableOpacity
@@ -717,13 +728,14 @@ const TasksTracker = ({ initialTasks, householdId }) => {
             ref={scrollRef}
             horizontal={true}
             showsHorizontalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={["#4F86C6"]} // Blue color that matches our theme
-              />
-            }
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#06B6D4"
+                  colors={["#06B6D4"]}
+                />
+              }
           >
             <View>
               <View style={styles.header}>
@@ -1236,15 +1248,38 @@ const TasksTracker = ({ initialTasks, householdId }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0A0A0C",
+  },
+  pageHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "#111114",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  addTaskButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#06B6D4",
+    justifyContent: "center",
+    alignItems: "center",
   },
   filterHeader: {
     flexDirection: "row",
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
-    backgroundColor: "#FFFFFF",
+    borderBottomColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "#111114",
     justifyContent: "space-between",
   },
   filterButtonsContainer: {
@@ -1259,21 +1294,21 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 15,
     marginRight: 8,
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#1A1A1F",
   },
   viewModeButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
     marginRight: 8,
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#1A1A1F",
   },
   activeFilterButton: {
-    backgroundColor: "#4F86C6",
+    backgroundColor: "#06B6D4",
   },
   filterButtonText: {
     fontSize: 12,
-    color: "#666666",
+    color: "#A1A1AA",
   },
   activeFilterText: {
     color: "#FFFFFF",
@@ -1283,11 +1318,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 15,
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "#1A1A1F",
   },
   legendButtonText: {
     fontSize: 12,
-    color: "#666666",
+    color: "#A1A1AA",
   },
   calendarContainer: {
     flex: 1,
@@ -1296,14 +1331,14 @@ const styles = StyleSheet.create({
   taskColumn: {
     width: TASK_COLUMN_WIDTH,
     borderRightWidth: 1,
-    borderRightColor: "#E0E0E0",
-    backgroundColor: "#FFFFFF",
+    borderRightColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "#111114",
     zIndex: 1,
     shadowColor: "#000",
     shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   taskTextContainer: {
     flexDirection: "row",
@@ -1316,39 +1351,39 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "#F0F0F0",
+    backgroundColor: "rgba(244,63,94,0.15)",
     justifyContent: "center",
     alignItems: "center",
   },
   deleteIconText: {
-    color: "#FF6B6B",
+    color: "#F43F5E",
     fontSize: 12,
     fontWeight: "bold",
   },
   header: {
     flexDirection: "row",
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#111114",
   },
   headerCell: {
     height: ROW_HEIGHT,
     justifyContent: "center",
     alignItems: "center",
     borderRightWidth: 1,
-    borderRightColor: "#E0E0E0",
+    borderRightColor: "rgba(255,255,255,0.05)",
     borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   currentWeekHeader: {
-    backgroundColor: "#E3F2FD", // Light blue background
+    backgroundColor: "rgba(6,182,212,0.15)",
   },
   headerText: {
     fontWeight: "500",
     fontSize: 12,
-    color: "#666666",
+    color: "#71717A",
   },
   currentWeekText: {
     fontWeight: "bold",
-    color: "#4F86C6",
+    color: "#06B6D4",
   },
   row: {
     flexDirection: "row",
@@ -1358,23 +1393,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderRightWidth: 1,
-    borderRightColor: "#E0E0E0",
+    borderRightColor: "rgba(255,255,255,0.05)",
     borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    borderBottomColor: "rgba(255,255,255,0.05)",
   },
   currentCell: {
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "rgba(6,182,212,0.08)",
   },
   taskText: {
     fontSize: 14,
-    color: "#333333",
+    color: "#FFFFFF",
     paddingHorizontal: 8,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderWidth: 1,
-    borderColor: "#CCCCCC",
+    borderColor: "#3F3F46",
     borderRadius: 4,
   },
   checkboxCompleted: {
@@ -1390,24 +1425,24 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    borderBottomColor: "rgba(255,255,255,0.1)",
     marginBottom: 12,
   },
   listHeaderText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#666666",
+    color: "#A1A1AA",
   },
   listItemContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#1A1A1F",
     marginVertical: 4,
     marginHorizontal: 8,
-    borderRadius: 8,
+    borderRadius: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
     padding: 8,
   },
   listItemTitleWrapper: {
@@ -1428,7 +1463,7 @@ const styles = StyleSheet.create({
   },
   listItemCompletionInfo: {
     fontSize: 12,
-    color: "#666666",
+    color: "#A1A1AA",
   },
   // User completion avatars
   userCompletionsContainer: {
@@ -1461,14 +1496,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: -2,
     right: -2,
-    backgroundColor: "#4F86C6",
+    backgroundColor: "#06B6D4",
     minWidth: 14,
     height: 14,
     borderRadius: 7,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "white",
+    borderColor: "#1A1A1F",
   },
   userCompletionCountText: {
     color: "white",
@@ -1477,10 +1512,10 @@ const styles = StyleSheet.create({
   },
   // Quick action buttons
   taskActionButton: {
-    backgroundColor: "#4F86C6",
+    backgroundColor: "#06B6D4",
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 4,
+    borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 6,
@@ -1493,15 +1528,17 @@ const styles = StyleSheet.create({
   // Delete modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
     justifyContent: "center",
     alignItems: "center",
   },
   deleteModalContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    backgroundColor: "#1A1A1F",
+    borderRadius: 16,
     width: "80%",
     maxWidth: 400,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -1510,29 +1547,29 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   deleteModalHeader: {
-    backgroundColor: "#F8F8F8",
+    backgroundColor: "#111114",
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEEEEE",
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   deleteModalTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333333",
+    color: "#FFFFFF",
   },
   deleteModalBody: {
     padding: 20,
   },
   deleteModalMessage: {
     fontSize: 16,
-    color: "#666666",
+    color: "#A1A1AA",
     textAlign: "center",
   },
   deleteModalActions: {
     flexDirection: "row",
     borderTopWidth: 1,
-    borderTopColor: "#EEEEEE",
+    borderTopColor: "rgba(255,255,255,0.1)",
   },
   deleteModalButton: {
     flex: 1,
@@ -1542,50 +1579,50 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     borderRightWidth: 1,
-    borderRightColor: "#EEEEEE",
+    borderRightColor: "rgba(255,255,255,0.1)",
   },
   deleteButton: {
-    backgroundColor: "#FFEFEF",
+    backgroundColor: "rgba(244,63,94,0.15)",
   },
   cancelButtonText: {
     fontSize: 16,
-    color: "#666666",
+    color: "#A1A1AA",
     fontWeight: "500",
   },
   deleteButtonText: {
     fontSize: 16,
-    color: "#FF6B6B",
+    color: "#F43F5E",
     fontWeight: "600",
   },
-  // Urgency styles for task items
+  // Urgency styles for task items (dark theme)
   normalItem: {
-    backgroundColor: "#E8F5E9", // Stronger light green
+    backgroundColor: "rgba(34,197,94,0.15)",
   },
   soonItem: {
-    backgroundColor: "#FFF8E1", // Stronger light yellow
+    backgroundColor: "rgba(234,179,8,0.15)",
   },
   urgentItem: {
-    backgroundColor: "#FFE0B2", // Stronger light orange
+    backgroundColor: "rgba(249,115,22,0.15)",
   },
   overdueItem: {
-    backgroundColor: "#FFCDD2", // Stronger light red
+    backgroundColor: "rgba(239,68,68,0.15)",
   },
 
   // Text styles for different urgency levels
   normalText: {
-    color: "#2E7D32",
+    color: "#22C55E",
     fontWeight: "500",
   },
   soonText: {
-    color: "#F57F17",
+    color: "#EAB308",
     fontWeight: "500",
   },
   urgentText: {
-    color: "#E65100",
+    color: "#F97316",
     fontWeight: "500",
   },
   overdueText: {
-    color: "#C62828",
+    color: "#EF4444",
     fontWeight: "600",
   },
 
@@ -1596,9 +1633,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
   fancyListItemContent: {
     padding: 16,
@@ -1620,12 +1657,13 @@ const styles = StyleSheet.create({
   fancyListItemTitle: {
     fontSize: 18,
     fontWeight: "600",
+    color: "#FFFFFF",
   },
   fancyDeleteIcon: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "rgba(244,63,94,0.15)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1634,7 +1672,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   lastCompletionInfoCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
@@ -1642,7 +1680,7 @@ const styles = StyleSheet.create({
   },
   lastCompletionHeading: {
     fontSize: 12,
-    color: "#888",
+    color: "#71717A",
     marginBottom: 4,
   },
   lastCompletionText: {
@@ -1651,16 +1689,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   normalCompletionText: {
-    color: "#2E7D32",
+    color: "#22C55E",
   },
   soonCompletionText: {
-    color: "#F57F17",
+    color: "#EAB308",
   },
   urgentCompletionText: {
-    color: "#E65100",
+    color: "#F97316",
   },
   overdueCompletionText: {
-    color: "#C62828",
+    color: "#EF4444",
   },
   userInfoContainer: {
     flexDirection: "row",
@@ -1681,7 +1719,7 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 14,
-    color: "#333",
+    color: "#FFFFFF",
   },
   neverCompletedMessage: {
     flexDirection: "row",
