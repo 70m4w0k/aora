@@ -8,6 +8,8 @@ import {
   StyleSheet, 
   Alert,
   Share,
+  Modal,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -75,10 +77,30 @@ const MemberAvatar = ({ member, index }) => (
   </View>
 );
 
+// Accent color options
+const ACCENT_COLORS = [
+  { name: 'Purple', value: '#8B5CF6' },
+  { name: 'Cyan', value: '#06B6D4' },
+  { name: 'Emerald', value: '#10B981' },
+  { name: 'Rose', value: '#F43F5E' },
+  { name: 'Amber', value: '#F59E0B' },
+  { name: 'Blue', value: '#3B82F6' },
+];
+
+// Theme options
+const THEME_OPTIONS = [
+  { name: 'Dark', value: 'dark', icon: 'moon' },
+  { name: 'Light', value: 'light', icon: 'sunny', disabled: true },
+  { name: 'System', value: 'system', icon: 'phone-portrait-outline', disabled: true },
+];
+
 const Profile = () => {
   const { user, setUser, setIsLogged, household, householdMembers, refreshUser, refreshHousehold } = useGlobalContext();
   const [stats, setStats] = useState({ completedTasks: 0, tasksPerWeek: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const [appearanceModalVisible, setAppearanceModalVisible] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState('dark');
+  const [selectedAccent, setSelectedAccent] = useState('#8B5CF6');
 
   const isAdmin = user?.role === 'admin';
 
@@ -182,7 +204,113 @@ const Profile = () => {
   };
 
   const handleNotifications = () => Alert.alert("Coming Soon", "Notification settings will be available in a future update.");
-  const handleAppearance = () => Alert.alert("Coming Soon", "Theme settings will be available soon.\n\nCurrently using dark mode.");
+  const handleAppearance = () => setAppearanceModalVisible(true);
+
+  const renderAppearanceModal = () => (
+    <Modal
+      visible={appearanceModalVisible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setAppearanceModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          {/* Header */}
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Appearance</Text>
+            <TouchableOpacity onPress={() => setAppearanceModalVisible(false)} style={styles.modalCloseBtn}>
+              <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Theme Selection */}
+          <Text style={styles.modalSectionTitle}>THEME</Text>
+          <View style={styles.themeOptions}>
+            {THEME_OPTIONS.map((theme) => (
+              <TouchableOpacity
+                key={theme.value}
+                style={[
+                  styles.themeOption,
+                  selectedTheme === theme.value && styles.themeOptionActive,
+                  theme.disabled && styles.themeOptionDisabled,
+                ]}
+                onPress={() => !theme.disabled && setSelectedTheme(theme.value)}
+                disabled={theme.disabled}
+              >
+                <Ionicons 
+                  name={theme.icon} 
+                  size={24} 
+                  color={selectedTheme === theme.value ? selectedAccent : theme.disabled ? COLORS.textTertiary : COLORS.textSecondary} 
+                />
+                <Text style={[
+                  styles.themeOptionText,
+                  selectedTheme === theme.value && { color: selectedAccent },
+                  theme.disabled && styles.themeOptionTextDisabled,
+                ]}>
+                  {theme.name}
+                </Text>
+                {selectedTheme === theme.value && (
+                  <View style={[styles.checkBadge, { backgroundColor: selectedAccent }]}>
+                    <Ionicons name="checkmark" size={12} color="#FFF" />
+                  </View>
+                )}
+                {theme.disabled && (
+                  <Text style={styles.comingSoonBadge}>Soon</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Accent Color Selection */}
+          <Text style={styles.modalSectionTitle}>ACCENT COLOR</Text>
+          <View style={styles.accentOptions}>
+            {ACCENT_COLORS.map((color) => (
+              <TouchableOpacity
+                key={color.value}
+                style={[
+                  styles.accentOption,
+                  { backgroundColor: color.value },
+                  selectedAccent === color.value && styles.accentOptionActive,
+                ]}
+                onPress={() => setSelectedAccent(color.value)}
+              >
+                {selectedAccent === color.value && (
+                  <Ionicons name="checkmark" size={20} color="#FFF" />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.accentNote}>
+            Accent color customization coming in a future update
+          </Text>
+
+          {/* Preview */}
+          <Text style={styles.modalSectionTitle}>PREVIEW</Text>
+          <View style={styles.previewCard}>
+            <View style={styles.previewRow}>
+              <View style={[styles.previewDot, { backgroundColor: selectedAccent }]} />
+              <Text style={styles.previewText}>Primary buttons & links</Text>
+            </View>
+            <View style={styles.previewRow}>
+              <View style={[styles.previewDot, { backgroundColor: selectedAccent, opacity: 0.5 }]} />
+              <Text style={styles.previewText}>Highlights & badges</Text>
+            </View>
+            <View style={[styles.previewButton, { backgroundColor: selectedAccent }]}>
+              <Text style={styles.previewButtonText}>Sample Button</Text>
+            </View>
+          </View>
+
+          {/* Close Button */}
+          <TouchableOpacity 
+            style={[styles.modalDoneBtn, { backgroundColor: selectedAccent }]}
+            onPress={() => setAppearanceModalVisible(false)}
+          >
+            <Text style={styles.modalDoneBtnText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -277,6 +405,9 @@ const Profile = () => {
         <Text style={styles.versionText}>Version 1.0.0</Text>
         <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* Appearance Modal */}
+      {renderAppearanceModal()}
     </SafeAreaView>
   );
 };
@@ -345,6 +476,168 @@ const styles = StyleSheet.create({
 
   // Version
   versionText: { fontSize: 11, color: COLORS.textTertiary, textAlign: 'center', marginTop: 16 },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 40,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textTertiary,
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+
+  // Theme Options
+  themeOptions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  themeOption: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+  },
+  themeOptionActive: {
+    borderColor: COLORS.accent.primary,
+    backgroundColor: `${COLORS.accent.primary}10`,
+  },
+  themeOptionDisabled: {
+    opacity: 0.5,
+  },
+  themeOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginTop: 8,
+  },
+  themeOptionTextDisabled: {
+    color: COLORS.textTertiary,
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  comingSoonBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    fontSize: 9,
+    fontWeight: '600',
+    color: COLORS.textTertiary,
+    backgroundColor: COLORS.elevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+
+  // Accent Colors
+  accentOptions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  accentOption: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accentOptionActive: {
+    borderWidth: 3,
+    borderColor: '#FFF',
+  },
+  accentNote: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+    fontStyle: 'italic',
+    marginBottom: 16,
+  },
+
+  // Preview
+  previewCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  previewDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  previewText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  previewButton: {
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  previewButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+
+  // Done Button
+  modalDoneBtn: {
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  modalDoneBtnText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 16,
+  },
 });
 
 export default Profile;
