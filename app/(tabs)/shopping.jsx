@@ -24,16 +24,16 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
   ShoppingCategories,
-  getAllShoppingItems,
+  getHouseholdShoppingItems,
   createShoppingItem,
   updateShoppingItem,
   deleteShoppingItem,
-  getAllUsers,
+  getHouseholdMembers,
 } from "../../lib/appwrite";
 import EmptyState from "../../components/EmptyState";
 
 const ShoppingScreen = () => {
-  const { user } = useGlobalContext();
+  const { user, household } = useGlobalContext();
   const [items, setItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -75,8 +75,10 @@ const ShoppingScreen = () => {
   const submitButtonText = editingItem ? "Update" : "Add";
 
   useEffect(() => {
-    fetchItems();
-    fetchUsers();
+    if (household?.$id) {
+      fetchItems();
+      fetchUsers();
+    }
 
     // Animate content in
     Animated.parallel([
@@ -91,11 +93,12 @@ const ShoppingScreen = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [household?.$id]);
 
   const fetchItems = async () => {
+    if (!household?.$id) return;
     try {
-      const shoppingItems = await getAllShoppingItems();
+      const shoppingItems = await getHouseholdShoppingItems(household.$id);
       setItems(shoppingItems || []);
     } catch (error) {
       console.error("Error fetching shopping items:", error);
@@ -103,9 +106,10 @@ const ShoppingScreen = () => {
   };
 
   const fetchUsers = async () => {
+    if (!household?.$id) return;
     try {
-      const allUsers = await getAllUsers();
-      setUsers(allUsers || []);
+      const members = await getHouseholdMembers(household.$id);
+      setUsers(members || []);
     } catch (error) {
       console.error("Error fetching users:", error);
     }
@@ -147,6 +151,7 @@ const ShoppingScreen = () => {
         await createShoppingItem({
           ...form,
           userId: user.$id,
+          householdId: household.$id,
         });
       }
 

@@ -17,18 +17,17 @@ import * as ImagePicker from "expo-image-picker";
 import { Picker } from "@react-native-picker/picker";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
-  getAllExpenses,
-  getUserExpenses,
+  getHouseholdExpenses,
   createExpense,
   createSettlement,
   getUserSettlements,
-  getAllUsers,
+  getHouseholdMembers,
   getExpenseImageUrl,
 } from "../../lib/appwrite";
 import EmptyState from "../../components/EmptyState";
 
 const ExpensesScreen = () => {
-  const { user } = useGlobalContext();
+  const { user, household } = useGlobalContext();
   const [activeTab, setActiveTab] = useState("expenses"); // expenses or settlements
   const [expenses, setExpenses] = useState([]);
   const [settlements, setSettlements] = useState([]);
@@ -65,10 +64,13 @@ const ExpensesScreen = () => {
   const [currentUserFilter, setCurrentUserFilter] = useState(true); // Show only current user's expenses
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (household?.$id) {
+      fetchData();
+    }
+  }, [household?.$id]);
 
   const fetchData = async () => {
+    if (!household?.$id) return;
     try {
       console.log("Fetching all data...");
       // Fetch users first to ensure we have them before processing expenses
@@ -92,14 +94,15 @@ const ExpensesScreen = () => {
   };
 
   const fetchUsers = async () => {
+    if (!household?.$id) return [];
     try {
-      const allUsers = await getAllUsers();
-      setUsers(allUsers || []);
+      const members = await getHouseholdMembers(household.$id);
+      setUsers(members || []);
       // Default paidBy to current user
       if (user) {
         setExpenseForm((prev) => ({ ...prev, paidBy: user.$id }));
       }
-      return allUsers;
+      return members;
     } catch (error) {
       console.error("Error fetching users:", error);
       return [];
@@ -107,14 +110,12 @@ const ExpensesScreen = () => {
   };
 
   const fetchExpenses = async () => {
+    if (!household?.$id) return [];
     try {
-      if (!user) return;
-      const allExpenses = currentUserFilter
-        ? await getUserExpenses(user.$id)
-        : await getAllExpenses();
-      console.log("allExpenses", allExpenses);
-      setExpenses(allExpenses || []);
-      return allExpenses;
+      const householdExpenses = await getHouseholdExpenses(household.$id);
+      console.log("householdExpenses", householdExpenses);
+      setExpenses(householdExpenses || []);
+      return householdExpenses;
     } catch (error) {
       console.error("Error fetching expenses:", error);
       return [];
@@ -343,6 +344,7 @@ const ExpensesScreen = () => {
         ...expenseForm,
         amount: parseFloat(expenseForm.amount),
         date: new Date().toISOString(),
+        householdId: household.$id,
       });
 
       setExpenseModalVisible(false);
@@ -381,6 +383,7 @@ const ExpensesScreen = () => {
         ...settlementForm,
         amount: parseFloat(settlementForm.amount),
         date: new Date().toISOString(),
+        householdId: household.$id,
       });
 
       setSettlementModalVisible(false);

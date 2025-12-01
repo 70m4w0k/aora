@@ -29,7 +29,7 @@ const RecurrenceButton = ({ label, value, selected, onPress }) => (
   </TouchableOpacity>
 );
 
-const CreateTaskModal = ({ visible, onClose, onTaskCreated }) => {
+const CreateTaskModal = ({ visible, onClose, onTaskCreated, householdId }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     title: "",
@@ -41,9 +41,13 @@ const CreateTaskModal = ({ visible, onClose, onTaskCreated }) => {
       return Alert.alert("Missing Information", "Please provide a task name");
     }
 
+    if (!householdId) {
+      return Alert.alert("Error", "No household found. Please join or create a household first.");
+    }
+
     setIsSubmitting(true);
     try {
-      const newTask = await createTask(form);
+      const newTask = await createTask({ ...form, householdId });
 
       Alert.alert("Success", "Task created successfully");
       // Reset form

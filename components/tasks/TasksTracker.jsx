@@ -24,8 +24,9 @@ import {
   createTaskDone,
   deleteTaskDone,
   deleteTask,
-  getAllUsers,
-  getAllTasks,
+  getHouseholdMembers,
+  getHouseholdTasks,
+  getAllTasksDone,
 } from "../../lib/appwrite";
 
 const WEEKS_IN_YEAR = 52;
@@ -37,7 +38,7 @@ const VIEW_MODES = {
   LIST: "list",
 };
 
-const TasksTracker = ({ initialTasks }) => {
+const TasksTracker = ({ initialTasks, householdId }) => {
   const { user } = useGlobalContext();
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState(initialTasks);
@@ -50,7 +51,6 @@ const TasksTracker = ({ initialTasks }) => {
 
   // Scrolling to current week
   const scrollRef = useRef();
-  const [currentWeekXPos, setCurrentWeekXPos] = useState(0);
 
   // Modals
   const [legendModalVisible, setLegendModalVisible] = useState(false);
@@ -87,28 +87,62 @@ const TasksTracker = ({ initialTasks }) => {
   }, [initialTasks]);
 
   const scrollToCurrentWeek = () => {
+    // Calculate the x position based on current week number
+    // Each column is COLUMN_WIDTH wide, we want to center current week on screen
+    const screenWidth = Dimensions.get("window").width;
+    const targetX = (currentWeekNumber - 1) * COLUMN_WIDTH - (screenWidth / 2) + TASK_COLUMN_WIDTH + (COLUMN_WIDTH / 2);
+    
     // Add a slight delay to ensure the component is rendered
     setTimeout(() => {
-      scrollRef.current?.scrollTo({ x: currentWeekXPos, animated: true });
-    }, 300);
+      scrollRef.current?.scrollTo({ x: Math.max(0, targetX), animated: true });
+    }, 500);
   };
 
   const fetchUsers = async () => {
+    if (!householdId) return;
     try {
-      const allUsers = await getAllUsers();
-      setUsers(allUsers);
+      const members = await getHouseholdMembers(householdId);
+      setUsers(members);
     } catch (error) {
       console.error("Error fetching users:", error);
     }
   };
 
   const onRefresh = async () => {
+    if (!householdId) return;
     setRefreshing(true);
     try {
-      const allTasks = await getAllTasks();
-      // Refresh tasks logic would be here
-      // For now, we just refresh the current list
-      setTasks([...tasks]);
+      // Get all tasks done first
+      const taskDoneList = await getAllTasksDone();
+      
+      // Build a map of completed weeks per task
+      const completedWeeksMap = {};
+      taskDoneList.forEach((taskDone) => {
+        const taskId = taskDone?.taskId?.$id;
+        if (!taskId) return;
+        
+        if (!completedWeeksMap[taskId]) {
+          completedWeeksMap[taskId] = {
+            name: taskDone?.taskId?.title,
+            completedWeeks: Array(52).fill(""),
+          };
+        }
+        if (taskDone.weekNumber >= 1 && taskDone.weekNumber <= 52) {
+          completedWeeksMap[taskId].completedWeeks[taskDone.weekNumber - 1] = taskDone.userId;
+        }
+      });
+      
+      // Get household tasks
+      const householdTasks = await getHouseholdTasks(householdId);
+      
+      // Merge tasks with completed weeks data
+      const refreshedTasks = householdTasks.map(task => ({
+        id: task.$id,
+        name: task.title,
+        completedWeeks: completedWeeksMap[task.$id]?.completedWeeks || Array(52).fill(""),
+      }));
+      
+      setTasks(refreshedTasks);
     } catch (error) {
       console.error("Error refreshing tasks:", error);
     } finally {
@@ -721,12 +755,6 @@ const TasksTracker = ({ initialTasks }) => {
                     {task.completedWeeks.map((completed, index) => (
                       <TouchableOpacity
                         key={index}
-                        onLayout={(event) => {
-                          if (index + 1 === currentWeekNumber) {
-                            const layout = event.nativeEvent.layout;
-                            setCurrentWeekXPos(layout.x - 120); // Scroll to show a bit before current week
-                          }
-                        }}
                         style={[
                           styles.cell,
                           { width: COLUMN_WIDTH },
@@ -1050,6 +1078,7 @@ const TasksTracker = ({ initialTasks }) => {
         visible={createTaskModal}
         onClose={() => setCreateTaskModalVisible(false)}
         onTaskCreated={handleTaskCreated}
+        householdId={householdId}
       />
 
       {/* Delete Confirmation Modal */}

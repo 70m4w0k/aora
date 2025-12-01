@@ -13,9 +13,9 @@ import { router } from "expo-router";
 
 import { useGlobalContext } from "../../context/GlobalProvider";
 import { 
-  getAllShoppingItems,
-  getAllExpenses,
-  getAllTasks,
+  getHouseholdShoppingItems,
+  getHouseholdExpenses,
+  getHouseholdTasks,
   getLatestTasksImplByTaskId
 } from "../../lib/appwrite";
 
@@ -39,7 +39,7 @@ const DashboardCard = ({ title, count, onPress, icon, color }) => (
 );
 
 const Home = () => {
-  const { user } = useGlobalContext();
+  const { user, household } = useGlobalContext();
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
     pendingChores: 0,
@@ -49,9 +49,11 @@ const Home = () => {
   });
 
   const fetchStats = async () => {
+    if (!household?.$id) return;
+    
     try {
-      // Get tasks stats
-      const tasks = await getAllTasks();
+      // Get tasks stats for household
+      const tasks = await getHouseholdTasks(household.$id);
       let pendingCount = 0;
       let completedCount = 0;
 
@@ -66,19 +68,20 @@ const Home = () => {
         }));
       }
 
-      // Get shopping items count
+      // Get shopping items count for household
       let shoppingCount = 0;
       try {
-        const shoppingItems = await getAllShoppingItems();
-        shoppingCount = shoppingItems?.length || 0;
+        const shoppingItems = await getHouseholdShoppingItems(household.$id);
+        // Count only non-completed items
+        shoppingCount = shoppingItems?.filter(item => !item.completed).length || 0;
       } catch (error) {
         console.error("Error fetching shopping items:", error);
       }
       
-      // Get expenses count
+      // Get expenses count for household
       let expensesCount = 0;
       try {
-        const expenses = await getAllExpenses();
+        const expenses = await getHouseholdExpenses(household.$id);
         expensesCount = expenses?.length || 0;
       } catch (error) {
         console.error("Error fetching expenses:", error);
@@ -96,8 +99,10 @@ const Home = () => {
   };
 
   useEffect(() => {
-    fetchStats();
-  }, []);
+    if (household?.$id) {
+      fetchStats();
+    }
+  }, [household?.$id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -126,6 +131,11 @@ const Home = () => {
               />
             )}
           </View>
+          {household && (
+            <View style={styles.householdBadge}>
+              <Text style={styles.householdText}>🏠 {household.name}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.dashboardSection}>
@@ -194,6 +204,19 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     backgroundColor: "#E0E0E0",
+  },
+  householdBadge: {
+    marginTop: 12,
+    backgroundColor: "#E3F2FD",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    alignSelf: "flex-start",
+  },
+  householdText: {
+    fontSize: 14,
+    color: "#1565C0",
+    fontWeight: "500",
   },
   dashboardSection: {
     padding: 20,

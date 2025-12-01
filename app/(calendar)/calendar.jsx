@@ -1,16 +1,22 @@
 import React, { useEffect, useState } from "react";
 import { getWeekNumberByDate } from "../../lib/utils";
 import TasksTracker from "../../components/tasks/TasksTracker";
-import { getAllTasks, getAllTasksDone } from "../../lib/appwrite";
+import { getHouseholdTasks, getAllTasksDone } from "../../lib/appwrite";
+import { useGlobalContext } from "../../context/GlobalProvider";
 
 const Calendar = () => {
+  const { household } = useGlobalContext();
   const [tasksToDisplay, setTasksToDisplay] = useState([]);
 
   useEffect(() => {
-    initTasksToDisplay();
-  }, []);
+    if (household?.$id) {
+      initTasksToDisplay();
+    }
+  }, [household?.$id]);
 
   const initTasksToDisplay = async () => {
+    if (!household?.$id) return;
+    
     try {
       let tasksToDisplayInitializer = [];
 
@@ -22,8 +28,8 @@ const Calendar = () => {
         tasksToDisplayInitializer = extractTasks(taskDoneList);
       }
 
-      // Get all tasks
-      const tasks = await getAllTasks();
+      // Get tasks for this household
+      const tasks = await getHouseholdTasks(household.$id);
       // console.log("initTasksToDisplay() - tasks", tasks);
 
       // Merge tasks that are not already in tasksToDisplayInitializer
@@ -83,7 +89,7 @@ const Calendar = () => {
 
   // console.log("tasksToDisplay", tasksToDisplay);
 
-  return <TasksTracker initialTasks={tasksToDisplay} />;
+  return <TasksTracker initialTasks={tasksToDisplay} householdId={household?.$id} />;
 };
 
 export default Calendar;
