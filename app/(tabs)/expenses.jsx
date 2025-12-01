@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
-  SafeAreaView,
   View,
   Text,
   FlatList,
@@ -12,9 +11,14 @@ import {
   RefreshControl,
   ScrollView,
   Image,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { Picker } from "@react-native-picker/picker";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
   getHouseholdExpenses,
@@ -22,22 +26,38 @@ import {
   createSettlement,
   getUserSettlements,
   getHouseholdMembers,
-  getExpenseImageUrl,
 } from "../../lib/appwrite";
-import EmptyState from "../../components/EmptyState";
+
+const { width: screenWidth } = Dimensions.get("window");
+
+// Expense Categories with icons and colors
+const EXPENSE_CATEGORIES = {
+  food: { icon: "restaurant", label: "Food & Drinks", color: "#F97316" },
+  groceries: { icon: "cart", label: "Groceries", color: "#22C55E" },
+  rent: { icon: "home", label: "Rent", color: "#8B5CF6" },
+  utilities: { icon: "flash", label: "Utilities", color: "#EAB308" },
+  transport: { icon: "car", label: "Transport", color: "#06B6D4" },
+  entertainment: { icon: "game-controller", label: "Entertainment", color: "#EC4899" },
+  shopping: { icon: "bag", label: "Shopping", color: "#F43F5E" },
+  health: { icon: "medkit", label: "Health", color: "#14B8A6" },
+  other: { icon: "ellipsis-horizontal", label: "Other", color: "#71717A" },
+};
 
 const ExpensesScreen = () => {
   const { user, household } = useGlobalContext();
-  const [activeTab, setActiveTab] = useState("expenses"); // expenses or settlements
+  const [activeTab, setActiveTab] = useState("expenses");
   const [expenses, setExpenses] = useState([]);
   const [settlements, setSettlements] = useState([]);
   const [users, setUsers] = useState([]);
   const [balances, setBalances] = useState({});
+  const [debts, setDebts] = useState([]); // Who owes whom
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Modal states
   const [expenseModalVisible, setExpenseModalVisible] = useState(false);
   const [settlementModalVisible, setSettlementModalVisible] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState(null);
 
   // Form states
   const [expenseForm, setExpenseForm] = useState({
@@ -45,229 +65,152 @@ const ExpensesScreen = () => {
     amount: "",
     paidBy: "",
     splitBetween: [],
-    category: "general",
+    category: "other",
     notes: "",
     image: null,
   });
 
-  // Image preview state
   const [imagePreview, setImagePreview] = useState(null);
 
-  const [settlementForm, setSettlementForm] = useState({
-    amount: "",
-    paidBy: "",
-    paidTo: "",
-    notes: "",
-  });
-
-  // For filtering
-  const [currentUserFilter, setCurrentUserFilter] = useState(true); // Show only current user's expenses
+  // Animation
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fabScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (household?.$id) {
       fetchData();
     }
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
   }, [household?.$id]);
 
   const fetchData = async () => {
     if (!household?.$id) return;
-    try {
-      console.log("Fetching all data...");
-      // Fetch users first to ensure we have them before processing expenses
-      const fetchedUsers = await fetchUsers();
-      if (fetchedUsers && fetchedUsers.length > 0) {
-        // Then fetch expenses and settlements sequentially
-        await fetchExpenses();
-        await fetchSettlements();
-        // Force recalculation of balances
-        calculateBalances();
-      } else {
-        console.log("No users found, cannot fetch expenses");
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      Alert.alert(
-        "Error",
-        "Failed to load expenses data. Pull down to refresh and try again."
-      );
-    }
-  };
-
-  const fetchUsers = async () => {
-    if (!household?.$id) return [];
+    setLoading(true);
     try {
       const members = await getHouseholdMembers(household.$id);
       setUsers(members || []);
-      // Default paidBy to current user
+      
       if (user) {
         setExpenseForm((prev) => ({ ...prev, paidBy: user.$id }));
       }
-      return members;
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      return [];
-    }
-  };
 
-  const fetchExpenses = async () => {
-    if (!household?.$id) return [];
-    try {
       const householdExpenses = await getHouseholdExpenses(household.$id);
-      console.log("householdExpenses", householdExpenses);
       setExpenses(householdExpenses || []);
-      return householdExpenses;
-    } catch (error) {
-      console.error("Error fetching expenses:", error);
-      return [];
-    }
-  };
 
-  const fetchSettlements = async () => {
-    try {
       if (user) {
         const userSettlements = await getUserSettlements(user.$id);
         setSettlements(userSettlements || []);
-        return userSettlements;
       }
     } catch (error) {
-      console.error("Error fetching settlements:", error);
-      return [];
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Calculate balances and debts
   useEffect(() => {
     if (users.length > 0) {
-      calculateBalances();
+      calculateBalancesAndDebts();
     }
   }, [expenses, settlements, users]);
 
-  const calculateBalances = () => {
-    try {
-      console.log(
-        "Calculating balances with users:",
-        users.length,
-        "expenses:",
-        expenses.length,
-        "settlements:",
-        settlements.length
-      );
+  const calculateBalancesAndDebts = () => {
+    const newBalances = {};
+    
+    // Initialize balances
+    users.forEach((u) => {
+      newBalances[u.$id] = {
+        oderId: u.$id,
+        username: u.username,
+        avatar: u.avatar,
+        color: u.color,
+        balance: 0,
+      };
+    });
 
-      const newBalances = {};
+    // Process expenses
+    expenses.forEach((expense) => {
+      if (!expense.amount) return;
+      
+      const amount = parseFloat(expense.amount);
+      const paidById = typeof expense.paidBy === "object" ? expense.paidBy.$id : expense.paidBy;
+      
+      let splitBetween = Array.isArray(expense.splitBetween) 
+        ? expense.splitBetween 
+        : [expense.splitBetween];
+      
+      const splitCount = splitBetween.length;
+      if (splitCount === 0) return;
+      
+      const amountPerPerson = amount / splitCount;
 
-      // Initialize balances for all users
-      users.forEach((u) => {
-        newBalances[u.$id] = {
-          userId: u.$id,
-          username: u.username,
-          balance: 0,
-          color: u.color,
-        };
+      if (newBalances[paidById]) {
+        newBalances[paidById].balance += amount;
+      }
+
+      splitBetween.forEach((personId) => {
+        const id = typeof personId === "object" ? personId.$id : personId;
+        if (newBalances[id]) {
+          newBalances[id].balance -= amountPerPerson;
+        }
       });
+    });
 
-      // Process expenses
-      if (expenses && expenses.length > 0) {
-        expenses.forEach((expense) => {
-          if (!expense.amount) {
-            console.log("Invalid expense amount:", expense);
-            return;
-          }
+    // Process settlements
+    settlements.forEach((settlement) => {
+      if (!settlement.amount) return;
+      
+      const amount = parseFloat(settlement.amount);
+      const paidById = typeof settlement.paidBy === "object" ? settlement.paidBy.$id : settlement.paidBy;
+      const paidToId = typeof settlement.paidTo === "object" ? settlement.paidTo.$id : settlement.paidTo;
 
-          const amount = parseFloat(expense.amount);
+      if (newBalances[paidById]) {
+        newBalances[paidById].balance -= amount;
+      }
+      if (newBalances[paidToId]) {
+        newBalances[paidToId].balance += amount;
+      }
+    });
 
-          // Handle different ways paidBy might be structured
-          let paidById;
-          if (expense.paidBy) {
-            paidById =
-              typeof expense.paidBy === "object"
-                ? expense.paidBy.$id
-                : expense.paidBy;
-          } else {
-            console.log("Invalid paidBy:", expense);
-            return;
-          }
+    setBalances(newBalances);
 
-          // Handle different ways splitBetween might be structured
-          let splitBetween = [];
-          if (expense.splitBetween) {
-            splitBetween = Array.isArray(expense.splitBetween)
-              ? expense.splitBetween
-              : [expense.splitBetween];
-          }
+    // Calculate who owes whom (simplified debt resolution)
+    const debtList = [];
+    const balancesCopy = { ...newBalances };
+    
+    // Get creditors (positive balance) and debtors (negative balance)
+    const creditors = Object.values(balancesCopy).filter(b => b.balance > 0.01).sort((a, b) => b.balance - a.balance);
+    const debtors = Object.values(balancesCopy).filter(b => b.balance < -0.01).sort((a, b) => a.balance - b.balance);
 
-          const splitCount = splitBetween.length;
-          if (splitCount === 0) return; // Skip if no split
-
-          const amountPerPerson = amount / splitCount;
-
-          // Add amount to the person who paid
-          if (newBalances[paidById]) {
-            newBalances[paidById].balance += amount;
-          }
-
-          // Subtract from each person who owes
-          splitBetween.forEach((personId) => {
-            const id = typeof personId === "object" ? personId.$id : personId;
-            if (newBalances[id]) {
-              newBalances[id].balance -= amountPerPerson;
-            }
-          });
+    // Match debtors with creditors
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const debtor = debtors[i];
+      const creditor = creditors[j];
+      
+      const debtAmount = Math.min(Math.abs(debtor.balance), creditor.balance);
+      
+      if (debtAmount > 0.01) {
+        debtList.push({
+          from: debtor,
+          to: creditor,
+          amount: debtAmount,
         });
       }
 
-      // Process settlements
-      if (settlements && settlements.length > 0) {
-        settlements.forEach((settlement) => {
-          if (!settlement.amount) {
-            console.log("Invalid settlement amount:", settlement);
-            return;
-          }
+      debtor.balance += debtAmount;
+      creditor.balance -= debtAmount;
 
-          const amount = parseFloat(settlement.amount);
-
-          // Handle different ways paidBy might be structured
-          let paidById;
-          if (settlement.paidBy) {
-            paidById =
-              typeof settlement.paidBy === "object"
-                ? settlement.paidBy.$id
-                : settlement.paidBy;
-          } else {
-            console.log("Invalid paidBy in settlement:", settlement);
-            return;
-          }
-
-          // Handle different ways paidTo might be structured
-          let paidToId;
-          if (settlement.paidTo) {
-            paidToId =
-              typeof settlement.paidTo === "object"
-                ? settlement.paidTo.$id
-                : settlement.paidTo;
-          } else {
-            console.log("Invalid paidTo in settlement:", settlement);
-            return;
-          }
-
-          // The person who paid the settlement decreases their balance
-          if (newBalances[paidById]) {
-            newBalances[paidById].balance -= amount;
-          }
-
-          // The person who received the settlement increases their balance
-          if (newBalances[paidToId]) {
-            newBalances[paidToId].balance += amount;
-          }
-        });
-      }
-
-      console.log(
-        "Balance calculation completed:",
-        Object.keys(newBalances).length
-      );
-      setBalances(newBalances);
-    } catch (error) {
-      console.error("Error calculating balances:", error);
+      if (Math.abs(debtor.balance) < 0.01) i++;
+      if (creditor.balance < 0.01) j++;
     }
+
+    setDebts(debtList);
   };
 
   const onRefresh = async () => {
@@ -276,23 +219,35 @@ const ExpensesScreen = () => {
     setRefreshing(false);
   };
 
-  const toggleFilter = () => {
-    setCurrentUserFilter(!currentUserFilter);
-    fetchExpenses();
+  const resetExpenseForm = () => {
+    setExpenseForm({
+      title: "",
+      amount: "",
+      paidBy: user?.$id || "",
+      splitBetween: [],
+      category: "other",
+      notes: "",
+      image: null,
+    });
+    setImagePreview(null);
   };
 
-  // Image picker function
+  const openAddExpense = () => {
+    resetExpenseForm();
+    // Pre-select all users for split
+    setExpenseForm(prev => ({
+      ...prev,
+      paidBy: user?.$id || "",
+      splitBetween: users.map(u => u.$id),
+    }));
+    setExpenseModalVisible(true);
+  };
+
   const pickImage = async () => {
     try {
-      // Request media library permissions
-      const permissionResult =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert(
-          "Permission Denied",
-          "You need to grant permission to access your photos"
-        );
+        Alert.alert("Permission Denied", "Camera roll permission is required");
         return;
       }
 
@@ -303,43 +258,63 @@ const ExpensesScreen = () => {
         quality: 0.8,
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedAsset = result.assets[0];
-
-        // Create the image object in the format expected by appwrite.js
-        const imageFile = {
-          uri: selectedAsset.uri,
-          name: selectedAsset.fileName || "expense_receipt.jpg",
-          mimeType: selectedAsset.mimeType || "image/jpeg",
-          size: selectedAsset.fileSize || 0,
-        };
-
-        setExpenseForm((prev) => ({
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        setExpenseForm(prev => ({
           ...prev,
-          image: imageFile,
+          image: {
+            uri: asset.uri,
+            name: asset.fileName || "receipt.jpg",
+            mimeType: asset.mimeType || "image/jpeg",
+            size: asset.fileSize || 0,
+          },
         }));
-
-        setImagePreview(selectedAsset.uri);
+        setImagePreview(asset.uri);
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to select image. Please try again.");
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission needed", "Camera permission is required");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: true,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        setExpenseForm(prev => ({
+          ...prev,
+          image: {
+            uri: asset.uri,
+            name: `receipt_${Date.now()}.jpg`,
+            mimeType: "image/jpeg",
+            size: asset.fileSize || 0,
+          },
+        }));
+        setImagePreview(asset.uri);
+      }
+    } catch (error) {
+      console.error("Error taking photo:", error);
     }
   };
 
   const handleAddExpense = async () => {
-    if (
-      expenseForm.title.trim() === "" ||
-      expenseForm.amount.trim() === "" ||
-      !expenseForm.paidBy ||
-      expenseForm.splitBetween.length === 0
-    ) {
-      return Alert.alert("Error", "Please fill in all required fields");
+    if (!expenseForm.title.trim() || !expenseForm.amount.trim() || 
+        !expenseForm.paidBy || expenseForm.splitBetween.length === 0) {
+      return Alert.alert("Missing Info", "Please fill in title, amount, payer, and who to split with");
     }
 
     try {
-      setExpenseModalVisible(false); // Close modal first to show loading UI
-
       await createExpense({
         ...expenseForm,
         amount: parseFloat(expenseForm.amount),
@@ -348,1048 +323,930 @@ const ExpensesScreen = () => {
       });
 
       setExpenseModalVisible(false);
-      setExpenseForm({
-        title: "",
-        amount: "",
-        paidBy: user.$id,
-        splitBetween: [],
-        category: "general",
-        notes: "",
-        image: null,
-      });
-      setImagePreview(null);
-
-      await fetchExpenses();
+      resetExpenseForm();
+      await fetchData();
+      Alert.alert("Success", "Expense added!");
     } catch (error) {
       Alert.alert("Error", error.message);
     }
   };
 
-  const handleAddSettlement = async () => {
-    if (
-      settlementForm.amount.trim() === "" ||
-      !settlementForm.paidBy ||
-      !settlementForm.paidTo ||
-      settlementForm.paidBy === settlementForm.paidTo
-    ) {
-      return Alert.alert(
-        "Error",
-        "Please fill in all fields and ensure payer and recipient are different"
-      );
-    }
-
+  const handleSettleDebt = async (debt) => {
     try {
       await createSettlement({
-        ...settlementForm,
-        amount: parseFloat(settlementForm.amount),
+        amount: debt.amount,
+        paidBy: debt.from.oderId,
+        paidTo: debt.to.oderId,
         date: new Date().toISOString(),
         householdId: household.$id,
+        notes: "Settlement",
       });
 
-      setSettlementModalVisible(false);
-      setSettlementForm({
-        amount: "",
-        paidBy: user.$id,
-        paidTo: "",
-        notes: "",
-      });
-
-      await Promise.all([fetchExpenses(), fetchSettlements()]);
+      await fetchData();
+      Alert.alert("Success", "Settlement recorded!");
     } catch (error) {
       Alert.alert("Error", error.message);
     }
   };
 
   const toggleUserInSplit = (userId) => {
-    setExpenseForm((prev) => {
+    setExpenseForm(prev => {
       const splitBetween = [...prev.splitBetween];
-
-      if (splitBetween.includes(userId)) {
-        // Remove user if already in split
-        return {
-          ...prev,
-          splitBetween: splitBetween.filter((id) => id !== userId),
-        };
+      const index = splitBetween.indexOf(userId);
+      
+      if (index > -1) {
+        splitBetween.splice(index, 1);
       } else {
-        // Add user if not in split
-        return {
-          ...prev,
-          splitBetween: [...splitBetween, userId],
-        };
+        splitBetween.push(userId);
       }
+      
+      return { ...prev, splitBetween };
     });
   };
 
   const getUsername = (userId) => {
     if (!userId) return "Unknown";
-    const user = users.find((u) => u.$id === userId);
-    return user ? user.username : "Unknown";
+    const u = users.find((u) => u.$id === userId);
+    return u ? u.username : "Unknown";
   };
 
-  const formatCurrency = (amount) => {
-    return `€${parseFloat(amount).toFixed(2)}`;
+  const formatCurrency = (amount) => `€${parseFloat(amount).toFixed(2)}`;
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return "Today";
+    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  // For showing expense image in a modal
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [imageModalVisible, setImageModalVisible] = useState(false);
-
-  // Load expense image
-  const getExpenseImage = async (imageId) => {
-    if (!imageId) return null;
-    try {
-      const imageUrl = await getExpenseImageUrl(imageId);
-      return imageUrl;
-    } catch (error) {
-      console.error("Error loading expense image:", error);
-      return null;
-    }
-  };
-
-  const renderExpenseItem = ({ item }) => (
-    <View style={styles.itemContainer}>
-      <View style={styles.itemHeader}>
-        <Text style={styles.itemTitle}>{item.title}</Text>
-        <Text style={styles.itemAmount}>
-          €{parseFloat(item.amount).toFixed(2)}
-        </Text>
-      </View>
-      <View style={styles.itemDetails}>
-        <Text style={styles.itemDetail}>
-          Paid by:{" "}
-          <Text style={styles.highlight}>{getUsername(item.paidBy)}</Text>
-        </Text>
-        <Text style={styles.itemDetail}>
-          Split with:{" "}
-          <Text style={styles.highlight}>
-            {Array.isArray(item.splitBetween)
-              ? item.splitBetween.map(getUsername).join(", ")
-              : getUsername(item.splitBetween)}
-          </Text>
-        </Text>
-        {item.notes && <Text style={styles.itemNotes}>{item.notes}</Text>}
-        <Text style={styles.itemDate}>
-          {new Date(item.date).toLocaleDateString()}
-        </Text>
-
-        {item.imageId && (
-          <TouchableOpacity
-            style={styles.receiptThumbnailContainer}
-            onPress={() => {
-              setSelectedImage(item.imageId);
-              setImageModalVisible(true);
-            }}
-          >
-            <Image
-              source={{ uri: item.imageId }}
-              style={styles.receiptThumbnail}
-              resizeMode="cover"
-            />
-            <Text style={styles.viewReceiptText}>View Receipt</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-  );
-
-  const renderSettlementItem = ({ item }) => {
-    const paidByName =
-      item.paidBy && item.paidBy.username
-        ? item.paidBy.username
-        : getUsername(item.paidBy);
-
-    const paidToName =
-      item.paidTo && item.paidTo.username
-        ? item.paidTo.username
-        : getUsername(item.paidTo);
+  // Render expense card (Tricount style)
+  const renderExpenseCard = ({ item }) => {
+    const category = EXPENSE_CATEGORIES[item.category] || EXPENSE_CATEGORIES.other;
+    const paidByName = getUsername(item.paidBy);
+    const splitCount = Array.isArray(item.splitBetween) ? item.splitBetween.length : 1;
+    const perPerson = parseFloat(item.amount) / splitCount;
 
     return (
-      <View style={styles.itemContainer}>
-        <View style={styles.itemHeader}>
-          <Text style={styles.itemTitle}>Settlement</Text>
-          <Text style={styles.itemAmount}>{formatCurrency(item.amount)}</Text>
+      <TouchableOpacity style={styles.expenseCard} activeOpacity={0.7}>
+        {/* Category icon */}
+        <View style={[styles.categoryIcon, { backgroundColor: category.color + "20" }]}>
+          <Ionicons name={category.icon} size={20} color={category.color} />
         </View>
-        <View style={styles.itemDetails}>
-          <Text style={styles.itemDetail}>
-            <Text style={styles.highlight}>{paidByName}</Text> paid{" "}
-            <Text style={styles.highlight}>{paidToName}</Text>
-          </Text>
-          {item.notes && <Text style={styles.itemNotes}>{item.notes}</Text>}
-          <Text style={styles.itemDate}>
-            {new Date(item.date).toLocaleDateString()}
+
+        {/* Content */}
+        <View style={styles.expenseContent}>
+          <Text style={styles.expenseTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.expenseSubtitle}>
+            <Text style={styles.expensePayer}>{paidByName}</Text> paid • {formatDate(item.date)}
           </Text>
         </View>
+
+        {/* Amount */}
+        <View style={styles.expenseAmountContainer}>
+          <Text style={styles.expenseAmount}>{formatCurrency(item.amount)}</Text>
+          <Text style={styles.expensePerPerson}>{formatCurrency(perPerson)}/person</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Render balance/debt card
+  const renderDebtCard = ({ item }) => {
+    const isCurrentUser = item.from.oderId === user?.$id;
+    
+    return (
+      <View style={styles.debtCard}>
+        <View style={styles.debtInfo}>
+          <View style={styles.debtAvatars}>
+            <View style={[styles.debtAvatar, { backgroundColor: item.from.color || "#F43F5E" }]}>
+              <Text style={styles.debtAvatarText}>{item.from.username?.[0]?.toUpperCase()}</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={16} color="#71717A" style={{ marginHorizontal: 8 }} />
+            <View style={[styles.debtAvatar, { backgroundColor: item.to.color || "#22C55E" }]}>
+              <Text style={styles.debtAvatarText}>{item.to.username?.[0]?.toUpperCase()}</Text>
+            </View>
+          </View>
+          <View style={styles.debtText}>
+            <Text style={styles.debtDescription}>
+              <Text style={styles.debtName}>{item.from.username}</Text>
+              {" owes "}
+              <Text style={styles.debtName}>{item.to.username}</Text>
+            </Text>
+            <Text style={styles.debtAmount}>{formatCurrency(item.amount)}</Text>
+          </View>
+        </View>
+        
+        {isCurrentUser && (
+          <TouchableOpacity 
+            style={styles.settleButton}
+            onPress={() => {
+              Alert.alert(
+                "Settle Up",
+                `Mark €${item.amount.toFixed(2)} as paid to ${item.to.username}?`,
+                [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Confirm", onPress: () => handleSettleDebt(item) },
+                ]
+              );
+            }}
+          >
+            <Text style={styles.settleButtonText}>Settle</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
 
-  const renderBalanceItem = ({ item }) => {
-    const balance = parseFloat(item.balance);
-    const isPositive = balance > 0;
-    const isNegative = balance < 0;
-    const isZero = balance === 0;
-
-    return (
-      <View
-        style={[
-          styles.balanceItem,
-          { borderLeftColor: item.color || "#757575" },
-        ]}
-      >
-        <Text style={styles.balanceUsername}>{item.username}</Text>
-        <Text
+  // Render category selector
+  const renderCategorySelector = () => (
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false}
+      style={styles.categoryScroll}
+      contentContainerStyle={styles.categoryScrollContent}
+    >
+      {Object.entries(EXPENSE_CATEGORIES).map(([key, cat]) => (
+        <TouchableOpacity
+          key={key}
           style={[
-            styles.balanceAmount,
-            isPositive && styles.positiveBalance,
-            isNegative && styles.negativeBalance,
-            isZero && styles.zeroBalance,
+            styles.categoryChip,
+            expenseForm.category === key && { backgroundColor: cat.color, borderColor: cat.color },
           ]}
+          onPress={() => setExpenseForm(prev => ({ ...prev, category: key }))}
         >
-          {formatCurrency(balance)}
-        </Text>
-        <Text style={styles.balanceStatus}>
-          {isPositive
-            ? "is owed money"
-            : isNegative
-            ? "owes money"
-            : "settled up"}
-        </Text>
+          <Ionicons 
+            name={cat.icon} 
+            size={16} 
+            color={expenseForm.category === key ? "#FFF" : "#71717A"} 
+          />
+          <Text style={[
+            styles.categoryChipText,
+            expenseForm.category === key && { color: "#FFF" },
+          ]}>
+            {cat.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+
+  // Summary banner
+  const renderSummaryBanner = () => {
+    const totalExpenses = expenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+    const myBalance = balances[user?.$id]?.balance || 0;
+    
+    return (
+      <View style={styles.summaryBanner}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Total Expenses</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(totalExpenses)}</Text>
+        </View>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>Your Balance</Text>
+          <Text style={[
+            styles.summaryValue,
+            myBalance > 0 && { color: "#22C55E" },
+            myBalance < 0 && { color: "#EF4444" },
+          ]}>
+            {myBalance >= 0 ? "+" : ""}{formatCurrency(myBalance)}
+          </Text>
+        </View>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0A0C" }}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Expense Sharing</Text>
-        <View style={styles.tabButtons}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Expenses</Text>
+        </View>
+
+        {/* Tab Switcher */}
+        <View style={styles.tabContainer}>
           <TouchableOpacity
-            style={[
-              styles.tabButton,
-              activeTab === "expenses" && styles.activeTabButton,
-            ]}
+            style={[styles.tab, activeTab === "expenses" && styles.tabActive]}
             onPress={() => setActiveTab("expenses")}
           >
-            <Text
-              style={[
-                styles.tabButtonText,
-                activeTab === "expenses" && styles.activeTabButtonText,
-              ]}
-            >
+            <Ionicons 
+              name="receipt" 
+              size={18} 
+              color={activeTab === "expenses" ? "#F43F5E" : "#71717A"} 
+            />
+            <Text style={[styles.tabText, activeTab === "expenses" && styles.tabTextActive]}>
               Expenses
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[
-              styles.tabButton,
-              activeTab === "balances" && styles.activeTabButton,
-            ]}
+            style={[styles.tab, activeTab === "balances" && styles.tabActive]}
             onPress={() => setActiveTab("balances")}
           >
-            <Text
-              style={[
-                styles.tabButtonText,
-                activeTab === "balances" && styles.activeTabButtonText,
-              ]}
-            >
+            <Ionicons 
+              name="swap-horizontal" 
+              size={18} 
+              color={activeTab === "balances" ? "#F43F5E" : "#71717A"} 
+            />
+            <Text style={[styles.tabText, activeTab === "balances" && styles.tabTextActive]}>
               Balances
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
-      {activeTab === "expenses" ? (
-        <>
-          <View style={styles.actionBar}>
-            <TouchableOpacity
-              style={styles.filterButton}
-              onPress={toggleFilter}
-            >
-              <Text style={styles.filterButtonText}>
-                {currentUserFilter ? "Show All" : "Show Mine"}
-              </Text>
-            </TouchableOpacity>
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.settlementButton]}
-                onPress={() => setSettlementModalVisible(true)}
-              >
-                <Text style={styles.actionButtonText}>Settle Up</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.expenseButton]}
-                onPress={() => setExpenseModalVisible(true)}
-              >
-                <Text style={styles.actionButtonText}>Add Expense</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+
+        {/* Summary Banner */}
+        {renderSummaryBanner()}
+
+        {/* Content */}
+        {activeTab === "expenses" ? (
           <FlatList
             data={expenses}
-            renderItem={renderExpenseItem}
+            renderItem={renderExpenseCard}
             keyExtractor={(item) => item.$id}
             contentContainerStyle={styles.listContent}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F43F5E" />
             }
             ListEmptyComponent={
-              <EmptyState
-                message="No expenses found"
-                subMessage="Add your first expense to get started"
-              />
+              <View style={styles.emptyState}>
+                <Ionicons name="receipt-outline" size={64} color="#3F3F46" />
+                <Text style={styles.emptyTitle}>No expenses yet</Text>
+                <Text style={styles.emptySubtitle}>Add your first shared expense</Text>
+              </View>
             }
-            removeClippedSubviews={false}
-            initialNumToRender={10}
-            maxToRenderPerBatch={10}
-            windowSize={10}
           />
-        </>
-      ) : (
-        <View style={styles.balancesContainer}>
+        ) : (
           <FlatList
-            data={Object.values(balances)}
-            renderItem={renderBalanceItem}
-            keyExtractor={(item) => item.userId}
+            data={debts}
+            renderItem={renderDebtCard}
+            keyExtractor={(item, index) => `debt-${index}`}
             contentContainerStyle={styles.listContent}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F43F5E" />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="checkmark-circle-outline" size={64} color="#22C55E" />
+                <Text style={styles.emptyTitle}>All settled up!</Text>
+                <Text style={styles.emptySubtitle}>No outstanding balances</Text>
+              </View>
+            }
+            ListHeaderComponent={
+              debts.length > 0 ? (
+                <Text style={styles.balanceHeader}>Who owes whom</Text>
+              ) : null
             }
           />
-        </View>
-      )}
-      {/* Modals */}
+        )}
+
+        {/* Floating Action Button */}
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={openAddExpense}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add" size={28} color="#FFF" />
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* Add Expense Modal */}
       <Modal
         visible={expenseModalVisible}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setExpenseModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
-            <ScrollView
-              style={{ width: "100%" }}
-              contentContainerStyle={{ flexGrow: 1 }}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={styles.modalTitle}>Add New Expense</Text>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setExpenseModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#A1A1AA" />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Add Expense</Text>
+              <TouchableOpacity onPress={handleAddExpense}>
+                <Text style={styles.modalSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
 
-              <Text style={styles.inputLabel}>Title:</Text>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Amount Input (Large) */}
+              <View style={styles.amountInputContainer}>
+                <Text style={styles.currencySymbol}>€</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={expenseForm.amount}
+                  onChangeText={(text) => setExpenseForm(prev => ({ ...prev, amount: text }))}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor="#3F3F46"
+                />
+              </View>
+
+              {/* Title */}
+              <Text style={styles.inputLabel}>Description</Text>
               <TextInput
                 style={styles.input}
                 value={expenseForm.title}
-                onChangeText={(text) =>
-                  setExpenseForm({ ...expenseForm, title: text })
-                }
-                placeholder="Enter expense title"
-                placeholderTextColor="#AAAAAA"
+                onChangeText={(text) => setExpenseForm(prev => ({ ...prev, title: text }))}
+                placeholder="What was this for?"
+                placeholderTextColor="#71717A"
               />
 
-              <Text style={styles.inputLabel}>Amount (€):</Text>
-              <TextInput
-                style={styles.input}
-                value={expenseForm.amount}
-                onChangeText={(text) =>
-                  setExpenseForm({ ...expenseForm, amount: text })
-                }
-                keyboardType="numeric"
-                placeholder="0.00"
-                placeholderTextColor="#AAAAAA"
-              />
+              {/* Category */}
+              <Text style={styles.inputLabel}>Category</Text>
+              {renderCategorySelector()}
 
-              <Text style={styles.inputLabel}>Paid By:</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={expenseForm.paidBy}
-                  style={styles.picker}
-                  onValueChange={(value) =>
-                    setExpenseForm({ ...expenseForm, paidBy: value })
-                  }
-                  dropdownIconColor="#4F86C6"
-                  mode="dropdown"
-                >
-                  {users.map((user) => (
-                    <Picker.Item
-                      key={user.$id}
-                      label={user.username}
-                      value={user.$id}
-                      color="#333333"
-                    />
-                  ))}
-                </Picker>
-              </View>
-
-              <View style={styles.splitBetweenHeader}>
-                <Text style={styles.inputLabel}>
-                  Split Between:{" "}
-                  <Text style={styles.optionalText}>
-                    (Select who shares this expense)
-                  </Text>
-                </Text>
-                <TouchableOpacity
-                  style={styles.selectAllButton}
-                  onPress={() => {
-                    const allUserIds = users.map((u) => u.$id);
-                    setExpenseForm((prev) => ({
-                      ...prev,
-                      splitBetween:
-                        prev.splitBetween.length === users.length
-                          ? []
-                          : allUserIds,
-                    }));
-                  }}
-                >
-                  <Text style={styles.selectAllButtonText}>
-                    {expenseForm.splitBetween.length === users.length
-                      ? "Deselect All"
-                      : "Select All"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.splitUsers}>
-                {users.map((user) => (
+              {/* Paid By */}
+              <Text style={styles.inputLabel}>Paid by</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.userChipsScroll}>
+                {users.map((u) => (
                   <TouchableOpacity
-                    key={user.$id}
+                    key={u.$id}
                     style={[
                       styles.userChip,
-                      expenseForm.splitBetween.includes(user.$id) &&
-                        styles.selectedUserChip,
+                      expenseForm.paidBy === u.$id && styles.userChipSelected,
                     ]}
-                    onPress={() => toggleUserInSplit(user.$id)}
+                    onPress={() => setExpenseForm(prev => ({ ...prev, paidBy: u.$id }))}
                   >
-                    <Text
-                      style={[
-                        styles.userChipText,
-                        expenseForm.splitBetween.includes(user.$id) &&
-                          styles.selectedUserChipText,
-                      ]}
-                    >
-                      {user.username}
-                      {expenseForm.paidBy === user.$id && " (Payer)"}
+                    <View style={[styles.userChipAvatar, { backgroundColor: u.color || "#8B5CF6" }]}>
+                      <Text style={styles.userChipAvatarText}>{u.username?.[0]?.toUpperCase()}</Text>
+                    </View>
+                    <Text style={[
+                      styles.userChipText,
+                      expenseForm.paidBy === u.$id && styles.userChipTextSelected,
+                    ]}>
+                      {u.username}
                     </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
 
-              <Text style={styles.inputLabel}>Category:</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={expenseForm.category}
-                  style={styles.picker}
-                  onValueChange={(value) =>
-                    setExpenseForm({ ...expenseForm, category: value })
-                  }
-                >
-                  <Picker.Item label="General" value="general" />
-                  <Picker.Item label="Food" value="food" />
-                  <Picker.Item label="Rent" value="rent" />
-                  <Picker.Item label="Utilities" value="utilities" />
-                  <Picker.Item label="Transportation" value="transportation" />
-                  <Picker.Item label="Entertainment" value="entertainment" />
-                  <Picker.Item label="Other" value="other" />
-                </Picker>
-              </View>
-
-              <Text style={styles.inputLabel}>Receipt Image:</Text>
-              <View style={styles.imageUploadContainer}>
+              {/* Split Between */}
+              <View style={styles.splitHeader}>
+                <Text style={styles.inputLabel}>Split between</Text>
                 <TouchableOpacity
-                  style={styles.uploadButton}
-                  onPress={pickImage}
+                  onPress={() => {
+                    const allIds = users.map(u => u.$id);
+                    const allSelected = allIds.every(id => expenseForm.splitBetween.includes(id));
+                    setExpenseForm(prev => ({
+                      ...prev,
+                      splitBetween: allSelected ? [] : allIds,
+                    }));
+                  }}
                 >
-                  <Text style={styles.uploadButtonText}>
-                    {imagePreview ? "Change Image" : "Attach Receipt"}
+                  <Text style={styles.selectAllText}>
+                    {expenseForm.splitBetween.length === users.length ? "Clear all" : "Select all"}
                   </Text>
                 </TouchableOpacity>
-
-                {imagePreview && (
-                  <View style={styles.imagePreviewContainer}>
-                    <Image
-                      source={{ uri: imagePreview }}
-                      style={styles.imagePreview}
-                      resizeMode="cover"
-                    />
+              </View>
+              <View style={styles.splitUsersGrid}>
+                {users.map((u) => {
+                  const isSelected = expenseForm.splitBetween.includes(u.$id);
+                  const splitAmount = isSelected && expenseForm.amount 
+                    ? parseFloat(expenseForm.amount) / expenseForm.splitBetween.length 
+                    : 0;
+                    
+                  return (
                     <TouchableOpacity
-                      style={styles.removeImageButton}
-                      onPress={() => {
-                        setImagePreview(null);
-                        setExpenseForm((prev) => ({ ...prev, image: null }));
-                      }}
+                      key={u.$id}
+                      style={[styles.splitUserCard, isSelected && styles.splitUserCardSelected]}
+                      onPress={() => toggleUserInSplit(u.$id)}
                     >
-                      <Text style={styles.removeImageText}>✕</Text>
+                      <View style={[styles.splitUserAvatar, { backgroundColor: u.color || "#8B5CF6" }]}>
+                        <Text style={styles.splitUserAvatarText}>{u.username?.[0]?.toUpperCase()}</Text>
+                        {isSelected && (
+                          <View style={styles.checkBadge}>
+                            <Ionicons name="checkmark" size={10} color="#FFF" />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.splitUserName} numberOfLines={1}>{u.username}</Text>
+                      {isSelected && splitAmount > 0 && (
+                        <Text style={styles.splitUserAmount}>{formatCurrency(splitAmount)}</Text>
+                      )}
                     </TouchableOpacity>
-                  </View>
-                )}
+                  );
+                })}
               </View>
 
-              <Text style={styles.inputLabel}>Notes:</Text>
+              {/* Receipt */}
+              <Text style={styles.inputLabel}>Receipt (optional)</Text>
+              <View style={styles.receiptRow}>
+                <TouchableOpacity style={styles.receiptButton} onPress={takePhoto}>
+                  <Ionicons name="camera" size={20} color="#F43F5E" />
+                  <Text style={styles.receiptButtonText}>Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.receiptButton} onPress={pickImage}>
+                  <Ionicons name="image" size={20} color="#F43F5E" />
+                  <Text style={styles.receiptButtonText}>Gallery</Text>
+                </TouchableOpacity>
+              </View>
+              {imagePreview && (
+                <View style={styles.receiptPreview}>
+                  <Image source={{ uri: imagePreview }} style={styles.receiptImage} />
+                  <TouchableOpacity
+                    style={styles.removeReceiptButton}
+                    onPress={() => {
+                      setImagePreview(null);
+                      setExpenseForm(prev => ({ ...prev, image: null }));
+                    }}
+                  >
+                    <Ionicons name="close" size={16} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Notes */}
+              <Text style={styles.inputLabel}>Notes (optional)</Text>
               <TextInput
                 style={[styles.input, styles.notesInput]}
                 value={expenseForm.notes}
-                onChangeText={(text) =>
-                  setExpenseForm({ ...expenseForm, notes: text })
-                }
-                placeholder="Add optional notes"
-                placeholderTextColor="#888"
+                onChangeText={(text) => setExpenseForm(prev => ({ ...prev, notes: text }))}
+                placeholder="Add notes..."
+                placeholderTextColor="#71717A"
                 multiline
               />
 
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => setExpenseModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.saveButton]}
-                  onPress={handleAddExpense}
-                >
-                  <Text style={styles.modalButtonText}>Add</Text>
-                </TouchableOpacity>
-              </View>
+              <View style={{ height: 40 }} />
             </ScrollView>
           </View>
-        </View>
-      </Modal>
-
-      {/* Settlement Modal */}
-      <Modal
-        visible={settlementModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setSettlementModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Settle Up</Text>
-
-            <Text style={styles.inputLabel}>Amount (€):</Text>
-            <TextInput
-              style={styles.input}
-              value={settlementForm.amount}
-              onChangeText={(text) =>
-                setSettlementForm({ ...settlementForm, amount: text })
-              }
-              keyboardType="numeric"
-              placeholder="0.00"
-              placeholderTextColor="#AAAAAA"
-            />
-
-            <Text style={styles.inputLabel}>Paid By:</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={settlementForm.paidBy}
-                style={styles.picker}
-                onValueChange={(value) =>
-                  setSettlementForm({ ...settlementForm, paidBy: value })
-                }
-                dropdownIconColor="#4F86C6"
-                mode="dropdown"
-              >
-                {users.map((user) => (
-                  <Picker.Item
-                    key={user.$id}
-                    label={user.username}
-                    value={user.$id}
-                    color="#333333"
-                  />
-                ))}
-              </Picker>
-            </View>
-
-            <Text style={styles.inputLabel}>Paid To:</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={settlementForm.paidTo}
-                style={styles.picker}
-                onValueChange={(value) =>
-                  setSettlementForm({ ...settlementForm, paidTo: value })
-                }
-                dropdownIconColor="#4F86C6"
-                mode="dropdown"
-              >
-                <Picker.Item label="Select User" value="" color="#999999" />
-                {users.map((user) => (
-                  <Picker.Item
-                    key={user.$id}
-                    label={user.username}
-                    value={user.$id}
-                    color="#333333"
-                  />
-                ))}
-              </Picker>
-            </View>
-
-            <Text style={styles.inputLabel}>Notes:</Text>
-            <TextInput
-              style={[styles.input, styles.notesInput]}
-              value={settlementForm.notes}
-              onChangeText={(text) =>
-                setSettlementForm({ ...settlementForm, notes: text })
-              }
-              placeholder="Add optional notes"
-              placeholderTextColor="#AAAAAA"
-              multiline
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setSettlementModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleAddSettlement}
-              >
-                <Text style={styles.modalButtonText}>Settle</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Full-size image modal */}
-      <Modal
-        visible={imageModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setImageModalVisible(false)}
-      >
-        <View style={styles.fullImageModalContainer}>
-          <TouchableOpacity
-            style={styles.closeImageButton}
-            onPress={() => setImageModalVisible(false)}
-          >
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-
-          {selectedImage && (
-            <Image
-              source={{ uri: selectedImage }}
-              style={styles.fullSizeImage}
-              resizeMode="contain"
-            />
-          )}
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  // Receipt thumbnail styles
-  receiptThumbnailContainer: {
-    marginTop: 8,
-    alignItems: "center",
-  },
-  receiptThumbnail: {
-    width: "100%",
-    height: 100,
-    borderRadius: 8,
-    marginBottom: 4,
-  },
-  viewReceiptText: {
-    color: "#F43F5E",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  // Full-size image modal styles
-  fullImageModalContainer: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.9)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  fullSizeImage: {
-    width: "90%",
-    height: "80%",
-  },
-  closeImageButton: {
-    position: "absolute",
-    top: 40,
-    right: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  closeButtonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  imageUploadContainer: {
-    marginBottom: 16,
-  },
-  uploadButton: {
-    backgroundColor: "#F43F5E",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  uploadButtonText: {
-    color: "white",
-    fontWeight: "500",
-  },
-  imagePreviewContainer: {
-    position: "relative",
-    marginVertical: 8,
-    alignItems: "center",
-  },
-  imagePreview: {
-    width: "100%",
-    height: 200,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  removeImageButton: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  removeImageText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  splitBetweenHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  selectAllButton: {
-    backgroundColor: "#222228",
-    borderRadius: 15,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  selectAllButtonText: {
-    fontSize: 12,
-    color: "#A1A1AA",
-    fontWeight: "500",
-  },
   container: {
     flex: 1,
     backgroundColor: "#0A0A0C",
   },
+  content: {
+    flex: 1,
+  },
   header: {
-    marginTop: 50,
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: "#111114",
   },
   title: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    marginBottom: 10,
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#FFF",
   },
-  tabButtons: {
+  tabContainer: {
     flexDirection: "row",
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#1A1A1F",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: "#111114",
+    gap: 12,
   },
-  tabButton: {
+  tab: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#1A1A1F",
+    gap: 8,
+  },
+  tabActive: {
+    backgroundColor: "rgba(244, 63, 94, 0.15)",
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#71717A",
+  },
+  tabTextActive: {
+    color: "#F43F5E",
+  },
+  summaryBanner: {
+    flexDirection: "row",
+    backgroundColor: "#1A1A1F",
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 16,
+  },
+  summaryItem: {
+    flex: 1,
     alignItems: "center",
   },
-  activeTabButton: {
-    backgroundColor: "#F43F5E",
+  summaryDivider: {
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginHorizontal: 16,
   },
-  tabButtonText: {
+  summaryLabel: {
+    fontSize: 12,
     color: "#71717A",
-    fontWeight: "500",
+    marginBottom: 4,
   },
-  activeTabButtonText: {
-    color: "white",
-    fontWeight: "600",
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#FFF",
   },
-  actionBar: {
+  listContent: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+  expenseCard: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#111114",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  filterButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    alignItems: "center",
     backgroundColor: "#1A1A1F",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
   },
-  filterButtonText: {
+  categoryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  expenseContent: {
+    flex: 1,
+  },
+  expenseTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFF",
+    marginBottom: 4,
+  },
+  expenseSubtitle: {
+    fontSize: 13,
+    color: "#71717A",
+  },
+  expensePayer: {
     color: "#A1A1AA",
     fontWeight: "500",
   },
-  actionButtons: {
-    flexDirection: "row",
+  expenseAmountContainer: {
+    alignItems: "flex-end",
   },
-  actionButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginLeft: 8,
+  expenseAmount: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#F43F5E",
   },
-  expenseButton: {
-    backgroundColor: "#F43F5E",
+  expensePerPerson: {
+    fontSize: 11,
+    color: "#71717A",
+    marginTop: 2,
   },
-  settlementButton: {
-    backgroundColor: "#8B5CF6",
-  },
-  actionButtonText: {
-    color: "white",
-    fontWeight: "600",
-  },
-  listContent: {
-    padding: 16,
-  },
-  itemContainer: {
+  debtCard: {
     backgroundColor: "#1A1A1F",
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: 16,
     padding: 16,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-  },
-  itemHeader: {
+    marginBottom: 12,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
+  },
+  debtInfo: {
+    flex: 1,
+  },
+  debtAvatars: {
+    flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
   },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
+  debtAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  itemAmount: {
+  debtAvatarText: {
+    color: "#FFF",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  debtText: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  debtDescription: {
+    fontSize: 14,
+    color: "#A1A1AA",
+  },
+  debtName: {
+    color: "#FFF",
+    fontWeight: "600",
+  },
+  debtAmount: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#F43F5E",
+    marginLeft: 12,
+  },
+  settleButton: {
+    backgroundColor: "#22C55E",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginLeft: 12,
+  },
+  settleButtonText: {
+    color: "#FFF",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  balanceHeader: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#71717A",
+    marginBottom: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFF",
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: "#71717A",
+    marginTop: 4,
+  },
+  fab: {
+    position: "absolute",
+    bottom: 100,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#F43F5E",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 8,
+    shadowColor: "#F43F5E",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#1A1A1F",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "92%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFF",
+  },
+  modalSaveText: {
     fontSize: 16,
     fontWeight: "600",
     color: "#F43F5E",
   },
-  itemDetails: {
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
-    paddingTop: 8,
-  },
-  itemDetail: {
-    color: "#A1A1AA",
-    marginBottom: 4,
-  },
-  highlight: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-  itemNotes: {
-    fontStyle: "italic",
-    color: "#71717A",
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  itemDate: {
-    color: "#71717A",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  balancesContainer: {
-    flex: 1,
-    backgroundColor: "#0A0A0C",
-  },
-  balanceSummary: {
-    padding: 16,
-    backgroundColor: "#111114",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
-  },
-  balanceSummaryTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    marginBottom: 8,
-  },
-  balanceSummaryText: {
-    color: "#A1A1AA",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  balancesList: {
-    padding: 16,
-  },
-  balanceItem: {
-    backgroundColor: "#1A1A1F",
-    borderRadius: 12,
-    marginBottom: 12,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderLeftWidth: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-  },
-  balanceUsername: {
-    fontWeight: "600",
-    color: "#FFFFFF",
-    flex: 1,
-  },
-  balanceAmount: {
-    fontWeight: "600",
-    color: "#FFFFFF",
-    marginHorizontal: 16,
-    minWidth: 80,
-    textAlign: "right",
-  },
-  positiveBalance: {
-    color: "#22C55E",
-  },
-  negativeBalance: {
-    color: "#EF4444",
-  },
-  zeroBalance: {
-    color: "#71717A",
-  },
-  balanceStatus: {
-    fontSize: 12,
-    color: "#71717A",
-    fontStyle: "italic",
-    width: 80,
-  },
-  balanceActions: {
-    padding: 16,
-    flexDirection: "row",
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    paddingVertical: 20,
-  },
-  modalContent: {
-    backgroundColor: "#1A1A1F",
-    borderRadius: 20,
+  modalBody: {
     padding: 20,
-    width: "90%",
-    alignSelf: "center",
-    maxHeight: "100%",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginBottom: 16,
-    color: "#FFFFFF",
+  amountInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+  },
+  currencySymbol: {
+    fontSize: 36,
+    fontWeight: "300",
+    color: "#71717A",
+    marginRight: 4,
+  },
+  amountInput: {
+    fontSize: 48,
+    fontWeight: "700",
+    color: "#FFF",
+    minWidth: 120,
     textAlign: "center",
   },
   inputLabel: {
-    color: "#A1A1AA",
-    marginBottom: 4,
-    fontWeight: "500",
-  },
-  optionalText: {
-    fontSize: 12,
-    fontStyle: "italic",
+    fontSize: 13,
+    fontWeight: "600",
     color: "#71717A",
+    marginBottom: 8,
+    marginTop: 16,
   },
   input: {
     backgroundColor: "#111114",
     borderRadius: 12,
+    padding: 14,
+    color: "#FFF",
+    fontSize: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    padding: 14,
-    marginBottom: 16,
-    color: "#FFFFFF",
-    fontSize: 16,
   },
   notesInput: {
-    minHeight: 80,
+    minHeight: 60,
     textAlignVertical: "top",
   },
-  pickerContainer: {
+  categoryScroll: {
+    marginBottom: 8,
+  },
+  categoryScrollContent: {
+    gap: 8,
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#111114",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 12,
-    backgroundColor: "#111114",
-    marginBottom: 16,
+    marginRight: 8,
+    gap: 6,
   },
-  picker: {
-    color: "#FFFFFF",
+  categoryChipText: {
+    fontSize: 13,
+    color: "#71717A",
+    fontWeight: "500",
   },
-  splitUsers: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 16,
+  userChipsScroll: {
+    marginBottom: 8,
   },
   userChip: {
-    backgroundColor: "#222228",
-    borderRadius: 20,
-    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
-    margin: 4,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#111114",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginRight: 8,
+    gap: 8,
+  },
+  userChipSelected: {
+    backgroundColor: "rgba(244, 63, 94, 0.15)",
+    borderColor: "#F43F5E",
+  },
+  userChipAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userChipAvatarText: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  userChipText: {
+    fontSize: 14,
+    color: "#A1A1AA",
+    fontWeight: "500",
+  },
+  userChipTextSelected: {
+    color: "#FFF",
+  },
+  splitHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  selectAllText: {
+    fontSize: 13,
+    color: "#F43F5E",
+    fontWeight: "500",
+  },
+  splitUsersGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  splitUserCard: {
+    width: (screenWidth - 64) / 3,
+    backgroundColor: "#111114",
+    borderRadius: 12,
+    padding: 12,
+    alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
-  selectedUserChip: {
-    backgroundColor: "#F43F5E",
+  splitUserCardSelected: {
     borderColor: "#F43F5E",
+    backgroundColor: "rgba(244, 63, 94, 0.1)",
   },
-  userChipText: {
-    color: "#A1A1AA",
-  },
-  selectedUserChipText: {
-    color: "white",
-    fontWeight: "600",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 8,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 10,
+  splitUserAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+    position: "relative",
   },
-  cancelButton: {
-    backgroundColor: "#222228",
-    marginRight: 8,
+  splitUserAvatarText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
-  saveButton: {
-    backgroundColor: "#F43F5E",
-    marginLeft: 8,
+  checkBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#22C55E",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  modalButtonText: {
+  splitUserName: {
+    fontSize: 12,
+    color: "#A1A1AA",
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  splitUserAmount: {
+    fontSize: 11,
+    color: "#F43F5E",
     fontWeight: "600",
-    color: "#FFFFFF",
+    marginTop: 4,
+  },
+  receiptRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  receiptButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#111114",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderStyle: "dashed",
+    gap: 8,
+  },
+  receiptButtonText: {
+    fontSize: 14,
+    color: "#A1A1AA",
+    fontWeight: "500",
+  },
+  receiptPreview: {
+    marginTop: 12,
+    position: "relative",
+  },
+  receiptImage: {
+    width: "100%",
+    height: 150,
+    borderRadius: 12,
+  },
+  removeReceiptButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 
