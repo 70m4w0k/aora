@@ -8,11 +8,14 @@ import {
   ScrollView, 
   TouchableOpacity, 
   StyleSheet, 
-  Alert 
+  Alert,
+  Share,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Clipboard from 'expo-clipboard';
 
 import { icons } from "../../constants";
-import { getChores, getAllTasksDone, signOut } from "../../lib/appwrite";
+import { getAllTasksDone, signOut, leaveHousehold, regenerateInviteCode } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
 
 const ProfileCard = ({ title, value, icon, bgColor }) => (
@@ -30,45 +33,30 @@ const ProfileCard = ({ title, value, icon, bgColor }) => (
 );
 
 const Profile = () => {
-  const { user, setUser, setIsLogged } = useGlobalContext();
+  const { user, setUser, setIsLogged, household, householdMembers, refreshUser, refreshHousehold } = useGlobalContext();
   const [stats, setStats] = useState({
-    completedChores: 0,
     completedTasks: 0,
     tasksPerWeek: 0,
-    completionRate: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+
+  const isAdmin = user?.role === 'admin';
 
   const fetchUserStats = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Get tasks done by this user
       const tasksDone = await getAllTasksDone();
       const userTasksDone = tasksDone.filter(
         task => task.userId && task.userId.$id === user.$id
       );
-
-      // Get chores done by this user
-      const chores = await getChores();
       
-      // Calculate tasks per week (assuming tasks are tracked for 52 weeks)
       const tasksPerWeek = userTasksDone.length > 0 
         ? (userTasksDone.length / 52).toFixed(1) 
         : 0;
       
-      // Calculate completion rate (placeholder logic)
-      const totalPossibleTasks = 52 * 10; // Assuming 10 possible tasks per week
-      const completionRate = userTasksDone.length > 0 
-        ? Math.min(100, Math.round((userTasksDone.length / totalPossibleTasks) * 100)) 
-        : 0;
-      
       setStats({
         completedTasks: userTasksDone.length,
-        completedChores: chores.filter(chore => 
-          chore.assignedTo && chore.assignedTo.$id === user.$id && chore.isDone
-        ).length,
         tasksPerWeek,
-        completionRate
       });
     } catch (error) {
       console.error("Error fetching user stats:", error);
@@ -92,6 +80,75 @@ const Profile = () => {
     } catch (error) {
       Alert.alert("Error", "Failed to sign out. Please try again.");
     }
+  };
+
+  const copyInviteCode = async () => {
+    if (household?.inviteCode) {
+      await Clipboard.setStringAsync(household.inviteCode);
+      Alert.alert("Copied!", "Invite code copied to clipboard");
+    }
+  };
+
+  const shareInviteCode = async () => {
+    if (household?.inviteCode) {
+      try {
+        await Share.share({
+          message: `Join my household "${household.name}" on the Roommate app!\n\nInvite Code: ${household.inviteCode}`,
+        });
+      } catch (error) {
+        console.error("Error sharing:", error);
+      }
+    }
+  };
+
+  const handleRegenerateCode = () => {
+    Alert.alert(
+      "Regenerate Invite Code?",
+      "This will invalidate the current invite code. Anyone with the old code won't be able to join.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Regenerate",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await regenerateInviteCode(household.$id);
+              await refreshHousehold();
+              Alert.alert("Success", "New invite code generated!");
+            } catch (error) {
+              Alert.alert("Error", "Failed to regenerate code");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLeaveHousehold = () => {
+    const warningMessage = isAdmin 
+      ? "You are the admin of this household. If you leave, the household will remain but without an admin. Are you sure?"
+      : "Are you sure you want to leave this household?";
+
+    Alert.alert(
+      "Leave Household?",
+      warningMessage,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveHousehold(user.$id);
+              await refreshUser();
+              router.replace("/(household)/onboarding");
+            } catch (error) {
+              Alert.alert("Error", "Failed to leave household");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -128,51 +185,89 @@ const Profile = () => {
               icon={<Text style={styles.iconText}>📅</Text>}
             />
             <ProfileCard 
-              title="Completed Chores" 
-              value={stats.completedChores}
-              bgColor="#E8F5E9"
-              icon={<Text style={styles.iconText}>✓</Text>}
-            />
-          </View>
-          
-          <View style={styles.statsContainer}>
-            <ProfileCard 
               title="Tasks Per Week" 
               value={stats.tasksPerWeek}
               bgColor="#FFF3E0"
               icon={<Text style={styles.iconText}>📊</Text>}
             />
-            <ProfileCard 
-              title="Completion Rate" 
-              value={`${stats.completionRate}%`}
-              bgColor="#E1F5FE"
-              icon={<Text style={styles.iconText}>🎯</Text>}
-            />
           </View>
+        </View>
+
+        {/* Household Section */}
+        <View style={styles.householdSection}>
+          <Text style={styles.sectionTitle}>🏠 Household</Text>
           
-          <View style={styles.progressContainer}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressTitle}>Overall Progress</Text>
-              <Text style={styles.progressValue}>{stats.completionRate}%</Text>
-            </View>
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${stats.completionRate}%` }]} />
-            </View>
-          </View>
+          {household ? (
+            <>
+              <View style={styles.householdCard}>
+                <View style={styles.householdHeader}>
+                  <Text style={styles.householdName}>{household.name}</Text>
+                  {isAdmin && (
+                    <View style={styles.adminBadge}>
+                      <Text style={styles.adminBadgeText}>Admin</Text>
+                    </View>
+                  )}
+                </View>
+                
+                <View style={styles.inviteCodeContainer}>
+                  <Text style={styles.inviteCodeLabel}>Invite Code</Text>
+                  <View style={styles.inviteCodeRow}>
+                    <Text style={styles.inviteCode}>{household.inviteCode}</Text>
+                    <TouchableOpacity style={styles.copyButton} onPress={copyInviteCode}>
+                      <MaterialCommunityIcons name="content-copy" size={20} color="#4F86C6" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.shareButton} onPress={shareInviteCode}>
+                      <MaterialCommunityIcons name="share-variant" size={20} color="#4F86C6" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.membersContainer}>
+                  <Text style={styles.membersLabel}>Members ({householdMembers.length})</Text>
+                  <View style={styles.membersList}>
+                    {householdMembers.map((member) => (
+                      <View key={member.$id} style={styles.memberItem}>
+                        <Image
+                          source={{ uri: member.avatar }}
+                          style={styles.memberAvatar}
+                        />
+                        <Text style={styles.memberName}>{member.username}</Text>
+                        {member.role === 'admin' && (
+                          <MaterialCommunityIcons name="crown" size={14} color="#FFC107" />
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.householdActions}>
+                {isAdmin && (
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={handleRegenerateCode}
+                  >
+                    <MaterialCommunityIcons name="refresh" size={20} color="#666666" />
+                    <Text style={styles.actionButtonText}>New Invite Code</Text>
+                  </TouchableOpacity>
+                )}
+                
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.leaveButton]}
+                  onPress={handleLeaveHousehold}
+                >
+                  <MaterialCommunityIcons name="exit-run" size={20} color="#F44336" />
+                  <Text style={[styles.actionButtonText, styles.leaveButtonText]}>Leave Household</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.noHouseholdText}>No household found</Text>
+          )}
         </View>
         
         <View style={styles.settingsSection}>
-          <Text style={styles.sectionTitle}>Account Settings</Text>
-          
-          <TouchableOpacity style={styles.settingItem}>
-            <View style={styles.settingIconContainer}>
-              <Text style={styles.settingIcon}>🔒</Text>
-            </View>
-            <View style={styles.settingContent}>
-              <Text style={styles.settingTitle}>Privacy & Security</Text>
-              <Text style={styles.settingDescription}>Password, data sharing</Text>
-            </View>
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>Settings</Text>
           
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingIconContainer}>
@@ -196,13 +291,7 @@ const Profile = () => {
         </View>
         
         <View style={styles.aboutSection}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.aboutText}>
-            Version 1.0.0
-          </Text>
-          <TouchableOpacity style={styles.supportButton}>
-            <Text style={styles.supportButtonText}>Contact Support</Text>
-          </TouchableOpacity>
+          <Text style={styles.aboutText}>Version 1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -274,7 +363,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     width: "100%",
-    marginBottom: 24,
   },
   profileCard: {
     flex: 1,
@@ -312,9 +400,8 @@ const styles = StyleSheet.create({
   iconText: {
     fontSize: 20,
   },
-  settingsSection: {
+  householdSection: {
     padding: 20,
-    paddingTop: 0,
     borderTopWidth: 1,
     borderTopColor: "#EEEEEE",
   },
@@ -323,6 +410,124 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#333333",
     marginBottom: 16,
+  },
+  householdCard: {
+    backgroundColor: "#F8F9FA",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  householdHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  householdName: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#333333",
+    flex: 1,
+  },
+  adminBadge: {
+    backgroundColor: "#FFC107",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  adminBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#333333",
+  },
+  inviteCodeContainer: {
+    marginBottom: 16,
+  },
+  inviteCodeLabel: {
+    fontSize: 12,
+    color: "#666666",
+    marginBottom: 4,
+  },
+  inviteCodeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  inviteCode: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#4F86C6",
+    letterSpacing: 4,
+    flex: 1,
+  },
+  copyButton: {
+    padding: 8,
+  },
+  shareButton: {
+    padding: 8,
+  },
+  membersContainer: {
+    marginTop: 8,
+  },
+  membersLabel: {
+    fontSize: 12,
+    color: "#666666",
+    marginBottom: 8,
+  },
+  membersList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  memberItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  memberAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  memberName: {
+    fontSize: 14,
+    color: "#333333",
+  },
+  householdActions: {
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "#F0F0F0",
+    gap: 8,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#666666",
+  },
+  leaveButton: {
+    backgroundColor: "#FFEBEE",
+  },
+  leaveButtonText: {
+    color: "#F44336",
+  },
+  noHouseholdText: {
+    color: "#999999",
+    textAlign: "center",
+    padding: 20,
+  },
+  settingsSection: {
+    padding: 20,
+    paddingTop: 0,
+    borderTopWidth: 1,
+    borderTopColor: "#EEEEEE",
   },
   settingItem: {
     flexDirection: "row",
@@ -357,23 +562,12 @@ const styles = StyleSheet.create({
   },
   aboutSection: {
     padding: 20,
-    paddingBottom: 40,
-    borderTopWidth: 1,
-    borderTopColor: "#EEEEEE",
-  },
-  aboutText: {
-    color: "#666666",
-    marginBottom: 16,
-  },
-  supportButton: {
-    backgroundColor: "#F0F0F0",
-    padding: 12,
-    borderRadius: 8,
+    paddingBottom: 100,
     alignItems: "center",
   },
-  supportButtonText: {
-    color: "#4F86C6",
-    fontWeight: "600",
+  aboutText: {
+    color: "#999999",
+    fontSize: 12,
   },
 });
 

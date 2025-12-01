@@ -72,7 +72,7 @@ const TabIcon = ({ icon, color, name, focused, focusAnim }) => {
 };
 
 const TabLayout = () => {
-  const { loading, isLogged, user } = useGlobalContext();
+  const { loading, isLogged, user, hasHousehold } = useGlobalContext();
   const [activeTab, setActiveTab] = useState('home');
   const focusAnims = {
     home: useRef(new Animated.Value(1)).current,
@@ -91,7 +91,11 @@ const TabLayout = () => {
     }).start();
   };
 
+  // Redirect to sign-in if not logged in
   if (!loading && !isLogged) return <Redirect href="/sign-in" />;
+  
+  // Redirect to household onboarding if logged in but no household
+  if (!loading && isLogged && !hasHousehold) return <Redirect href="/(household)/onboarding" />;
   return (
     <View style={{ flex: 1 }}>
       <Tabs
