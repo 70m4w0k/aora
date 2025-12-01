@@ -23,6 +23,8 @@ import { useGlobalContext } from "../../context/GlobalProvider";
 import {
   getHouseholdExpenses,
   createExpense,
+  updateExpense,
+  deleteExpense,
   createSettlement,
   getUserSettlements,
   getHouseholdMembers,
@@ -58,6 +60,7 @@ const ExpensesScreen = () => {
   const [expenseModalVisible, setExpenseModalVisible] = useState(false);
   const [settlementModalVisible, setSettlementModalVisible] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState(null);
+  const [editingExpense, setEditingExpense] = useState(null);
 
   // Form states
   const [expenseForm, setExpenseForm] = useState({
@@ -230,6 +233,7 @@ const ExpensesScreen = () => {
       image: null,
     });
     setImagePreview(null);
+    setEditingExpense(null);
   };
 
   const openAddExpense = () => {
@@ -241,6 +245,52 @@ const ExpensesScreen = () => {
       splitBetween: users.map(u => u.$id),
     }));
     setExpenseModalVisible(true);
+  };
+
+  const openEditExpense = (expense) => {
+    // Extract paidBy ID
+    const paidById = typeof expense.paidBy === "object" ? expense.paidBy.$id : expense.paidBy;
+    
+    // Extract splitBetween IDs
+    const splitIds = Array.isArray(expense.splitBetween) 
+      ? expense.splitBetween.map(s => typeof s === "object" ? s.$id : s)
+      : [];
+    
+    setEditingExpense(expense);
+    setExpenseForm({
+      title: expense.title || "",
+      amount: expense.amount?.toString() || "",
+      paidBy: paidById,
+      splitBetween: splitIds,
+      category: expense.category || "other",
+      notes: expense.notes || "",
+      image: null,
+    });
+    setImagePreview(null);
+    setExpenseModalVisible(true);
+  };
+
+  const handleDeleteExpense = async (expense) => {
+    Alert.alert(
+      "Delete Expense",
+      `Are you sure you want to delete "${expense.title}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteExpense(expense.$id);
+              await fetchData();
+              Alert.alert("Success", "Expense deleted!");
+            } catch (error) {
+              Alert.alert("Error", error.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const pickImage = async () => {
@@ -315,17 +365,31 @@ const ExpensesScreen = () => {
     }
 
     try {
-      await createExpense({
-        ...expenseForm,
-        amount: parseFloat(expenseForm.amount),
-        date: new Date().toISOString(),
-        householdId: household.$id,
-      });
+      if (editingExpense) {
+        // Update existing expense
+        await updateExpense(editingExpense.$id, {
+          title: expenseForm.title,
+          amount: parseFloat(expenseForm.amount),
+          paidBy: expenseForm.paidBy,
+          splitBetween: expenseForm.splitBetween,
+          category: expenseForm.category,
+          notes: expenseForm.notes,
+        });
+        Alert.alert("Success", "Expense updated!");
+      } else {
+        // Create new expense
+        await createExpense({
+          ...expenseForm,
+          amount: parseFloat(expenseForm.amount),
+          date: new Date().toISOString(),
+          householdId: household.$id,
+        });
+        Alert.alert("Success", "Expense added!");
+      }
 
       setExpenseModalVisible(false);
       resetExpenseForm();
       await fetchData();
-      Alert.alert("Success", "Expense added!");
     } catch (error) {
       Alert.alert("Error", error.message);
     }
@@ -364,8 +428,18 @@ const ExpensesScreen = () => {
     });
   };
 
-  const getUsername = (userId) => {
-    if (!userId) return "Unknown";
+  const getUsername = (userRef) => {
+    if (!userRef) return "Unknown";
+    
+    // If it's an object with username, return it directly
+    if (typeof userRef === "object" && userRef.username) {
+      return userRef.username;
+    }
+    
+    // If it's an object with $id, extract the ID
+    const userId = typeof userRef === "object" ? userRef.$id : userRef;
+    
+    // Find in users list
     const u = users.find((u) => u.$id === userId);
     return u ? u.username : "Unknown";
   };
@@ -391,7 +465,11 @@ const ExpensesScreen = () => {
     const perPerson = parseFloat(item.amount) / splitCount;
 
     return (
-      <TouchableOpacity style={styles.expenseCard} activeOpacity={0.7}>
+      <TouchableOpacity 
+        style={styles.expenseCard} 
+        activeOpacity={0.7}
+        onPress={() => openEditExpense(item)}
+      >
         {/* Category icon */}
         <View style={[styles.categoryIcon, { backgroundColor: category.color + "20" }]}>
           <Ionicons name={category.icon} size={20} color={category.color} />
@@ -405,10 +483,21 @@ const ExpensesScreen = () => {
           </Text>
         </View>
 
-        {/* Amount */}
-        <View style={styles.expenseAmountContainer}>
-          <Text style={styles.expenseAmount}>{formatCurrency(item.amount)}</Text>
-          <Text style={styles.expensePerPerson}>{formatCurrency(perPerson)}/person</Text>
+        {/* Amount and Actions */}
+        <View style={styles.expenseRightSection}>
+          <View style={styles.expenseAmountContainer}>
+            <Text style={styles.expenseAmount}>{formatCurrency(item.amount)}</Text>
+            <Text style={styles.expensePerPerson}>{formatCurrency(perPerson)}/person</Text>
+          </View>
+          
+          {/* Delete button */}
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={() => handleDeleteExpense(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -626,12 +715,12 @@ const ExpensesScreen = () => {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setExpenseModalVisible(false)}>
+              <TouchableOpacity onPress={() => { setExpenseModalVisible(false); resetExpenseForm(); }}>
                 <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Add Expense</Text>
+              <Text style={styles.modalTitle}>{editingExpense ? "Edit Expense" : "Add Expense"}</Text>
               <TouchableOpacity onPress={handleAddExpense}>
-                <Text style={styles.modalSaveText}>Save</Text>
+                <Text style={styles.modalSaveText}>{editingExpense ? "Update" : "Save"}</Text>
               </TouchableOpacity>
             </View>
 
@@ -894,6 +983,11 @@ const styles = StyleSheet.create({
     color: "#A1A1AA",
     fontWeight: "500",
   },
+  expenseRightSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   expenseAmountContainer: {
     alignItems: "flex-end",
   },
@@ -906,6 +1000,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#71717A",
     marginTop: 2,
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   debtCard: {
     backgroundColor: "#1A1A1F",
