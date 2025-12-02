@@ -30,6 +30,8 @@ import {
   createTask,
   updateTask,
   deleteTask,
+  createTaskDone,
+  getTaskDoneByTaskId,
 } from "../../lib/appwrite";
 import { getWeekNumberByDate } from "../../lib/utils";
 
@@ -96,6 +98,10 @@ const UnifiedCalendar = () => {
   
   // Chores list view state
   const [showChoresList, setShowChoresList] = useState(false);
+  
+  // Chore edit modal state
+  const [choreEditTab, setChoreEditTab] = useState("edit"); // "edit" or "history"
+  const [choreCompletionHistory, setChoreCompletionHistory] = useState([]);
 
   useEffect(() => {
     if (household?.$id) {
@@ -355,7 +361,7 @@ const UnifiedCalendar = () => {
     console.log("Day pressed:", date);
   };
 
-  const openModal = (type = "event", date = null, item = null) => {
+  const openModal = async (type = "event", date = null, item = null) => {
     setModalType(type);
     
     if (type === "event") {
@@ -400,14 +406,25 @@ const UnifiedCalendar = () => {
         // Edit chore
         setEditingChore(item);
         setEditingEvent(null);
+        setChoreEditTab("edit");
         setChoreForm({
           title: item.title || "",
           recurrence: item.recurrence || "weekly",
         });
+        // Fetch completion history
+        try {
+          const history = await getTaskDoneByTaskId(item.$id);
+          setChoreCompletionHistory(history || []);
+        } catch (error) {
+          console.error("Error fetching chore history:", error);
+          setChoreCompletionHistory([]);
+        }
       } else {
         // Create chore
         setEditingChore(null);
         setEditingEvent(null);
+        setChoreEditTab("edit");
+        setChoreCompletionHistory([]);
         setChoreForm({
           title: "",
           recurrence: "weekly",
@@ -569,6 +586,34 @@ const UnifiedCalendar = () => {
     );
   };
 
+  const handleCompleteChore = async () => {
+    if (!editingChore || !user?.$id || !household?.$id) {
+      Alert.alert("Error", "Missing information");
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const weekNumber = getWeekNumberByDate(now);
+      
+      await createTaskDone({
+        taskId: editingChore.$id,
+        userId: user.$id,
+        householdId: household.$id,
+        weekNumber: weekNumber,
+      });
+      
+      // Close modal first
+      closeModal();
+      
+      // Refresh data in background
+      await fetchData();
+    } catch (error) {
+      console.error("Error completing chore:", error);
+      Alert.alert("Error", "Could not complete chore. " + (error.message || ""));
+    }
+  };
+
   // Calculate days since last completion for a chore
   const getDaysSinceLastCompletion = (chore) => {
     const choreCompletions = tasksDone.filter(td => {
@@ -690,6 +735,9 @@ const UnifiedCalendar = () => {
           <MonthlyView 
             date={currentDate} 
             items={items}
+            tasks={tasks}
+            tasksDone={tasksDone}
+            users={users}
             onDayPress={handleDayPress}
             onCreateEvent={(date) => openModal("event", date)}
             onEditEvent={(date, event) => openModal("event", date, event)}
@@ -765,7 +813,14 @@ const UnifiedCalendar = () => {
               renderItem={({ item }) => {
                 const status = getChoreStatus(item);
                 return (
-                  <View style={styles.choreListItem}>
+                  <TouchableOpacity
+                    style={styles.choreListItem}
+                    onPress={() => {
+                      setShowChoresList(false);
+                      openModal("chore", null, item);
+                    }}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.choreListItemContent}>
                       <View style={styles.choreListItemHeader}>
                         <Text style={styles.choreListItemTitle}>{item.title}</Text>
@@ -783,21 +838,15 @@ const UnifiedCalendar = () => {
                     <View style={styles.choreListItemActions}>
                       <TouchableOpacity
                         style={styles.choreListActionButton}
-                        onPress={() => {
-                          setShowChoresList(false);
-                          openModal("chore", null, item);
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteChore(item);
                         }}
-                      >
-                        <Ionicons name="pencil" size={18} color="#06B6D4" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.choreListActionButton}
-                        onPress={() => handleDeleteChore(item)}
                       >
                         <Ionicons name="trash-outline" size={18} color="#EF4444" />
                       </TouchableOpacity>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               }}
               ListEmptyComponent={
@@ -893,7 +942,7 @@ const UnifiedCalendar = () => {
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {modalType === "event" ? (
+                {modalType === "event" ? (
                 <>
                   {/* Event Form */}
                   {/* Title */}
@@ -1057,50 +1106,159 @@ const UnifiedCalendar = () => {
               ) : (
                 <>
                   {/* Chore Form */}
-                  {/* Title */}
-                  <Text style={[styles.inputLabel, { marginTop: 0 }]}>Title *</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={choreForm.title}
-                    onChangeText={(text) => setChoreForm(prev => ({ ...prev, title: text }))}
-                    placeholder="Chore title"
-                    placeholderTextColor="#71717A"
-                  />
-
-                  {/* Recurrence */}
-                  <Text style={styles.inputLabel}>Recurrence</Text>
-                  <View style={styles.recurrenceContainer}>
-                    {["daily", "weekly", "monthly"].map((recurrence) => (
-                      <TouchableOpacity
-                        key={recurrence}
-                        style={[
-                          styles.recurrenceButton,
-                          choreForm.recurrence === recurrence && styles.recurrenceButtonActive,
-                        ]}
-                        onPress={() => setChoreForm(prev => ({ ...prev, recurrence }))}
-                      >
-                        <Text style={[
-                          styles.recurrenceButtonText,
-                          choreForm.recurrence === recurrence && styles.recurrenceButtonTextActive,
-                        ]}>
-                          {recurrence.charAt(0).toUpperCase() + recurrence.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Delete Button (Edit Mode) */}
                   {editingChore && (
-                    <TouchableOpacity
-                      style={styles.deleteEventButton}
-                      onPress={() => {
-                        closeModal();
-                        handleDeleteChore(editingChore);
-                      }}
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                      <Text style={styles.deleteEventButtonText}>Delete Chore</Text>
-                    </TouchableOpacity>
+                    <>
+                      {/* Tab Switcher */}
+                      <View style={styles.choreEditTabs}>
+                        <TouchableOpacity
+                          style={[
+                            styles.choreEditTab,
+                            choreEditTab === "edit" && styles.choreEditTabActive,
+                          ]}
+                          onPress={() => setChoreEditTab("edit")}
+                        >
+                          <Ionicons 
+                            name="create-outline" 
+                            size={16} 
+                            color={choreEditTab === "edit" ? "#06B6D4" : "#71717A"} 
+                          />
+                          <Text style={[
+                            styles.choreEditTabText,
+                            choreEditTab === "edit" && styles.choreEditTabTextActive,
+                          ]}>
+                            Edit
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.choreEditTab,
+                            choreEditTab === "history" && styles.choreEditTabActive,
+                          ]}
+                          onPress={() => setChoreEditTab("history")}
+                        >
+                          <Ionicons 
+                            name="time-outline" 
+                            size={16} 
+                            color={choreEditTab === "history" ? "#06B6D4" : "#71717A"} 
+                          />
+                          <Text style={[
+                            styles.choreEditTabText,
+                            choreEditTab === "history" && styles.choreEditTabTextActive,
+                          ]}>
+                            History
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+
+                  {choreEditTab === "edit" ? (
+                    <>
+                      {/* Title */}
+                      <Text style={[styles.inputLabel, { marginTop: 0 }]}>Title *</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={choreForm.title}
+                        onChangeText={(text) => setChoreForm(prev => ({ ...prev, title: text }))}
+                        placeholder="Chore title"
+                        placeholderTextColor="#71717A"
+                      />
+
+                      {/* Recurrence */}
+                      <Text style={styles.inputLabel}>Recurrence</Text>
+                      <View style={styles.recurrenceContainer}>
+                        {["daily", "weekly", "monthly"].map((recurrence) => (
+                          <TouchableOpacity
+                            key={recurrence}
+                            style={[
+                              styles.recurrenceButton,
+                              choreForm.recurrence === recurrence && styles.recurrenceButtonActive,
+                            ]}
+                            onPress={() => setChoreForm(prev => ({ ...prev, recurrence }))}
+                          >
+                            <Text style={[
+                              styles.recurrenceButtonText,
+                              choreForm.recurrence === recurrence && styles.recurrenceButtonTextActive,
+                            ]}>
+                              {recurrence.charAt(0).toUpperCase() + recurrence.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      {/* Complete Task Button */}
+                      {editingChore && (
+                        <TouchableOpacity
+                          style={styles.completeChoreButton}
+                          onPress={handleCompleteChore}
+                        >
+                          <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+                          <Text style={styles.completeChoreButtonText}>Complete Task</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Delete Button (Edit Mode) */}
+                      {editingChore && (
+                        <TouchableOpacity
+                          style={styles.deleteEventButton}
+                          onPress={() => {
+                            closeModal();
+                            handleDeleteChore(editingChore);
+                          }}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                          <Text style={styles.deleteEventButtonText}>Delete Chore</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {choreCompletionHistory.length > 0 ? (
+                        choreCompletionHistory.map((item) => {
+                          const completionDate = new Date(item.$createdAt);
+                          const user = users.find(u => {
+                            const itemUserId = typeof item.userId === 'object' ? item.userId?.$id : item.userId;
+                            return u.$id === itemUserId;
+                          });
+                          
+                          return (
+                            <View key={item.$id} style={styles.choreHistoryItem}>
+                              <View style={[
+                                styles.choreHistoryAvatar,
+                                { backgroundColor: user?.color || "#06B6D4" }
+                              ]}>
+                                <Text style={styles.choreHistoryAvatarText}>
+                                  {user?.username?.[0]?.toUpperCase() || "?"}
+                                </Text>
+                              </View>
+                              <View style={styles.choreHistoryContent}>
+                                <Text style={styles.choreHistoryUser}>
+                                  {user?.username || "Unknown"} completed this task
+                                </Text>
+                                <Text style={styles.choreHistoryDate}>
+                                  {completionDate.toLocaleDateString("en-US", {
+                                    weekday: "long",
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })
+                      ) : (
+                        <View style={styles.choreHistoryEmpty}>
+                          <Ionicons name="time-outline" size={48} color="#3F3F46" />
+                          <Text style={styles.choreHistoryEmptyText}>No completion history</Text>
+                          <Text style={styles.choreHistoryEmptySubtext}>
+                            Complete this task to see history
+                          </Text>
+                        </View>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -1203,8 +1361,46 @@ const WeeklyView = ({ date, items }) => (
   </View>
 );
 
-const MonthlyView = ({ date, items, onDayPress, onCreateEvent, onEditEvent, onDeleteEvent }) => {
+const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreateEvent, onEditEvent, onDeleteEvent }) => {
   const [selectedDate, setSelectedDate] = useState(null);
+  
+  // Get completed tasks for a specific day
+  const getCompletedTasksForDay = (dayDate) => {
+    if (!dayDate || !tasksDone || !tasks || !Array.isArray(tasksDone)) return [];
+    
+    const dayStart = new Date(dayDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    return tasksDone
+      .filter(td => {
+        if (!td || !td.$createdAt) return false;
+        const completionDate = new Date(td.$createdAt);
+        return completionDate >= dayStart && completionDate <= dayEnd;
+      })
+      .map(td => {
+        // Find the task for this completion
+        const taskId = typeof td.taskId === 'object' ? td.taskId?.$id : td.taskId;
+        const task = tasks.find(t => t.$id === taskId);
+        
+        if (!task) return null;
+        
+        // Find the user who completed it
+        const userId = typeof td.userId === 'object' ? td.userId?.$id : td.userId;
+        const user = users?.find(u => u.$id === userId);
+        
+        return {
+          id: td.$id,
+          type: "completed_task",
+          task: task,
+          completedBy: user,
+          completedAt: new Date(td.$createdAt),
+          data: td,
+        };
+      })
+      .filter(item => item !== null);
+  };
   
   // Get first day of month and number of days
   const year = date.getFullYear();
@@ -1401,59 +1597,89 @@ const MonthlyView = ({ date, items, onDayPress, onCreateEvent, onEditEvent, onDe
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.selectedDayEvents} showsVerticalScrollIndicator={false}>
-            {getItemsForDay(selectedDate).length === 0 ? (
-              <View style={styles.noEventsContainer}>
-                <Ionicons name="calendar-outline" size={32} color="#3F3F46" />
-                <Text style={styles.noEventsText}>No events on this day</Text>
-                {onCreateEvent && (
-                  <TouchableOpacity 
-                    style={styles.addEventButton}
-                    onPress={() => onCreateEvent(selectedDate)}
-                  >
-                    <Ionicons name="add" size={16} color="#FFF" />
-                    <Text style={styles.addEventButtonText}>Add Event</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ) : (
-              getItemsForDay(selectedDate).map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.eventItem}
-                  onPress={() => item.type === "event" && onEditEvent && onEditEvent(null, item.data)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.eventItemColor, { backgroundColor: item.color }]} />
-                  <View style={styles.eventItemContent}>
-                    <Text style={styles.eventItemTitle}>{item.title}</Text>
-                    <Text style={styles.eventItemTime}>
-                      {item.allDay 
-                        ? "All day" 
-                        : `${item.startDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} - ${item.endDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                      }
-                    </Text>
-                    {item.type === "task" && (
-                      <View style={styles.taskBadge}>
-                        <Ionicons name="checkbox" size={12} color="#06B6D4" />
-                        <Text style={styles.taskBadgeText}>Task</Text>
-                      </View>
-                    )}
-                    {item.type === "event" && onDeleteEvent && (
-                      <TouchableOpacity
-                        style={styles.eventDeleteButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          onDeleteEvent(item.data);
-                        }}
+          <ScrollView 
+            style={styles.selectedDayEvents} 
+            contentContainerStyle={styles.selectedDayEventsContent}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+          >
+            {(() => {
+              const dayEvents = getItemsForDay(selectedDate).filter(item => item.type === "event");
+              const completedTasks = getCompletedTasksForDay(selectedDate);
+              const allItems = [...dayEvents, ...completedTasks];
+              
+              if (allItems.length === 0) {
+                return (
+                  <View style={styles.noEventsContainer}>
+                    <Ionicons name="calendar-outline" size={32} color="#3F3F46" />
+                    <Text style={styles.noEventsText}>No events on this day</Text>
+                    {onCreateEvent && (
+                      <TouchableOpacity 
+                        style={styles.addEventButton}
+                        onPress={() => onCreateEvent(selectedDate)}
                       >
-                        <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                        <Ionicons name="add" size={16} color="#FFF" />
+                        <Text style={styles.addEventButtonText}>Add Event</Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                </TouchableOpacity>
-              ))
-            )}
+                );
+              }
+              
+              return allItems.map((item) => {
+                if (item.type === "completed_task") {
+                  return (
+                    <View key={item.id} style={styles.completedTaskItem}>
+                      <View style={[styles.completedTaskColor, { backgroundColor: "#06B6D4" }]} />
+                      <View style={styles.completedTaskContent}>
+                        <Text style={styles.completedTaskTitle}>{item.task.title}</Text>
+                        <Text style={styles.completedTaskRecurrence}>
+                          {item.task.recurrence.charAt(0).toUpperCase() + item.task.recurrence.slice(1)}
+                        </Text>
+                        <View style={styles.completedTaskUser}>
+                          <Ionicons name="checkmark-circle" size={14} color="#22C55E" />
+                          <Text style={styles.completedTaskUserText}>
+                            completed by {item.completedBy?.username || "Unknown"}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                } else {
+                  // Regular event
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.eventItem}
+                      onPress={() => item.type === "event" && onEditEvent && onEditEvent(null, item.data)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.eventItemColor, { backgroundColor: item.color }]} />
+                      <View style={styles.eventItemContent}>
+                        <Text style={styles.eventItemTitle}>{item.title}</Text>
+                        <Text style={styles.eventItemTime}>
+                          {item.allDay 
+                            ? "All day" 
+                            : `${item.startDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} - ${item.endDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
+                          }
+                        </Text>
+                        {item.type === "event" && onDeleteEvent && (
+                          <TouchableOpacity
+                            style={styles.eventDeleteButton}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              onDeleteEvent(item.data);
+                            }}
+                          >
+                            <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }
+              });
+            })()}
           </ScrollView>
         </View>
       )}
@@ -1650,7 +1876,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 16,
     marginBottom: 20,
-    maxHeight: 400,
+    maxHeight: 500,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
   },
@@ -1669,7 +1895,11 @@ const styles = StyleSheet.create({
     color: "#FFF",
   },
   selectedDayEvents: {
-    maxHeight: 300,
+    maxHeight: 400,
+    flexGrow: 0,
+  },
+  selectedDayEventsContent: {
+    paddingBottom: 8,
   },
   noEventsContainer: {
     alignItems: "center",
@@ -1740,6 +1970,44 @@ const styles = StyleSheet.create({
   eventDeleteButton: {
     padding: 4,
     marginLeft: "auto",
+  },
+  // Completed Task Item Styles
+  completedTaskItem: {
+    flexDirection: "row",
+    backgroundColor: "#111114",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+  },
+  completedTaskColor: {
+    width: 3,
+    borderRadius: 2,
+    marginRight: 12,
+  },
+  completedTaskContent: {
+    flex: 1,
+  },
+  completedTaskTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FFF",
+    marginBottom: 4,
+  },
+  completedTaskRecurrence: {
+    fontSize: 12,
+    color: "#71717A",
+    marginBottom: 6,
+    textTransform: "capitalize",
+  },
+  completedTaskUser: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  completedTaskUserText: {
+    fontSize: 12,
+    color: "#71717A",
   },
   // FAB
   fab: {
@@ -2145,6 +2413,111 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontSize: 16,
     fontWeight: "600",
+  },
+  // Chore Edit Tabs
+  choreEditTabs: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  choreEditTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  choreEditTabActive: {
+    backgroundColor: "#06B6D4",
+  },
+  choreEditTabText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#71717A",
+  },
+  choreEditTabTextActive: {
+    color: "#FFF",
+  },
+  // Complete Chore Button
+  completeChoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#22C55E",
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 24,
+    marginBottom: 8,
+    gap: 8,
+  },
+  completeChoreButtonText: {
+    fontSize: 16,
+    color: "#FFF",
+    fontWeight: "600",
+  },
+  // Chore History
+  choreHistoryContainer: {
+    flex: 1,
+    minHeight: 300,
+  },
+  choreHistoryItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  choreHistoryAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  choreHistoryAvatarText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  choreHistoryContent: {
+    flex: 1,
+  },
+  choreHistoryUser: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FFF",
+    marginBottom: 4,
+  },
+  choreHistoryDate: {
+    fontSize: 13,
+    color: "#71717A",
+  },
+  choreHistoryEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  choreHistoryEmptyText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFF",
+    marginTop: 16,
+  },
+  choreHistoryEmptySubtext: {
+    fontSize: 14,
+    color: "#71717A",
+    marginTop: 8,
   },
 });
 
