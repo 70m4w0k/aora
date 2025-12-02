@@ -78,16 +78,6 @@ const ShoppingScreen = () => {
   // Track which category tab is active
   const [activeTab, setActiveTab] = useState("all");
 
-  // Get the screen width to calculate item width for the grid
-  const screenWidth = Dimensions.get("window").width;
-  const itemWidth = (screenWidth - 48) / 2; // Account for padding and margins
-
-  // Add double-tap state tracking (same as TasksTracker)
-  const [tappedItemId, setTappedItemId] = useState(null);
-  const [doubleTapItemId, setDoubleTapItemId] = useState(null);
-  const lastTapTimeRef = useRef(0);
-  const doubleTapTimeoutRef = useRef(null);
-  const completeAnimationRef = useRef(new Animated.Value(0)).current;
 
   // First, let's add a new state variable to track which item is being edited
   const [editingItem, setEditingItem] = useState(null);
@@ -313,210 +303,82 @@ const ShoppingScreen = () => {
   const listData = filteredItems;
 
   // Function to handle tap on a shopping item
-  const handleItemTap = (itemId) => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300; // ms between taps to count as double-tap
 
-    // If this is the first tap or tap on a different item
-    if (tappedItemId !== itemId) {
-      // Clear any existing timeout
-      if (doubleTapTimeoutRef.current) {
-        clearTimeout(doubleTapTimeoutRef.current);
-      }
-
-      // Set this item as tapped
-      setTappedItemId(itemId);
-      lastTapTimeRef.current = now;
-
-      // Clear the tapped state after a delay if no second tap happens
-      doubleTapTimeoutRef.current = setTimeout(() => {
-        setTappedItemId(null);
-      }, DOUBLE_TAP_DELAY);
-
-      return;
-    }
-
-    // If tapping the same item that was just tapped
-    const timeSinceLastTap = now - lastTapTimeRef.current;
-
-    if (timeSinceLastTap < DOUBLE_TAP_DELAY) {
-      // This is a double tap - mark item as complete
-      clearTimeout(doubleTapTimeoutRef.current);
-      setDoubleTapItemId(itemId);
-      setTappedItemId(null);
-
-      // Show completion animation
-      completeAnimationRef.setValue(0);
-      Animated.timing(completeAnimationRef, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-        easing: Easing.bezier(0.175, 0.885, 0.32, 1.275), // Bounce-like easing
-      }).start(() => {
-        // Actually complete the item after animation finishes
-        const item = filteredItems.find((item) => item.$id === itemId);
-        if (item) {
-          toggleItemComplete(item);
-        }
-
-        // Reset animation state after a brief delay
-        setTimeout(() => {
-          setDoubleTapItemId(null);
-        }, 200);
-      });
-    } else {
-      // If the second tap was too slow, treat as a new first tap
-      clearTimeout(doubleTapTimeoutRef.current);
-      lastTapTimeRef.current = now;
-
-      doubleTapTimeoutRef.current = setTimeout(() => {
-        setTappedItemId(null);
-      }, DOUBLE_TAP_DELAY);
-    }
-  };
-
-  // Update quantity inline
-  const handleQuantityChange = async (item, delta) => {
-    const newQty = Math.max(1, parseInt(item.quantity || "1") + delta);
-    try {
-      await updateShoppingItem(item.$id, { quantity: newQty.toString() });
-      await fetchItems();
-    } catch (error) {
-      console.error("Error updating quantity:", error);
-    }
-  };
-
-  // Render the items in a 2-column grid
-  const renderItem = ({ item, index }) => {
-    // Regular shopping item
+  // Render shopping item card (matching expense style)
+  const renderItem = ({ item }) => {
+    const category = SHOPPING_CATEGORIES_CONFIG[item.category] || SHOPPING_CATEGORIES_CONFIG.other;
+    const assignedUser = users.find((u) => u.$id === item.assignedTo);
+    
     return (
-      <TouchableOpacity
+      <TouchableOpacity 
         style={[
-          styles.itemCard,
-          { width: itemWidth },
-          tappedItemId === item.$id && styles.itemCardTapped,
-          item.completed && styles.itemCardCompleted,
-        ]}
-        onPress={() => handleItemTap(item.$id)}
+          styles.itemCard, 
+          item.completed && styles.itemCardCompleted
+        ]} 
         activeOpacity={0.7}
+        onPress={() => handleEditItem(item)}
       >
-        {/* Action buttons now in the top right corner */}
-        <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleEditItem(item)}
-          >
-            <MaterialCommunityIcons name="pencil" size={16} color="#4F86C6" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => confirmDelete(item)}
-          >
-            <MaterialCommunityIcons name="close" size={16} color="#F44336" />
-          </TouchableOpacity>
+        {/* Category icon */}
+        <View style={[styles.categoryIcon, { backgroundColor: category.color + "20" }]}>
+          <Ionicons name={category.icon} size={20} color={category.color} />
         </View>
 
-        {/* Rest of card content */}
-        {tappedItemId === item.$id && (
-          <View style={styles.completePromptOverlay}>
-            <Text
-              style={[
-                styles.completePromptText,
-                {
-                  color: getCategoryColor(item.category)[0],
-                  textShadowColor: "rgba(255, 255, 255, 0.8)",
-                  textShadowOffset: { width: 1, height: 1 },
-                  textShadowRadius: 3,
-                },
-              ]}
-            >
-              Complete?
-            </Text>
-            <Text style={styles.completePromptSubtext}>
-              Tap again to confirm
-            </Text>
-          </View>
-        )}
-
-        {/* Animation overlay */}
-        {doubleTapItemId === item.$id && (
-          <Animated.View
+        {/* Content */}
+        <View style={styles.itemContent}>
+          <Text 
             style={[
-              styles.completionOverlay,
-              {
-                /*...*/
-              },
-            ]}
-          >
-            <MaterialCommunityIcons
-              name="check-circle"
-              size={60}
-              color="#4CAF50"
-            />
-          </Animated.View>
-        )}
-
-        <View style={styles.itemHeader}>
-          {item.completed && (
-            <View style={styles.completedLabel}>
-              <Text style={styles.completedLabelText}>Completed</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Item content remains the same */}
-        <View style={styles.itemBody}>
-          <Text
-            style={[
-              styles.itemName,
-              item.completed && styles.itemNameCompleted,
-            ]}
-            numberOfLines={2}
+              styles.itemTitle, 
+              item.completed && styles.itemTitleCompleted
+            ]} 
+            numberOfLines={1}
           >
             {item.name}
           </Text>
-
-          <View style={styles.itemDetails}>
-            <View
-              style={[
-                styles.categoryPill,
-                { backgroundColor: getCategoryColor(item.category)[0] + "20" },
-              ]}
-            >
-              <View
-                style={[
-                  styles.categoryDot,
-                  { backgroundColor: getCategoryColor(item.category)[0] },
-                ]}
-              />
-              <Text
-                style={[
-                  styles.categoryPillText,
-                  { color: getCategoryColor(item.category)[0] },
-                ]}
-              >
-                {item.category}
+          <View style={styles.itemSubtitle}>
+            {assignedUser && (
+              <Text style={styles.itemAssigned}>
+                {assignedUser.username} • 
               </Text>
-            </View>
+            )}
+            <Text style={styles.itemCategory}>{category.label}</Text>
+            {item.quantity && parseInt(item.quantity) > 1 && (
+              <Text style={styles.itemQuantity}> • Qty: {item.quantity}</Text>
+            )}
           </View>
+        </View>
 
-          {/* Quantity stepper */}
-          <View style={styles.quantityStepper}>
-            <TouchableOpacity 
-              style={styles.stepperButton}
-              onPress={() => handleQuantityChange(item, -1)}
-            >
-              <Ionicons name="remove" size={16} color="#A1A1AA" />
-            </TouchableOpacity>
-            <Text style={styles.quantityValue}>{item.quantity || 1}</Text>
-            <TouchableOpacity 
-              style={styles.stepperButton}
-              onPress={() => handleQuantityChange(item, 1)}
-            >
-              <Ionicons name="add" size={16} color="#10B981" />
-            </TouchableOpacity>
-          </View>
+        {/* Actions */}
+        <View style={styles.itemRightSection}>
+          {/* Complete button */}
+          <TouchableOpacity 
+            style={[
+              styles.completeButton,
+              item.completed && styles.completeButtonActive
+            ]}
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleItemComplete(item);
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons 
+              name={item.completed ? "checkmark-circle" : "checkmark-circle-outline"} 
+              size={24} 
+              color={item.completed ? "#22C55E" : "#71717A"} 
+            />
+          </TouchableOpacity>
+          
+          {/* Delete button */}
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              confirmDelete(item);
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="trash-outline" size={18} color="#EF4444" />
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -665,21 +527,19 @@ const ShoppingScreen = () => {
 
       <Animated.View style={styles.content}>
         <FlatList
-          key="grid-view"
           data={listData}
           renderItem={renderItem}
           keyExtractor={(item, index) => item.$id || `add-item-${index}`}
-          numColumns={2}
           contentContainerStyle={styles.listContent}
-          columnWrapperStyle={styles.columnWrapper}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />
           }
           ListEmptyComponent={
-            <EmptyState
-              title="No items yet"
-              message="Add some items to your shopping list"
-            />
+            <View style={styles.emptyState}>
+              <Ionicons name="cart-outline" size={64} color="#3F3F46" />
+              <Text style={styles.emptyTitle}>No items yet</Text>
+              <Text style={styles.emptySubtitle}>Add some items to your shopping list</Text>
+            </View>
           }
           // Performance optimizations
           removeClippedSubviews={true}
@@ -945,94 +805,91 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    padding: 16,
-  },
-  columnWrapper: {
-    justifyContent: "space-between",
-    marginBottom: 12, // Add space between rows
+    padding: 20,
+    paddingBottom: 100,
   },
   itemCard: {
-    backgroundColor: "#1A1A1F",
-    borderRadius: 12,
-    padding: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-  },
-  itemHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    backgroundColor: "#1A1A1F",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
   },
-  itemBody: {
+  categoryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  itemContent: {
     flex: 1,
   },
-  itemName: {
-    fontSize: 14,
+  itemTitle: {
+    fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
-    marginBottom: 8,
-    minHeight: 40,
+    color: "#FFF",
+    marginBottom: 4,
   },
-  itemNameCompleted: {
+  itemTitleCompleted: {
     textDecorationLine: "line-through",
     color: "#71717A",
   },
-  itemDetails: {
+  itemSubtitle: {
+    fontSize: 13,
+    color: "#71717A",
     flexDirection: "row",
-    alignItems: "center",
     flexWrap: "wrap",
   },
-  categoryPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4,
-  },
-  categoryPillText: {
-    fontSize: 11,
+  itemAssigned: {
+    color: "#A1A1AA",
     fontWeight: "500",
   },
-  quantityText: {
-    fontSize: 11,
-    color: "#A1A1AA",
+  itemCategory: {
+    color: "#71717A",
   },
-  quantityStepper: {
+  itemQuantity: {
+    color: "#71717A",
+  },
+  itemRightSection: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#111114",
-    borderRadius: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    gap: 12,
   },
-  stepperButton: {
-    padding: 8,
+  completeButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  quantityValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    minWidth: 24,
-    textAlign: "center",
+  completeButtonActive: {
+    // No additional styling needed, icon color changes
   },
   deleteButton: {
-    padding: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFF",
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: "#71717A",
+    marginTop: 4,
   },
   categoryTabs: {
     marginTop: 12,
@@ -1196,81 +1053,9 @@ const styles = StyleSheet.create({
   userChipTextSelected: {
     color: "#FFF",
   },
-  itemCardTapped: {
-    backgroundColor: "#222228",
-  },
-  completePromptOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "transparent",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 5,
-    borderRadius: 8,
-  },
-  completePromptText: {
-    fontSize: 24,
-    fontWeight: "900",
-    marginBottom: 4,
-    textShadowColor: "rgba(255, 255, 255, 0.8)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  completePromptSubtext: {
-    fontSize: 12,
-    color: "#444",
-    fontWeight: "500",
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  completionOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(10, 10, 12, 0.85)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 12,
-    zIndex: 10,
-  },
-  completedLabel: {
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.3)",
-  },
-  completedLabelText: {
-    fontSize: 10,
-    color: "#10B981",
-    fontWeight: "500",
-  },
   itemCardCompleted: {
     opacity: 0.7,
     backgroundColor: "#111114",
-  },
-  itemActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  actionButtonsContainer: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    flexDirection: "row",
-    zIndex: 4,
-  },
-  actionButton: {
-    padding: 8,
-    marginLeft: 4,
   },
 });
 
