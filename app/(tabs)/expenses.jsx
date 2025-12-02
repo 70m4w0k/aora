@@ -26,7 +26,8 @@ import {
   updateExpense,
   deleteExpense,
   createSettlement,
-  getUserSettlements,
+  getHouseholdSettlements,
+  deleteSettlement,
   getHouseholdMembers,
 } from "../../lib/appwrite";
 
@@ -73,6 +74,11 @@ const ExpensesScreen = () => {
     image: null,
   });
 
+  const [settlementForm, setSettlementForm] = useState({
+    amount: "",
+    notes: "",
+  });
+
   const [imagePreview, setImagePreview] = useState(null);
 
   // Animation
@@ -101,13 +107,12 @@ const ExpensesScreen = () => {
         setExpenseForm((prev) => ({ ...prev, paidBy: user.$id }));
       }
 
-      const householdExpenses = await getHouseholdExpenses(household.$id);
+      const [householdExpenses, householdSettlements] = await Promise.all([
+        getHouseholdExpenses(household.$id),
+        getHouseholdSettlements(household.$id),
+      ]);
       setExpenses(householdExpenses || []);
-
-      if (user) {
-        const userSettlements = await getUserSettlements(user.$id);
-        setSettlements(userSettlements || []);
-      }
+      setSettlements(householdSettlements || []);
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -128,7 +133,8 @@ const ExpensesScreen = () => {
     // Initialize balances
     users.forEach((u) => {
       newBalances[u.$id] = {
-        oderId: u.$id,
+        $id: u.$id,
+        oderId: u.$id, // Keep for backward compatibility
         username: u.username,
         avatar: u.avatar,
         color: u.color,
@@ -165,6 +171,9 @@ const ExpensesScreen = () => {
     });
 
     // Process settlements
+    // When paidBy pays paidTo:
+    // - paidBy was in debt (negative balance), paying makes it go UP towards 0
+    // - paidTo was owed money (positive balance), receiving makes it go DOWN towards 0
     settlements.forEach((settlement) => {
       if (!settlement.amount) return;
       
@@ -173,10 +182,10 @@ const ExpensesScreen = () => {
       const paidToId = typeof settlement.paidTo === "object" ? settlement.paidTo.$id : settlement.paidTo;
 
       if (newBalances[paidById]) {
-        newBalances[paidById].balance -= amount;
+        newBalances[paidById].balance += amount; // Debtor pays, balance goes up
       }
       if (newBalances[paidToId]) {
-        newBalances[paidToId].balance += amount;
+        newBalances[paidToId].balance -= amount; // Creditor receives, balance goes down
       }
     });
 
@@ -395,22 +404,90 @@ const ExpensesScreen = () => {
     }
   };
 
-  const handleSettleDebt = async (debt) => {
+  // Open settlement modal
+  const openSettlementModal = (debt) => {
+    setSelectedDebt(debt);
+    setSettlementForm({
+      amount: debt.amount.toFixed(2),
+      notes: "",
+    });
+    setSettlementModalVisible(true);
+  };
+
+  // Handle settlement submission
+  const handleSettleDebt = async () => {
+    if (!selectedDebt) return;
+    
+    const amount = parseFloat(settlementForm.amount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+
+    if (amount > selectedDebt.amount + 0.01) {
+      Alert.alert("Error", "Amount cannot exceed the debt");
+      return;
+    }
+
     try {
       await createSettlement({
-        amount: debt.amount,
-        paidBy: debt.from.oderId,
-        paidTo: debt.to.oderId,
+        amount: amount,
+        paidBy: selectedDebt.from.oderId,
+        paidTo: selectedDebt.to.oderId,
         date: new Date().toISOString(),
         householdId: household.$id,
-        notes: "Settlement",
+        notes: settlementForm.notes || "Settlement",
       });
 
+      setSettlementModalVisible(false);
+      setSelectedDebt(null);
+      setSettlementForm({ amount: "", notes: "" });
       await fetchData();
       Alert.alert("Success", "Settlement recorded!");
     } catch (error) {
       Alert.alert("Error", error.message);
     }
+  };
+
+  // Delete a settlement
+  const handleDeleteSettlement = (settlement) => {
+    const paidByName = getUserName(settlement.paidBy);
+    const paidToName = getUserName(settlement.paidTo);
+    
+    Alert.alert(
+      "Delete Settlement",
+      `Delete settlement of €${parseFloat(settlement.amount).toFixed(2)} from ${paidByName} to ${paidToName}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteSettlement(settlement.$id);
+              await fetchData();
+              Alert.alert("Success", "Settlement deleted");
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete settlement");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Helper to get user name from ID
+  const getUserName = (userId) => {
+    const id = typeof userId === "object" ? userId.$id : userId;
+    const user = users.find(u => u.$id === id);
+    return user?.username || "Unknown";
+  };
+
+  // Get user color
+  const getUserColor = (userId) => {
+    const id = typeof userId === "object" ? userId.$id : userId;
+    const user = users.find(u => u.$id === id);
+    return user?.color || "#71717A";
   };
 
   const toggleUserInSplit = (userId) => {
@@ -505,7 +582,9 @@ const ExpensesScreen = () => {
 
   // Render balance/debt card
   const renderDebtCard = ({ item }) => {
-    const isCurrentUser = item.from.oderId === user?.$id;
+    const isDebtor = item.from.$id === user?.$id;
+    const isCreditor = item.to.$id === user?.$id;
+    const canSettle = isDebtor || isCreditor;
     
     return (
       <View style={styles.debtCard}>
@@ -529,23 +608,55 @@ const ExpensesScreen = () => {
           </View>
         </View>
         
-        {isCurrentUser && (
+        {canSettle && (
           <TouchableOpacity 
             style={styles.settleButton}
-            onPress={() => {
-              Alert.alert(
-                "Settle Up",
-                `Mark €${item.amount.toFixed(2)} as paid to ${item.to.username}?`,
-                [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Confirm", onPress: () => handleSettleDebt(item) },
-                ]
-              );
-            }}
+            onPress={() => openSettlementModal(item)}
           >
-            <Text style={styles.settleButtonText}>Settle</Text>
+            <Text style={styles.settleButtonText}>{isDebtor ? "Pay" : "Received"}</Text>
           </TouchableOpacity>
         )}
+      </View>
+    );
+  };
+
+  // Render settlement history card
+  const renderSettlementCard = ({ item }) => {
+    const paidByName = getUserName(item.paidBy);
+    const paidToName = getUserName(item.paidTo);
+    const paidById = typeof item.paidBy === "object" ? item.paidBy.$id : item.paidBy;
+    const isCurrentUserPayer = paidById === user?.$id;
+
+    return (
+      <View style={styles.settlementCard}>
+        <View style={styles.settlementIcon}>
+          <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
+        </View>
+        <View style={styles.settlementInfo}>
+          <Text style={styles.settlementText}>
+            <Text style={[styles.settlementName, { color: getUserColor(item.paidBy) }]}>
+              {paidByName}
+            </Text>
+            {" paid "}
+            <Text style={[styles.settlementName, { color: getUserColor(item.paidTo) }]}>
+              {paidToName}
+            </Text>
+          </Text>
+          <Text style={styles.settlementDate}>
+            {new Date(item.date).toLocaleDateString()} • {item.notes || "Settlement"}
+          </Text>
+        </View>
+        <View style={styles.settlementRight}>
+          <Text style={styles.settlementAmount}>{formatCurrency(item.amount)}</Text>
+          {isCurrentUserPayer && (
+            <TouchableOpacity 
+              style={styles.settlementDeleteBtn}
+              onPress={() => handleDeleteSettlement(item)}
+            >
+              <Ionicons name="trash-outline" size={16} color="#F43F5E" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   };
@@ -645,13 +756,26 @@ const ExpensesScreen = () => {
               Balances
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === "history" && styles.tabActive]}
+            onPress={() => setActiveTab("history")}
+          >
+            <Ionicons 
+              name="time" 
+              size={18} 
+              color={activeTab === "history" ? "#F43F5E" : "#71717A"} 
+            />
+            <Text style={[styles.tabText, activeTab === "history" && styles.tabTextActive]}>
+              Settlements
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Summary Banner */}
         {renderSummaryBanner()}
 
         {/* Content */}
-        {activeTab === "expenses" ? (
+        {activeTab === "expenses" && (
           <FlatList
             data={expenses}
             renderItem={renderExpenseCard}
@@ -668,7 +792,9 @@ const ExpensesScreen = () => {
               </View>
             }
           />
-        ) : (
+        )}
+        
+        {activeTab === "balances" && (
           <FlatList
             data={debts}
             renderItem={renderDebtCard}
@@ -687,6 +813,33 @@ const ExpensesScreen = () => {
             ListHeaderComponent={
               debts.length > 0 ? (
                 <Text style={styles.balanceHeader}>Who owes whom</Text>
+              ) : null
+            }
+          />
+        )}
+
+        {activeTab === "history" && (
+          <FlatList
+            data={settlements}
+            renderItem={renderSettlementCard}
+            keyExtractor={(item) => item.$id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F43F5E" />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="time-outline" size={64} color="#3F3F46" />
+                <Text style={styles.emptyTitle}>No settlements yet</Text>
+                <Text style={styles.emptySubtitle}>Settlements will appear here</Text>
+              </View>
+            }
+            ListHeaderComponent={
+              settlements.length > 0 ? (
+                <View style={styles.settlementsHeader}>
+                  <Text style={styles.balanceHeader}>Settlement History</Text>
+                  <Text style={styles.settlementsCount}>{settlements.length} settlement{settlements.length !== 1 ? 's' : ''}</Text>
+                </View>
               ) : null
             }
           />
@@ -867,6 +1020,91 @@ const ExpensesScreen = () => {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Settlement Modal */}
+      <Modal
+        visible={settlementModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSettlementModalVisible(false)}
+      >
+        <View style={styles.settlementModalOverlay}>
+          <View style={styles.settlementModalContent}>
+            <View style={styles.settlementModalHeader}>
+              <Text style={styles.settlementModalTitle}>Record Settlement</Text>
+              <TouchableOpacity onPress={() => {
+                setSettlementModalVisible(false);
+                setSelectedDebt(null);
+              }}>
+                <Ionicons name="close" size={24} color="#A1A1AA" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedDebt && (
+              <>
+                {/* Debt Info */}
+                <View style={styles.settlementDebtInfo}>
+                  <View style={styles.settlementAvatarRow}>
+                    <View style={[styles.settlementAvatar, { backgroundColor: selectedDebt.from.color || "#F43F5E" }]}>
+                      <Text style={styles.settlementAvatarText}>
+                        {selectedDebt.from.username?.[0]?.toUpperCase()}
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={20} color="#71717A" style={{ marginHorizontal: 12 }} />
+                    <View style={[styles.settlementAvatar, { backgroundColor: selectedDebt.to.color || "#22C55E" }]}>
+                      <Text style={styles.settlementAvatarText}>
+                        {selectedDebt.to.username?.[0]?.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.settlementDebtText}>
+                    {selectedDebt.from.username} pays {selectedDebt.to.username}
+                  </Text>
+                  <Text style={styles.settlementDebtAmount}>
+                    Total owed: {formatCurrency(selectedDebt.amount)}
+                  </Text>
+                </View>
+
+                {/* Amount Input */}
+                <Text style={styles.settlementInputLabel}>Amount to settle</Text>
+                <View style={styles.settlementAmountRow}>
+                  <Text style={styles.settlementCurrency}>€</Text>
+                  <TextInput
+                    style={styles.settlementAmountInput}
+                    value={settlementForm.amount}
+                    onChangeText={(text) => setSettlementForm(prev => ({ ...prev, amount: text }))}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor="#71717A"
+                  />
+                  <TouchableOpacity 
+                    style={styles.settlementFullBtn}
+                    onPress={() => setSettlementForm(prev => ({ ...prev, amount: selectedDebt.amount.toFixed(2) }))}
+                  >
+                    <Text style={styles.settlementFullBtnText}>Full Amount</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Notes */}
+                <Text style={styles.settlementInputLabel}>Notes (optional)</Text>
+                <TextInput
+                  style={styles.settlementNotesInput}
+                  value={settlementForm.notes}
+                  onChangeText={(text) => setSettlementForm(prev => ({ ...prev, notes: text }))}
+                  placeholder="e.g., Cash, Bank transfer..."
+                  placeholderTextColor="#71717A"
+                />
+
+                {/* Submit Button */}
+                <TouchableOpacity style={styles.settlementSubmitBtn} onPress={handleSettleDebt}>
+                  <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+                  <Text style={styles.settlementSubmitText}>Confirm Settlement</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -1349,6 +1587,175 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  // Settlement Card
+  settlementCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  settlementIcon: {
+    marginRight: 12,
+  },
+  settlementInfo: {
+    flex: 1,
+  },
+  settlementText: {
+    fontSize: 14,
+    color: "#FFF",
+  },
+  settlementName: {
+    fontWeight: "600",
+  },
+  settlementDate: {
+    fontSize: 12,
+    color: "#71717A",
+    marginTop: 2,
+  },
+  settlementRight: {
+    alignItems: "flex-end",
+  },
+  settlementAmount: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#22C55E",
+  },
+  settlementDeleteBtn: {
+    padding: 4,
+    marginTop: 4,
+  },
+  settlementsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  settlementsCount: {
+    fontSize: 13,
+    color: "#71717A",
+  },
+
+  // Settlement Modal
+  settlementModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "flex-end",
+  },
+  settlementModalContent: {
+    backgroundColor: "#1A1A1F",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  settlementModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  settlementModalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  settlementDebtInfo: {
+    alignItems: "center",
+    paddingVertical: 20,
+    backgroundColor: "#111114",
+    borderRadius: 16,
+    marginBottom: 20,
+  },
+  settlementAvatarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  settlementAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  settlementAvatarText: {
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  settlementDebtText: {
+    fontSize: 16,
+    color: "#FFF",
+    fontWeight: "500",
+  },
+  settlementDebtAmount: {
+    fontSize: 14,
+    color: "#71717A",
+    marginTop: 4,
+  },
+  settlementInputLabel: {
+    fontSize: 13,
+    color: "#A1A1AA",
+    marginBottom: 8,
+  },
+  settlementAmountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#111114",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  settlementCurrency: {
+    fontSize: 24,
+    fontWeight: "600",
+    color: "#71717A",
+    marginRight: 8,
+  },
+  settlementAmountInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: "600",
+    color: "#FFF",
+    paddingVertical: 14,
+  },
+  settlementFullBtn: {
+    backgroundColor: "rgba(244, 63, 94, 0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  settlementFullBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#F43F5E",
+  },
+  settlementNotesInput: {
+    backgroundColor: "#111114",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: "#FFF",
+    marginBottom: 20,
+  },
+  settlementSubmitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#22C55E",
+    borderRadius: 12,
+    paddingVertical: 16,
+    gap: 8,
+  },
+  settlementSubmitText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFF",
   },
 });
 
