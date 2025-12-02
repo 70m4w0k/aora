@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -34,6 +34,8 @@ import {
   getTaskDoneByTaskId,
 } from "../../lib/appwrite";
 import { getWeekNumberByDate } from "../../lib/utils";
+
+const WEEKS_IN_YEAR = 52;
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -745,7 +747,7 @@ const UnifiedCalendar = () => {
           />
         );
       case VIEW_TYPES.ANNUAL:
-        return <AnnualView date={currentDate} tasks={tasks} tasksDone={tasksDone} />;
+        return <AnnualView date={currentDate} tasks={tasks} tasksDone={tasksDone} users={users} />;
       default:
         return null;
     }
@@ -1687,11 +1689,222 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
   );
 };
 
-const AnnualView = ({ date, tasks, tasksDone }) => (
-  <View style={styles.viewContainer}>
-    <Text style={styles.placeholderText}>Annual View - Will use existing heatmap</Text>
-  </View>
-);
+const AnnualView = ({ date, tasks, tasksDone, users }) => {
+  const heatmapScrollRef = useRef(null);
+  const currentWeekNumber = getWeekNumberByDate(new Date());
+  
+  useEffect(() => {
+    // Auto-scroll to current week when view loads
+    if (heatmapScrollRef.current) {
+      const CELL_WIDTH = 25; // 22 cell + 3 gap
+      const targetX = Math.max(0, (currentWeekNumber - 8) * CELL_WIDTH);
+      setTimeout(() => {
+        heatmapScrollRef.current?.scrollTo({ x: targetX, animated: true });
+      }, 300);
+    }
+  }, [currentWeekNumber]);
+  
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const CELL_SIZE = 22;
+  const CELL_GAP = 3;
+  const ROW_GAP = 6;
+  const LABEL_WIDTH = 80;
+  
+  // Month positions (approximate week for each month start)
+  const monthPositions = [0, 4, 8, 13, 17, 22, 26, 30, 35, 39, 44, 48];
+  
+  // User colors fallback
+  const userColors = [
+    "#8B5CF6", // Purple
+    "#06B6D4", // Cyan
+    "#F59E0B", // Amber
+    "#10B981", // Emerald
+    "#F43F5E", // Rose
+    "#3B82F6", // Blue
+  ];
+  
+  // Calculate weekly activity per user
+  const userWeeklyActivity = (users || []).map((u, index) => {
+    const weeks = Array(WEEKS_IN_YEAR).fill(0);
+    const color = u.color || userColors[index % userColors.length];
+    
+    (tasksDone || []).forEach(td => {
+      const tdUserId = typeof td.userId === 'object' ? td.userId?.$id : td.userId;
+      if (tdUserId === u.$id && td.weekNumber >= 1 && td.weekNumber <= WEEKS_IN_YEAR) {
+        weeks[td.weekNumber - 1]++;
+      }
+    });
+    
+    return {
+      id: u.$id,
+      username: u.username,
+      color,
+      weeks,
+      total: weeks.reduce((sum, w) => sum + w, 0),
+    };
+  });
+  
+  // Calculate household total weekly activity
+  const weeklyActivity = Array(WEEKS_IN_YEAR).fill(0);
+  (tasksDone || []).forEach(td => {
+    if (td.weekNumber && td.weekNumber >= 1 && td.weekNumber <= WEEKS_IN_YEAR) {
+      weeklyActivity[td.weekNumber - 1]++;
+    }
+  });
+  
+  // Get cell color based on count and user color
+  const getCellColor = (count, userColor) => {
+    if (count === 0) return "#1E1E24"; // Dark empty cell (visible against background)
+    const opacity = Math.min(0.3 + (count * 0.2), 1); // 0.3 to 1.0 based on count
+    return userColor + Math.round(opacity * 255).toString(16).padStart(2, '0');
+  };
+  
+  return (
+    <ScrollView 
+      style={styles.annualContainer} 
+      showsVerticalScrollIndicator={false} 
+      contentContainerStyle={styles.annualContent}
+    >
+      <Text style={styles.annualTitle}>📊 Yearly Activity</Text>
+      <Text style={styles.annualSubtitle}>Tasks completed per week • Scroll → to see full year</Text>
+
+      {/* Stacked Heatmap Grid */}
+      <View style={styles.stackedHeatmapCard}>
+        <ScrollView 
+          ref={heatmapScrollRef}
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingRight: 20 }}
+        >
+          <View>
+            {/* Month labels row */}
+            <View style={[styles.heatmapRow, { marginLeft: LABEL_WIDTH, marginBottom: 8 }]}>
+              {months.map((month, i) => (
+                <Text 
+                  key={month} 
+                  style={[
+                    styles.stackedMonthLabel, 
+                    { left: monthPositions[i] * (CELL_SIZE + CELL_GAP), position: 'absolute' }
+                  ]}
+                >
+                  {month}
+                </Text>
+              ))}
+            </View>
+
+            {/* User rows */}
+            {userWeeklyActivity.map((userData) => (
+              <View key={userData.id} style={[styles.heatmapRow, { marginBottom: ROW_GAP }]}>
+                {/* User label */}
+                <View style={[styles.rowLabel, { width: LABEL_WIDTH }]}>
+                  <View style={[styles.rowLabelDot, { backgroundColor: userData.color }]} />
+                  <Text style={styles.rowLabelText} numberOfLines={1}>
+                    {userData.username}
+                  </Text>
+                </View>
+                
+                {/* Week cells */}
+                <View style={styles.heatmapRowCells}>
+                  {userData.weeks.map((count, weekIndex) => (
+                    <TouchableOpacity
+                      key={weekIndex}
+                      style={[
+                        styles.stackedCell,
+                        { 
+                          backgroundColor: getCellColor(count, userData.color),
+                          width: CELL_SIZE,
+                          height: CELL_SIZE,
+                          marginRight: CELL_GAP,
+                        },
+                        weekIndex + 1 === currentWeekNumber && styles.currentWeekCell,
+                      ]}
+                      onPress={() => {
+                        Alert.alert(
+                          `${userData.username} • Week ${weekIndex + 1}`,
+                          count > 0 ? `${count} task${count > 1 ? 's' : ''} completed` : "No tasks this week"
+                        );
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+            ))}
+
+            {/* Household total row */}
+            <View style={[styles.heatmapRow]}>
+              <View style={[styles.rowLabel, { width: LABEL_WIDTH }]}>
+                <Ionicons name="home" size={14} color="#06B6D4" />
+                <Text style={[styles.rowLabelText, { color: '#06B6D4', marginLeft: 6, fontWeight: '600' }]}>
+                  Total
+                </Text>
+              </View>
+              
+              <View style={styles.heatmapRowCells}>
+                {weeklyActivity.map((count, weekIndex) => (
+                  <TouchableOpacity
+                    key={weekIndex}
+                    style={[
+                      styles.stackedCell,
+                      { 
+                        backgroundColor: count === 0 ? "#1E1E24" : `rgba(6, 182, 212, ${Math.min(0.3 + count * 0.15, 1)})`,
+                        width: CELL_SIZE,
+                        height: CELL_SIZE,
+                        marginRight: CELL_GAP,
+                      },
+                      weekIndex + 1 === currentWeekNumber && styles.currentWeekCell,
+                    ]}
+                    onPress={() => {
+                      Alert.alert(
+                        `Household • Week ${weekIndex + 1}`,
+                        count > 0 ? `${count} task${count > 1 ? 's' : ''} completed` : "No tasks this week"
+                      );
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Legend */}
+      <View style={styles.stackedLegend}>
+        <View style={styles.legendRow}>
+          {userWeeklyActivity.map((userData) => (
+            <View key={userData.id} style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: userData.color }]} />
+              <Text style={styles.legendUsername}>{userData.username}</Text>
+              <Text style={styles.legendCount}>{userData.total}</Text>
+            </View>
+          ))}
+          {/* Household Total */}
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: "#06B6D4" }]} />
+            <Text style={[styles.legendUsername, { color: "#06B6D4" }]}>Total</Text>
+            <Text style={[styles.legendCount, { color: "#06B6D4" }]}>{(tasksDone || []).length}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Week indicator */}
+      <Text style={styles.heatmapWeekIndicator}>
+        📍 Current: Week {currentWeekNumber} of {WEEKS_IN_YEAR}
+      </Text>
+
+      {/* Stats summary */}
+      <View style={styles.heatmapStats}>
+        <View style={styles.heatmapStatItem}>
+          <Text style={styles.heatmapStatValue}>{(tasksDone || []).length}</Text>
+          <Text style={styles.heatmapStatLabel}>Total Completions</Text>
+        </View>
+        <View style={styles.heatmapStatItem}>
+          <Text style={styles.heatmapStatValue}>{weeklyActivity.filter(w => w > 0).length}</Text>
+          <Text style={styles.heatmapStatLabel}>Active Weeks</Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -2518,6 +2731,138 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#71717A",
     marginTop: 8,
+  },
+  // Annual View / Heatmap Styles
+  annualContainer: {
+    flex: 1,
+    padding: 20,
+    paddingBottom: 100,
+  },
+  annualContent: {
+    paddingBottom: 20,
+  },
+  annualTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#FFF",
+    marginBottom: 6,
+  },
+  annualSubtitle: {
+    fontSize: 14,
+    color: "#71717A",
+    marginBottom: 20,
+  },
+  stackedHeatmapCard: {
+    backgroundColor: "#131316",
+    borderRadius: 16,
+    padding: 18,
+    paddingBottom: 40,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  heatmapRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+    height: 28,
+  },
+  rowLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 12,
+    position: "absolute",
+    left: 0,
+  },
+  rowLabelDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 6,
+  },
+  rowLabelText: {
+    fontSize: 12,
+    color: "#A1A1AA",
+    fontWeight: "500",
+    flex: 1,
+  },
+  heatmapRowCells: {
+    flexDirection: "row",
+    marginLeft: 80, // LABEL_WIDTH
+  },
+  stackedCell: {
+    borderRadius: 4,
+  },
+  currentWeekCell: {
+    borderWidth: 2,
+    borderColor: "#06B6D4",
+  },
+  stackedMonthLabel: {
+    fontSize: 11,
+    color: "#71717A",
+    fontWeight: "500",
+    position: "absolute",
+  },
+  stackedLegend: {
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  legendRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    justifyContent: "center",
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendUsername: {
+    fontSize: 13,
+    color: "#A1A1AA",
+    fontWeight: "500",
+  },
+  legendCount: {
+    fontSize: 13,
+    color: "#71717A",
+    fontWeight: "600",
+  },
+  heatmapWeekIndicator: {
+    textAlign: "center",
+    fontSize: 15,
+    color: "#06B6D4",
+    marginTop: 16,
+    fontWeight: "500",
+  },
+  heatmapStats: {
+    flexDirection: "row",
+    marginTop: 24,
+    gap: 12,
+  },
+  heatmapStatItem: {
+    flex: 1,
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+  },
+  heatmapStatValue: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  heatmapStatLabel: {
+    fontSize: 13,
+    color: "#71717A",
+    marginTop: 6,
   },
 });
 
