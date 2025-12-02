@@ -521,7 +521,10 @@ const ExpensesScreen = () => {
     return u ? u.username : "Unknown";
   };
 
-  const formatCurrency = (amount) => `€${parseFloat(amount).toFixed(2)}`;
+  const formatCurrency = (amount) => {
+    const parsed = parseFloat(amount);
+    return `€${isNaN(parsed) ? "0.00" : parsed.toFixed(2)}`;
+  };
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -538,8 +541,10 @@ const ExpensesScreen = () => {
   const renderExpenseCard = ({ item }) => {
     const category = EXPENSE_CATEGORIES[item.category] || EXPENSE_CATEGORIES.other;
     const paidByName = getUsername(item.paidBy);
-    const splitCount = Array.isArray(item.splitBetween) ? item.splitBetween.length : 1;
-    const perPerson = parseFloat(item.amount) / splitCount;
+    const splitCount = Array.isArray(item.splitBetween) && item.splitBetween.length > 0 
+      ? item.splitBetween.length 
+      : 1;
+    const perPerson = parseFloat(item.amount || 0) / splitCount;
 
     return (
       <TouchableOpacity 
@@ -791,6 +796,11 @@ const ExpensesScreen = () => {
                 <Text style={styles.emptySubtitle}>Add your first shared expense</Text>
               </View>
             }
+            // Performance optimizations
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            initialNumToRender={10}
           />
         )}
         
@@ -842,6 +852,11 @@ const ExpensesScreen = () => {
                 </View>
               ) : null
             }
+            // Performance optimizations
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            initialNumToRender={10}
           />
         )}
 
@@ -951,7 +966,7 @@ const ExpensesScreen = () => {
               <View style={styles.splitUsersGrid}>
                 {users.map((u) => {
                   const isSelected = expenseForm.splitBetween.includes(u.$id);
-                  const splitAmount = isSelected && expenseForm.amount 
+                  const splitAmount = isSelected && expenseForm.amount && expenseForm.splitBetween.length > 0
                     ? parseFloat(expenseForm.amount) / expenseForm.splitBetween.length 
                     : 0;
                     

@@ -124,7 +124,19 @@ const PriceTracker = () => {
   }, [householdId]);
 
   useEffect(() => {
-    fetchData();
+    let isMounted = true;
+    
+    const loadData = async () => {
+      if (isMounted) {
+        await fetchData();
+      }
+    };
+    
+    loadData();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [fetchData]);
 
   const onRefresh = async () => {

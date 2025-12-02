@@ -61,14 +61,21 @@ const DocumentsScreen = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (household?.$id) {
+    let isMounted = true;
+    
+    if (household?.$id && isMounted) {
       fetchDocuments();
     }
+    
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 500,
       useNativeDriver: true,
     }).start();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [household?.$id]);
 
   const fetchDocuments = async () => {

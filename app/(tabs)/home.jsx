@@ -147,9 +147,19 @@ const Home = () => {
   };
 
   useEffect(() => {
-    if (household?.$id) {
-      fetchStats();
-    }
+    let isMounted = true;
+    
+    const loadStats = async () => {
+      if (household?.$id && isMounted) {
+        await fetchStats();
+      }
+    };
+    
+    loadStats();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [household?.$id]);
 
   const onRefresh = async () => {

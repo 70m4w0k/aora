@@ -52,9 +52,9 @@ const ShoppingScreen = () => {
     assignedTo: "",
   });
 
-  // For animations
-  const fadeAnim = new Animated.Value(0);
-  const scaleAnim = new Animated.Value(0.95);
+  // For animations - use useRef to prevent re-creation on each render
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   // For filtering
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -100,6 +100,13 @@ const ShoppingScreen = () => {
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Cleanup timeouts on unmount
+    return () => {
+      if (doubleTapTimeoutRef.current) {
+        clearTimeout(doubleTapTimeoutRef.current);
+      }
+    };
   }, [household?.$id]);
 
   // Quick add item handler - ultra fast addition
@@ -659,6 +666,11 @@ const ShoppingScreen = () => {
               message="Add some items to your shopping list"
             />
           }
+          // Performance optimizations
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          initialNumToRender={10}
         />
       </Animated.View>
       </KeyboardAvoidingView>
