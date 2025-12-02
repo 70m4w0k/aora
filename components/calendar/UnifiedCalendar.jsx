@@ -13,6 +13,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Alert,
+  FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -26,6 +27,9 @@ import {
   getHouseholdTasks,
   getAllTasksDone,
   getHouseholdMembers,
+  createTask,
+  updateTask,
+  deleteTask,
 } from "../../lib/appwrite";
 import { getWeekNumberByDate } from "../../lib/utils";
 
@@ -61,9 +65,13 @@ const UnifiedCalendar = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   
-  // Event modal state
-  const [eventModalVisible, setEventModalVisible] = useState(false);
+  // Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalType, setModalType] = useState("event"); // "event" or "chore"
   const [editingEvent, setEditingEvent] = useState(null);
+  const [editingChore, setEditingChore] = useState(null);
+  
+  // Event form state
   const [eventForm, setEventForm] = useState({
     title: "",
     description: "",
@@ -74,10 +82,20 @@ const UnifiedCalendar = () => {
     assignedTo: "",
     color: null,
   });
+  
+  // Chore form state
+  const [choreForm, setChoreForm] = useState({
+    title: "",
+    recurrence: "weekly", // "daily", "weekly", "monthly"
+  });
+  
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  
+  // Chores list view state
+  const [showChoresList, setShowChoresList] = useState(false);
 
   useEffect(() => {
     if (household?.$id) {
@@ -337,47 +355,73 @@ const UnifiedCalendar = () => {
     console.log("Day pressed:", date);
   };
 
-  const openEventModal = (date = null, event = null) => {
-    if (event) {
-      // Edit mode
-      setEditingEvent(event);
-      const startDate = new Date(event.startDate);
-      const endDate = new Date(event.endDate);
-      setEventForm({
-        title: event.title || "",
-        description: event.description || "",
-        startDate,
-        endDate,
-        allDay: event.allDay || false,
-        category: event.category || EventCategories.OTHER,
-        assignedTo: typeof event.assignedTo === 'object' ? event.assignedTo?.$id : event.assignedTo || "",
-        color: event.color || null,
-      });
-    } else {
-      // Create mode
-      setEditingEvent(null);
-      const defaultDate = date || new Date();
-      defaultDate.setHours(9, 0, 0, 0); // Default to 9 AM
-      const endDate = new Date(defaultDate);
-      endDate.setHours(10, 0, 0, 0); // Default to 10 AM (1 hour duration)
-      
-      setEventForm({
-        title: "",
-        description: "",
-        startDate: defaultDate,
-        endDate: endDate,
-        allDay: false,
-        category: EventCategories.OTHER,
-        assignedTo: "",
-        color: null,
-      });
+  const openModal = (type = "event", date = null, item = null) => {
+    setModalType(type);
+    
+    if (type === "event") {
+      if (item) {
+        // Edit event
+        setEditingEvent(item);
+        setEditingChore(null);
+        const startDate = new Date(item.startDate);
+        const endDate = new Date(item.endDate);
+        setEventForm({
+          title: item.title || "",
+          description: item.description || "",
+          startDate,
+          endDate,
+          allDay: item.allDay || false,
+          category: item.category || EventCategories.OTHER,
+          assignedTo: typeof item.assignedTo === 'object' ? item.assignedTo?.$id : item.assignedTo || "",
+          color: item.color || null,
+        });
+      } else {
+        // Create event
+        setEditingEvent(null);
+        setEditingChore(null);
+        const defaultDate = date || new Date();
+        defaultDate.setHours(9, 0, 0, 0);
+        const endDate = new Date(defaultDate);
+        endDate.setHours(10, 0, 0, 0);
+        
+        setEventForm({
+          title: "",
+          description: "",
+          startDate: defaultDate,
+          endDate: endDate,
+          allDay: false,
+          category: EventCategories.OTHER,
+          assignedTo: "",
+          color: null,
+        });
+      }
+    } else if (type === "chore") {
+      if (item) {
+        // Edit chore
+        setEditingChore(item);
+        setEditingEvent(null);
+        setChoreForm({
+          title: item.title || "",
+          recurrence: item.recurrence || "weekly",
+        });
+      } else {
+        // Create chore
+        setEditingChore(null);
+        setEditingEvent(null);
+        setChoreForm({
+          title: "",
+          recurrence: "weekly",
+        });
+      }
     }
-    setEventModalVisible(true);
+    
+    setModalVisible(true);
   };
 
-  const closeEventModal = () => {
-    setEventModalVisible(false);
+  const closeModal = () => {
+    setModalVisible(false);
     setEditingEvent(null);
+    setEditingChore(null);
     setShowStartDatePicker(false);
     setShowEndDatePicker(false);
     setShowStartTimePicker(false);
@@ -435,10 +479,47 @@ const UnifiedCalendar = () => {
       }
 
       await fetchData();
-      closeEventModal();
+      closeModal();
     } catch (error) {
       console.error("Error saving event:", error);
       Alert.alert("Error", "Could not save event. " + (error.message || ""));
+    }
+  };
+
+  const handleSaveChore = async () => {
+    if (!choreForm.title.trim()) {
+      Alert.alert("Error", "Please enter a chore title");
+      return;
+    }
+
+    if (!household?.$id) {
+      Alert.alert("Error", "Missing household information");
+      return;
+    }
+
+    try {
+      if (editingChore) {
+        // Update existing chore
+        await updateTask(editingChore.$id, {
+          title: choreForm.title.trim(),
+          recurrence: choreForm.recurrence,
+        });
+        Alert.alert("Success", "Chore updated!");
+      } else {
+        // Create new chore
+        await createTask({
+          title: choreForm.title.trim(),
+          recurrence: choreForm.recurrence,
+          householdId: household.$id,
+        });
+        Alert.alert("Success", "Chore created!");
+      }
+
+      await fetchData();
+      closeModal();
+    } catch (error) {
+      console.error("Error saving chore:", error);
+      Alert.alert("Error", "Could not save chore. " + (error.message || ""));
     }
   };
 
@@ -463,6 +544,84 @@ const UnifiedCalendar = () => {
         },
       ]
     );
+  };
+
+  const handleDeleteChore = (chore) => {
+    Alert.alert(
+      "Delete Chore",
+      `Are you sure you want to delete "${chore.title}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteTask(chore.$id);
+              Alert.alert("Success", "Chore deleted!");
+              await fetchData();
+            } catch (error) {
+              Alert.alert("Error", "Could not delete chore");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Calculate days since last completion for a chore
+  const getDaysSinceLastCompletion = (chore) => {
+    const choreCompletions = tasksDone.filter(td => {
+      const tdTaskId = typeof td.taskId === 'object' ? td.taskId?.$id : td.taskId;
+      return tdTaskId === chore.$id;
+    });
+    
+    if (choreCompletions.length === 0) {
+      return null; // Never completed
+    }
+    
+    // Sort by creation date (most recent first)
+    const sorted = choreCompletions.sort((a, b) => {
+      const dateA = new Date(a.$createdAt);
+      const dateB = new Date(b.$createdAt);
+      return dateB - dateA;
+    });
+    
+    const lastCompletion = new Date(sorted[0].$createdAt);
+    const now = new Date();
+    const diffTime = now - lastCompletion;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
+  };
+
+  // Get status color and emoji based on recurrence and days since completion
+  const getChoreStatus = (chore) => {
+    const daysSince = getDaysSinceLastCompletion(chore);
+    
+    if (daysSince === null) {
+      return { color: "#EF4444", emoji: "🔴", text: "Never completed" };
+    }
+    
+    const recurrenceDays = {
+      daily: 1,
+      weekly: 7,
+      monthly: 30,
+    };
+    
+    const expectedDays = recurrenceDays[chore.recurrence] || 7;
+    const ratio = daysSince / expectedDays;
+    
+    if (ratio < 0.8) {
+      // Green: less than 80% of expected time
+      return { color: "#22C55E", emoji: "🟢", text: `${daysSince} day${daysSince !== 1 ? 's' : ''} ago` };
+    } else if (ratio <= 1.2) {
+      // Orange: 80-120% of expected time
+      return { color: "#F59E0B", emoji: "🟠", text: `${daysSince} day${daysSince !== 1 ? 's' : ''} ago` };
+    } else {
+      // Red: more than 120% of expected time
+      return { color: "#EF4444", emoji: "🔴", text: `${daysSince} day${daysSince !== 1 ? 's' : ''} ago` };
+    }
   };
 
   const formatDateTime = (date, allDay = false) => {
@@ -532,8 +691,8 @@ const UnifiedCalendar = () => {
             date={currentDate} 
             items={items}
             onDayPress={handleDayPress}
-            onCreateEvent={openEventModal}
-            onEditEvent={openEventModal}
+            onCreateEvent={(date) => openModal("event", date)}
+            onEditEvent={(date, event) => openModal("event", date, event)}
             onDeleteEvent={handleDeleteEvent}
           />
         );
@@ -569,18 +728,108 @@ const UnifiedCalendar = () => {
       {/* Floating Action Button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => openEventModal()}
+        onPress={() => openModal("event")}
         activeOpacity={0.8}
       >
         <Ionicons name="add" size={28} color="#FFF" />
       </TouchableOpacity>
 
-      {/* Event Modal */}
+      {/* Chores List Button */}
+      <TouchableOpacity
+        style={styles.choresListButton}
+        onPress={() => setShowChoresList(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="checkbox-outline" size={25} color="#FFF" />
+      </TouchableOpacity>
+
+      {/* Chores List Modal */}
       <Modal
-        visible={eventModalVisible}
+        visible={showChoresList}
         animationType="slide"
         transparent={true}
-        onRequestClose={closeEventModal}
+        onRequestClose={() => setShowChoresList(false)}
+      >
+        <View style={styles.choresListOverlay}>
+          <View style={styles.choresListContent}>
+            <View style={styles.choresListHeader}>
+              <Text style={styles.choresListTitle}>All Chores</Text>
+              <TouchableOpacity onPress={() => setShowChoresList(false)}>
+                <Ionicons name="close" size={24} color="#A1A1AA" />
+              </TouchableOpacity>
+            </View>
+            
+            <FlatList
+              data={tasks}
+              keyExtractor={(item) => item.$id}
+              renderItem={({ item }) => {
+                const status = getChoreStatus(item);
+                return (
+                  <View style={styles.choreListItem}>
+                    <View style={styles.choreListItemContent}>
+                      <View style={styles.choreListItemHeader}>
+                        <Text style={styles.choreListItemTitle}>{item.title}</Text>
+                        <View style={[styles.choreStatusBadge, { backgroundColor: status.color + "20" }]}>
+                          <Text style={styles.choreStatusEmoji}>{status.emoji}</Text>
+                          <Text style={[styles.choreStatusText, { color: status.color }]}>
+                            {status.text}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.choreListItemRecurrence}>
+                        Recurrence: {item.recurrence.charAt(0).toUpperCase() + item.recurrence.slice(1)}
+                      </Text>
+                    </View>
+                    <View style={styles.choreListItemActions}>
+                      <TouchableOpacity
+                        style={styles.choreListActionButton}
+                        onPress={() => {
+                          setShowChoresList(false);
+                          openModal("chore", null, item);
+                        }}
+                      >
+                        <Ionicons name="pencil" size={18} color="#06B6D4" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.choreListActionButton}
+                        onPress={() => handleDeleteChore(item)}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              }}
+              ListEmptyComponent={
+                <View style={styles.choresListEmpty}>
+                  <Ionicons name="checkbox-outline" size={64} color="#3F3F46" />
+                  <Text style={styles.choresListEmptyText}>No chores yet</Text>
+                  <Text style={styles.choresListEmptySubtext}>Create your first chore</Text>
+                </View>
+              }
+              contentContainerStyle={styles.choresListContentContainer}
+            />
+            
+            <TouchableOpacity
+              style={styles.choresListAddButton}
+              onPress={() => {
+                setShowChoresList(false);
+                openModal("chore");
+              }}
+            >
+              <Ionicons name="add" size={20} color="#FFF" />
+              <Text style={styles.choresListAddButtonText}>Add Chore</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Event/Chore Modal */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeModal}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -588,29 +837,74 @@ const UnifiedCalendar = () => {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={closeEventModal}>
+              <TouchableOpacity onPress={closeModal}>
                 <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
               <Text style={styles.modalTitle}>
-                {editingEvent ? "Edit Event" : "Add Event"}
+                {modalType === "event" 
+                  ? (editingEvent ? "Edit Event" : "Add Event")
+                  : (editingChore ? "Edit Chore" : "Add Chore")
+                }
               </Text>
-              <TouchableOpacity onPress={handleSaveEvent}>
+              <TouchableOpacity onPress={modalType === "event" ? handleSaveEvent : handleSaveChore}>
                 <Text style={styles.modalSaveText}>
-                  {editingEvent ? "Update" : "Save"}
+                  {modalType === "event" 
+                    ? (editingEvent ? "Update" : "Save")
+                    : (editingChore ? "Update" : "Save")
+                  }
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Type Toggle */}
+            <View style={styles.modalTypeToggle}>
+              <TouchableOpacity
+                style={[styles.modalTypeButton, modalType === "event" && styles.modalTypeButtonActive]}
+                onPress={() => setModalType("event")}
+              >
+                <Ionicons 
+                  name="calendar" 
+                  size={18} 
+                  color={modalType === "event" ? "#06B6D4" : "#71717A"} 
+                />
+                <Text style={[
+                  styles.modalTypeButtonText,
+                  modalType === "event" && styles.modalTypeButtonTextActive
+                ]}>
+                  Event
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalTypeButton, modalType === "chore" && styles.modalTypeButtonActive]}
+                onPress={() => setModalType("chore")}
+              >
+                <Ionicons 
+                  name="checkbox" 
+                  size={18} 
+                  color={modalType === "chore" ? "#06B6D4" : "#71717A"} 
+                />
+                <Text style={[
+                  styles.modalTypeButtonText,
+                  modalType === "chore" && styles.modalTypeButtonTextActive
+                ]}>
+                  Chore
                 </Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Title */}
-              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Title *</Text>
-              <TextInput
-                style={styles.input}
-                value={eventForm.title}
-                onChangeText={(text) => setEventForm(prev => ({ ...prev, title: text }))}
-                placeholder="Event title"
-                placeholderTextColor="#71717A"
-              />
+              {modalType === "event" ? (
+                <>
+                  {/* Event Form */}
+                  {/* Title */}
+                  <Text style={[styles.inputLabel, { marginTop: 0 }]}>Title *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={eventForm.title}
+                    onChangeText={(text) => setEventForm(prev => ({ ...prev, title: text }))}
+                    placeholder="Event title"
+                    placeholderTextColor="#71717A"
+                  />
 
               {/* All Day Toggle */}
               <View style={styles.allDayContainer}>
@@ -751,13 +1045,64 @@ const UnifiedCalendar = () => {
                 <TouchableOpacity
                   style={styles.deleteEventButton}
                   onPress={() => {
-                    closeEventModal();
+                    closeModal();
                     handleDeleteEvent(editingEvent);
                   }}
                 >
                   <Ionicons name="trash-outline" size={18} color="#EF4444" />
                   <Text style={styles.deleteEventButtonText}>Delete Event</Text>
                 </TouchableOpacity>
+              )}
+                </>
+              ) : (
+                <>
+                  {/* Chore Form */}
+                  {/* Title */}
+                  <Text style={[styles.inputLabel, { marginTop: 0 }]}>Title *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={choreForm.title}
+                    onChangeText={(text) => setChoreForm(prev => ({ ...prev, title: text }))}
+                    placeholder="Chore title"
+                    placeholderTextColor="#71717A"
+                  />
+
+                  {/* Recurrence */}
+                  <Text style={styles.inputLabel}>Recurrence</Text>
+                  <View style={styles.recurrenceContainer}>
+                    {["daily", "weekly", "monthly"].map((recurrence) => (
+                      <TouchableOpacity
+                        key={recurrence}
+                        style={[
+                          styles.recurrenceButton,
+                          choreForm.recurrence === recurrence && styles.recurrenceButtonActive,
+                        ]}
+                        onPress={() => setChoreForm(prev => ({ ...prev, recurrence }))}
+                      >
+                        <Text style={[
+                          styles.recurrenceButtonText,
+                          choreForm.recurrence === recurrence && styles.recurrenceButtonTextActive,
+                        ]}>
+                          {recurrence.charAt(0).toUpperCase() + recurrence.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Delete Button (Edit Mode) */}
+                  {editingChore && (
+                    <TouchableOpacity
+                      style={styles.deleteEventButton}
+                      onPress={() => {
+                        closeModal();
+                        handleDeleteChore(editingChore);
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                      <Text style={styles.deleteEventButtonText}>Delete Chore</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
               )}
 
               <View style={{ height: 40 }} />
@@ -1599,6 +1944,206 @@ const styles = StyleSheet.create({
   deleteEventButtonText: {
     fontSize: 14,
     color: "#EF4444",
+    fontWeight: "600",
+  },
+  // Modal Type Toggle
+  modalTypeToggle: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  modalTypeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  modalTypeButtonActive: {
+    backgroundColor: "#06B6D4",
+  },
+  modalTypeButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#71717A",
+  },
+  modalTypeButtonTextActive: {
+    color: "#FFF",
+  },
+  // Recurrence Buttons
+  recurrenceContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 8,
+  },
+  recurrenceButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#1A1A1F",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recurrenceButtonActive: {
+    backgroundColor: "#06B6D4",
+    borderColor: "#06B6D4",
+  },
+  recurrenceButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#71717A",
+  },
+  recurrenceButtonTextActive: {
+    color: "#FFF",
+  },
+  // Chores List Styles
+  choresListButton: {
+    position: "absolute",
+    right: 20,
+    bottom: 170,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#8B5CF6",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 6,
+    elevation: 8,
+    shadowColor: "#8B5CF6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  choresListButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  choresListOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-start",
+  },
+  choresListContent: {
+    backgroundColor: "#111114",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "100%",
+    minHeight: "100%",
+  },
+  choresListHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  choresListTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  choresListContentContainer: {
+    padding: 20,
+  },
+  choreListItem: {
+    flexDirection: "row",
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  choreListItemContent: {
+    flex: 1,
+  },
+  choreListItemHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  choreListItemTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFF",
+    flex: 1,
+  },
+  choreStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  choreStatusEmoji: {
+    fontSize: 12,
+  },
+  choreStatusText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  choreListItemRecurrence: {
+    fontSize: 13,
+    color: "#71717A",
+  },
+  choreListItemActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginLeft: 12,
+  },
+  choreListActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#111114",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  choresListEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  choresListEmptyText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFF",
+    marginTop: 16,
+  },
+  choresListEmptySubtext: {
+    fontSize: 14,
+    color: "#71717A",
+    marginTop: 8,
+  },
+  choresListAddButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#06B6D4",
+    marginHorizontal: 20,
+    marginBottom: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  choresListAddButtonText: {
+    color: "#FFF",
+    fontSize: 16,
     fontWeight: "600",
   },
 });
