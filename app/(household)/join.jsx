@@ -82,16 +82,16 @@ const JoinHousehold = () => {
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#333333" />
+            <MaterialCommunityIcons name="arrow-left" size={24} color="#FFFFFF" />
           </TouchableOpacity>
 
           <View style={styles.header}>
             <View style={styles.iconContainer}>
-              <MaterialCommunityIcons name="account-group" size={48} color="#2196F3" />
+              <MaterialCommunityIcons name="account-group" size={48} color="#3B82F6" />
             </View>
             <Text style={styles.title}>Join a Household</Text>
             <Text style={styles.subtitle}>
-              Enter the 6-character invite code shared by your roommate
+              Enter the 6-character invite code shared by your housemate
             </Text>
           </View>
 
@@ -112,9 +112,9 @@ const JoinHousehold = () => {
             </Text>
 
             <View style={styles.infoBox}>
-              <MaterialCommunityIcons name="help-circle-outline" size={20} color="#FF9800" />
+              <MaterialCommunityIcons name="help-circle-outline" size={20} color="#F59E0B" />
               <Text style={styles.infoText}>
-                Don't have a code? Ask your roommate to share their household's invite code from their Profile settings.
+                Don't have a code? Ask your housemate to share their household's invite code from their Profile settings.
               </Text>
             </View>
           </View>
@@ -137,10 +137,22 @@ const JoinHousehold = () => {
   );
 };
 
+const COLORS = {
+  bg: '#0A0A0C',
+  card: '#18181B',
+  elevated: '#27272A',
+  border: '#3F3F46',
+  accent: '#3B82F6',
+  warning: '#F59E0B',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#A1A1AA',
+  textMuted: '#71717A',
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.bg,
   },
   loadingContainer: {
     flex: 1,
@@ -150,7 +162,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: "#666666",
+    color: COLORS.textSecondary,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -175,8 +187,8 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 96,
     height: 96,
-    borderRadius: 48,
-    backgroundColor: "#E3F2FD",
+    borderRadius: 28,
+    backgroundColor: `${COLORS.accent}20`,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 24,
@@ -184,13 +196,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#333333",
+    color: COLORS.textPrimary,
     marginBottom: 8,
     textAlign: "center",
   },
   subtitle: {
     fontSize: 16,
-    color: "#666666",
+    color: COLORS.textSecondary,
     textAlign: "center",
     lineHeight: 24,
   },
@@ -200,31 +212,31 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333333",
+    color: COLORS.textSecondary,
     marginBottom: 8,
   },
   codeInput: {
-    backgroundColor: "#F5F5F5",
+    backgroundColor: COLORS.card,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: "#E0E0E0",
+    borderColor: COLORS.border,
     paddingHorizontal: 16,
     paddingVertical: 18,
     fontSize: 28,
     fontWeight: "700",
-    color: "#333333",
+    color: COLORS.textPrimary,
     textAlign: "center",
     letterSpacing: 8,
   },
   helperText: {
     fontSize: 12,
-    color: "#999999",
+    color: COLORS.textMuted,
     textAlign: "center",
     marginTop: 8,
   },
   infoBox: {
     flexDirection: "row",
-    backgroundColor: "#FFF3E0",
+    backgroundColor: `${COLORS.warning}15`,
     borderRadius: 12,
     padding: 16,
     marginTop: 24,
@@ -233,18 +245,18 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: "#E65100",
+    color: COLORS.warning,
     lineHeight: 20,
   },
   joinButton: {
-    backgroundColor: "#2196F3",
+    backgroundColor: COLORS.accent,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 24,
   },
   joinButtonDisabled: {
-    backgroundColor: "#90CAF9",
+    opacity: 0.6,
   },
   joinButtonText: {
     color: "#FFFFFF",

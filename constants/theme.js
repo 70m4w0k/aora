@@ -1,5 +1,5 @@
 /**
- * Design System for Roommate App
+ * Design System for Tipi App
  * Inspired by: Clash Royale (bold nav), Web3 apps (minimalism), iOS (polish)
  */
 

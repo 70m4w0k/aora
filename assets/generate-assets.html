@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tipi App - Asset Generator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #fff;
+      padding: 40px;
+      min-height: 100vh;
+    }
+    h1 { text-align: center; margin-bottom: 40px; color: #F43F5E; }
+    h2 { margin: 30px 0 20px; color: #A1A1AA; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+    .assets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 40px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .asset-card {
+      background: #222;
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+    }
+    .asset-title { font-size: 18px; margin-bottom: 16px; }
+    .asset-size { color: #71717A; font-size: 13px; margin-bottom: 16px; }
+    .instructions {
+      background: #111;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 40px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .instructions h3 { color: #F43F5E; margin-bottom: 12px; }
+    .instructions ol { padding-left: 20px; line-height: 1.8; color: #A1A1AA; }
+    .instructions code {
+      background: #222;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    canvas { border-radius: 16px; }
+  </style>
+</head>
+<body>
+  <h1>🏠 Tipi App Assets</h1>
+  
+  <div class="assets-grid">
+    <!-- App Icon -->
+    <div class="asset-card">
+      <div class="asset-title">App Icon</div>
+      <div class="asset-size">1024 x 1024 px</div>
+      <canvas id="icon" width="1024" height="1024"></canvas>
+    </div>
+    
+    <!-- Adaptive Icon (Android) -->
+    <div class="asset-card">
+      <div class="asset-title">Adaptive Icon (Android)</div>
+      <div class="asset-size">1024 x 1024 px (foreground)</div>
+      <canvas id="adaptive-icon" width="1024" height="1024"></canvas>
+    </div>
+    
+    <!-- Splash Screen -->
+    <div class="asset-card">
+      <div class="asset-title">Splash Screen</div>
+      <div class="asset-size">1284 x 2778 px (scaled preview)</div>
+      <canvas id="splash" width="428" height="926"></canvas>
+    </div>
+    
+    <!-- Favicon -->
+    <div class="asset-card">
+      <div class="asset-title">Favicon</div>
+      <div class="asset-size">48 x 48 px</div>
+      <canvas id="favicon" width="192" height="192"></canvas>
+    </div>
+  </div>
+
+  <div class="instructions">
+    <h3>📋 How to Export</h3>
+    <ol>
+      <li>Right-click on each canvas above and select "Save Image As..."</li>
+      <li>Save as:
+        <ul>
+          <li><code>icon.png</code> → App Icon (1024x1024)</li>
+          <li><code>adaptive-icon.png</code> → Android Adaptive Icon</li>
+          <li><code>splash.png</code> → Splash Screen (resize to 1284x2778)</li>
+          <li><code>favicon.png</code> → Web Favicon</li>
+        </ul>
+      </li>
+      <li>Replace the existing files in your <code>assets/</code> folder</li>
+      <li>For production, use a tool like Figma or Sketch to create higher quality versions</li>
+    </ol>
+  </div>
+
+  <script>
+    // Color palette
+    const COLORS = {
+      bg: '#0A0A0C',
+      card: '#18181B',
+      accent: '#F43F5E',
+      accentSecondary: '#8B5CF6',
+      cyan: '#06B6D4',
+      green: '#10B981',
+      white: '#FFFFFF',
+    };
+
+    // Draw App Icon
+    function drawIcon(canvas, size = 1024) {
+      const ctx = canvas.getContext('2d');
+      const scale = size / 1024;
+      
+      // Background gradient
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#0A0A0C');
+      gradient.addColorStop(1, '#18181B');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+      
+      // Outer glow
+      const glowGradient = ctx.createRadialGradient(
+        size/2, size/2, size * 0.2,
+        size/2, size/2, size * 0.6
+      );
+      glowGradient.addColorStop(0, 'rgba(244, 63, 94, 0.3)');
+      glowGradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = glowGradient;
+      ctx.fillRect(0, 0, size, size);
+      
+      // House shape
+      ctx.save();
+      ctx.translate(size/2, size/2);
+      
+      // Main house body
+      const houseWidth = size * 0.45;
+      const houseHeight = size * 0.35;
+      const roofHeight = size * 0.2;
+      
+      // Roof
+      ctx.beginPath();
+      ctx.moveTo(0, -houseHeight/2 - roofHeight);
+      ctx.lineTo(-houseWidth/2 - 30*scale, -houseHeight/2 + 10*scale);
+      ctx.lineTo(houseWidth/2 + 30*scale, -houseHeight/2 + 10*scale);
+      ctx.closePath();
+      
+      const roofGradient = ctx.createLinearGradient(0, -houseHeight/2 - roofHeight, 0, -houseHeight/2);
+      roofGradient.addColorStop(0, COLORS.accent);
+      roofGradient.addColorStop(1, '#E11D48');
+      ctx.fillStyle = roofGradient;
+      ctx.fill();
+      
+      // House body
+      ctx.beginPath();
+      ctx.roundRect(-houseWidth/2, -houseHeight/2, houseWidth, houseHeight + 50*scale, 12*scale);
+      ctx.fillStyle = COLORS.card;
+      ctx.fill();
+      
+      // Door
+      const doorWidth = size * 0.12;
+      const doorHeight = size * 0.2;
+      ctx.beginPath();
+      ctx.roundRect(-doorWidth/2, houseHeight/2 - doorHeight + 30*scale, doorWidth, doorHeight, [8*scale, 8*scale, 0, 0]);
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      // Door handle
+      ctx.beginPath();
+      ctx.arc(doorWidth/4, houseHeight/2 - doorHeight/2 + 30*scale, 6*scale, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.white;
+      ctx.fill();
+      
+      // Windows
+      const windowSize = size * 0.08;
+      const windowGap = size * 0.05;
+      
+      // Left window
+      ctx.beginPath();
+      ctx.roundRect(-houseWidth/2 + 40*scale, -houseHeight/2 + 40*scale, windowSize, windowSize, 6*scale);
+      ctx.fillStyle = COLORS.cyan;
+      ctx.fill();
+      
+      // Right window
+      ctx.beginPath();
+      ctx.roundRect(houseWidth/2 - 40*scale - windowSize, -houseHeight/2 + 40*scale, windowSize, windowSize, 6*scale);
+      ctx.fillStyle = COLORS.green;
+      ctx.fill();
+      
+      // People silhouettes at bottom
+      const peopleY = houseHeight/2 + 100*scale;
+      
+      // Person 1
+      ctx.beginPath();
+      ctx.arc(-80*scale, peopleY, 25*scale, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      // Person 2
+      ctx.beginPath();
+      ctx.arc(0, peopleY, 25*scale, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.accentSecondary;
+      ctx.fill();
+      
+      // Person 3
+      ctx.beginPath();
+      ctx.arc(80*scale, peopleY, 25*scale, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.cyan;
+      ctx.fill();
+      
+      ctx.restore();
+    }
+
+    // Draw Adaptive Icon (Android - just foreground, no padding)
+    function drawAdaptiveIcon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const size = canvas.width;
+      
+      // Transparent background (Android will add the background)
+      ctx.clearRect(0, 0, size, size);
+      
+      // Draw the house centered with safe zone consideration
+      // Android adaptive icons need 66% of content in center
+      ctx.save();
+      ctx.translate(size/2, size/2);
+      
+      const scale = size / 1024;
+      const houseWidth = size * 0.35;
+      const houseHeight = size * 0.28;
+      const roofHeight = size * 0.15;
+      
+      // Roof
+      ctx.beginPath();
+      ctx.moveTo(0, -houseHeight/2 - roofHeight);
+      ctx.lineTo(-houseWidth/2 - 25*scale, -houseHeight/2 + 8*scale);
+      ctx.lineTo(houseWidth/2 + 25*scale, -houseHeight/2 + 8*scale);
+      ctx.closePath();
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      // House body
+      ctx.beginPath();
+      ctx.roundRect(-houseWidth/2, -houseHeight/2, houseWidth, houseHeight + 40*scale, 10*scale);
+      ctx.fillStyle = COLORS.card;
+      ctx.fill();
+      
+      // Door
+      const doorWidth = size * 0.09;
+      const doorHeight = size * 0.15;
+      ctx.beginPath();
+      ctx.roundRect(-doorWidth/2, houseHeight/2 - doorHeight + 25*scale, doorWidth, doorHeight, [6*scale, 6*scale, 0, 0]);
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      // Windows
+      const windowSize = size * 0.06;
+      ctx.fillStyle = COLORS.cyan;
+      ctx.beginPath();
+      ctx.roundRect(-houseWidth/2 + 30*scale, -houseHeight/2 + 30*scale, windowSize, windowSize, 4*scale);
+      ctx.fill();
+      
+      ctx.fillStyle = COLORS.green;
+      ctx.beginPath();
+      ctx.roundRect(houseWidth/2 - 30*scale - windowSize, -houseHeight/2 + 30*scale, windowSize, windowSize, 4*scale);
+      ctx.fill();
+      
+      // People dots
+      const peopleY = houseHeight/2 + 70*scale;
+      ctx.beginPath();
+      ctx.arc(-55*scale, peopleY, 18*scale, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      ctx.beginPath();
+      ctx.arc(0, peopleY, 18*scale, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.accentSecondary;
+      ctx.fill();
+      
+      ctx.beginPath();
+      ctx.arc(55*scale, peopleY, 18*scale, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.cyan;
+      ctx.fill();
+      
+      ctx.restore();
+    }
+
+    // Draw Splash Screen
+    function drawSplash(canvas) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      
+      // Dark background
+      ctx.fillStyle = COLORS.bg;
+      ctx.fillRect(0, 0, w, h);
+      
+      // Subtle gradient overlay
+      const gradient = ctx.createRadialGradient(w/2, h/3, 0, w/2, h/3, h * 0.6);
+      gradient.addColorStop(0, 'rgba(244, 63, 94, 0.15)');
+      gradient.addColorStop(0.5, 'rgba(139, 92, 246, 0.08)');
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, w, h);
+      
+      // Draw mini icon
+      ctx.save();
+      ctx.translate(w/2, h * 0.38);
+      
+      const scale = 0.18;
+      const houseWidth = w * 0.45 * scale;
+      const houseHeight = w * 0.35 * scale;
+      const roofHeight = w * 0.2 * scale;
+      
+      // Glow behind icon
+      const glowGradient = ctx.createRadialGradient(0, 0, 20, 0, 0, 120);
+      glowGradient.addColorStop(0, 'rgba(244, 63, 94, 0.4)');
+      glowGradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(0, 0, 120, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Roof
+      ctx.beginPath();
+      ctx.moveTo(0, -houseHeight/2 - roofHeight);
+      ctx.lineTo(-houseWidth/2 - 8, -houseHeight/2 + 3);
+      ctx.lineTo(houseWidth/2 + 8, -houseHeight/2 + 3);
+      ctx.closePath();
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      // House body
+      ctx.beginPath();
+      ctx.roundRect(-houseWidth/2, -houseHeight/2, houseWidth, houseHeight + 15, 4);
+      ctx.fillStyle = COLORS.card;
+      ctx.fill();
+      
+      // Door
+      ctx.beginPath();
+      ctx.roundRect(-8, houseHeight/2 - 22, 16, 25, [3, 3, 0, 0]);
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      ctx.restore();
+      
+      // App name
+      ctx.fillStyle = COLORS.white;
+      ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Tipi', w/2, h * 0.55);
+      
+      // Tagline
+      ctx.fillStyle = '#71717A';
+      ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.fillText('Manage your shared home', w/2, h * 0.59);
+      
+      // Loading dots at bottom
+      const dotsY = h * 0.85;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(w/2 - 20 + i * 20, dotsY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = i === 1 ? COLORS.accent : '#3F3F46';
+        ctx.fill();
+      }
+    }
+
+    // Draw Favicon
+    function drawFavicon(canvas) {
+      const ctx = canvas.getContext('2d');
+      const size = canvas.width;
+      
+      // Background
+      ctx.fillStyle = COLORS.bg;
+      ctx.beginPath();
+      ctx.roundRect(0, 0, size, size, 24);
+      ctx.fill();
+      
+      ctx.save();
+      ctx.translate(size/2, size/2);
+      
+      const scale = size / 192;
+      
+      // Simple house
+      const houseWidth = 80 * scale;
+      const houseHeight = 60 * scale;
+      
+      // Roof
+      ctx.beginPath();
+      ctx.moveTo(0, -houseHeight/2 - 25*scale);
+      ctx.lineTo(-houseWidth/2 - 10*scale, -houseHeight/2 + 5*scale);
+      ctx.lineTo(houseWidth/2 + 10*scale, -houseHeight/2 + 5*scale);
+      ctx.closePath();
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      // Body
+      ctx.beginPath();
+      ctx.roundRect(-houseWidth/2, -houseHeight/2, houseWidth, houseHeight + 10*scale, 6*scale);
+      ctx.fillStyle = COLORS.card;
+      ctx.fill();
+      
+      // Door
+      ctx.beginPath();
+      ctx.roundRect(-10*scale, houseHeight/2 - 25*scale, 20*scale, 28*scale, [4*scale, 4*scale, 0, 0]);
+      ctx.fillStyle = COLORS.accent;
+      ctx.fill();
+      
+      ctx.restore();
+    }
+
+    // Render all assets
+    drawIcon(document.getElementById('icon'));
+    drawAdaptiveIcon(document.getElementById('adaptive-icon'));
+    drawSplash(document.getElementById('splash'));
+    drawFavicon(document.getElementById('favicon'));
+  </script>
+</body>
+</html>
+

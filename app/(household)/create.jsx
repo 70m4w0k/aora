@@ -50,7 +50,7 @@ const CreateHousehold = () => {
       
       Alert.alert(
         "Household Created! 🏠",
-        `Your household "${newHousehold.name}" has been created!\n\nInvite Code: ${newHousehold.inviteCode}\n\nShare this code with your roommates so they can join.`,
+        `Your household "${newHousehold.name}" has been created!\n\nInvite Code: ${newHousehold.inviteCode}\n\nShare this code with your housemates so they can join.`,
         [
           {
             text: "Got it!",
@@ -76,12 +76,12 @@ const CreateHousehold = () => {
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <MaterialCommunityIcons name="arrow-left" size={24} color="#333333" />
+            <MaterialCommunityIcons name="arrow-left" size={24} color="#FFFFFF" />
           </TouchableOpacity>
 
           <View style={styles.header}>
             <View style={styles.iconContainer}>
-              <MaterialCommunityIcons name="home-plus" size={48} color="#4CAF50" />
+              <MaterialCommunityIcons name="home-plus" size={48} color="#10B981" />
             </View>
             <Text style={styles.title}>Create Your Household</Text>
             <Text style={styles.subtitle}>
@@ -102,9 +102,9 @@ const CreateHousehold = () => {
             <Text style={styles.charCount}>{householdName.length}/50</Text>
 
             <View style={styles.infoBox}>
-              <MaterialCommunityIcons name="information-outline" size={20} color="#2196F3" />
+              <MaterialCommunityIcons name="information-outline" size={20} color="#10B981" />
               <Text style={styles.infoText}>
-                After creating your household, you'll receive an invite code to share with your roommates.
+                After creating your household, you'll receive an invite code to share with your housemates.
               </Text>
             </View>
           </View>
@@ -127,10 +127,21 @@ const CreateHousehold = () => {
   );
 };
 
+const COLORS = {
+  bg: '#0A0A0C',
+  card: '#18181B',
+  elevated: '#27272A',
+  border: '#3F3F46',
+  accent: '#10B981',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#A1A1AA',
+  textMuted: '#71717A',
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.bg,
   },
   loadingContainer: {
     flex: 1,
@@ -140,7 +151,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: "#666666",
+    color: COLORS.textSecondary,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -165,8 +176,8 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 96,
     height: 96,
-    borderRadius: 48,
-    backgroundColor: "#E8F5E9",
+    borderRadius: 28,
+    backgroundColor: `${COLORS.accent}20`,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 24,
@@ -174,13 +185,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#333333",
+    color: COLORS.textPrimary,
     marginBottom: 8,
     textAlign: "center",
   },
   subtitle: {
     fontSize: 16,
-    color: "#666666",
+    color: COLORS.textSecondary,
     textAlign: "center",
     lineHeight: 24,
   },
@@ -190,28 +201,28 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333333",
+    color: COLORS.textSecondary,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#F5F5F5",
+    backgroundColor: COLORS.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: COLORS.border,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: "#333333",
+    color: COLORS.textPrimary,
   },
   charCount: {
     fontSize: 12,
-    color: "#999999",
+    color: COLORS.textMuted,
     textAlign: "right",
     marginTop: 4,
   },
   infoBox: {
     flexDirection: "row",
-    backgroundColor: "#E3F2FD",
+    backgroundColor: `${COLORS.accent}15`,
     borderRadius: 12,
     padding: 16,
     marginTop: 24,
@@ -220,18 +231,18 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     fontSize: 14,
-    color: "#1565C0",
+    color: COLORS.accent,
     lineHeight: 20,
   },
   createButton: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: COLORS.accent,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 24,
   },
   createButtonDisabled: {
-    backgroundColor: "#A5D6A7",
+    opacity: 0.6,
   },
   createButtonText: {
     color: "#FFFFFF",

@@ -1,32 +1,54 @@
 {
   "expo": {
-    "name": "aora",
-    "scheme": "aora",
-    "slug": "aora",
+    "name": "Tipi",
+    "scheme": "tipi",
+    "slug": "tipi-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/icon.jpg",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0A0A0C"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tipi.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "We need camera access to scan barcodes and take photos of documents and receipts.",
+        "NSPhotoLibraryUsageDescription": "We need photo library access to upload documents and receipts."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0A0A0C"
       },
-      "package": "com.neonzed.aora"
+      "package": "com.tipi.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Tipi to access your camera for barcode scanning and document photos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Tipi to access your photos for document uploads."
+        }
+      ]
     ],
     "extra": {
       "router": {

@@ -67,7 +67,7 @@ const SignUp = () => {
           
           <View style={styles.formContainer}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Sign up to get started with Aora</Text>
+            <Text style={styles.subtitle}>Sign up to get started with Tipi</Text>
             
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Username</Text>
@@ -148,10 +148,20 @@ const SignUp = () => {
   );
 };
 
+const COLORS = {
+  bg: '#0A0A0C',
+  card: '#18181B',
+  border: '#3F3F46',
+  accent: '#F43F5E',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#A1A1AA',
+  textMuted: '#71717A',
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.bg,
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -167,8 +177,9 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    width: 150,
-    height: 50,
+    width: 100,
+    height: 100,
+    borderRadius: 24,
   },
   formContainer: {
     flex: 1,
@@ -177,12 +188,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#333333",
+    color: COLORS.textPrimary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: "#666666",
+    color: COLORS.textSecondary,
     marginBottom: 40,
   },
   inputContainer: {
@@ -191,33 +202,33 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333333",
+    color: COLORS.textSecondary,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 8,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: COLORS.border,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     fontSize: 16,
-    color: "#333333",
+    color: COLORS.textPrimary,
   },
   passwordContainer: {
     flexDirection: "row",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 8,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: COLORS.border,
     overflow: "hidden",
   },
   passwordInput: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     fontSize: 16,
-    color: "#333333",
+    color: COLORS.textPrimary,
   },
   passwordToggle: {
     justifyContent: "center",
@@ -227,22 +238,22 @@ const styles = StyleSheet.create({
   passwordToggleIcon: {
     width: 24,
     height: 24,
-    tintColor: "#666666",
+    tintColor: COLORS.textMuted,
   },
   passwordHint: {
     fontSize: 12,
-    color: "#999999",
+    color: COLORS.textMuted,
     marginTop: 8,
   },
   signUpButton: {
-    backgroundColor: "#4F86C6",
-    borderRadius: 8,
+    backgroundColor: COLORS.accent,
+    borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 8,
   },
   signUpButtonDisabled: {
-    backgroundColor: "#A5C0E0",
+    opacity: 0.6,
   },
   signUpButtonText: {
     color: "white",
@@ -256,12 +267,12 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   footerText: {
-    color: "#666666",
+    color: COLORS.textSecondary,
     fontSize: 14,
     marginRight: 4,
   },
   signInLink: {
-    color: "#4F86C6",
+    color: COLORS.accent,
     fontSize: 14,
     fontWeight: "600",
   },

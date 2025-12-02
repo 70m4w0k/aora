@@ -143,7 +143,7 @@ const ManageHousehold = () => {
     if (household?.inviteCode) {
       try {
         await Share.share({
-          message: `Join my household "${household.name}" on the Roommate app!\n\nInvite Code: ${household.inviteCode}`,
+          message: `Join my household "${household.name}" on Tipi!\n\nInvite Code: ${household.inviteCode}`,
         });
       } catch (error) {
         console.error("Error sharing:", error);
