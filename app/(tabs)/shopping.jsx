@@ -18,7 +18,6 @@ import {
   KeyboardAvoidingView,
   Keyboard,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
@@ -29,7 +28,23 @@ import {
   deleteShoppingItem,
   getHouseholdMembers,
 } from "../../lib/appwrite";
+
+// Shopping Categories with icons and colors (matching expense style)
+const SHOPPING_CATEGORIES_CONFIG = {
+  groceries: { icon: "cart", label: "Groceries", color: "#22C55E" },
+  household: { icon: "home", label: "Household", color: "#8B5CF6" },
+  personal: { icon: "person", label: "Personal", color: "#EC4899" },
+  other: { icon: "apps", label: "Other", color: "#71717A" },
+};
 import EmptyState from "../../components/EmptyState";
+
+// Shopping Categories with icons and colors
+const SHOPPING_CATEGORY_CONFIG = {
+  groceries: { icon: "basket", label: "Groceries", color: "#22C55E" },
+  household: { icon: "home", label: "Household", color: "#8B5CF6" },
+  personal: { icon: "person", label: "Personal", color: "#F43F5E" },
+  other: { icon: "cube", label: "Other", color: "#71717A" },
+};
 
 const ShoppingScreen = () => {
   const { user, household } = useGlobalContext();
@@ -677,105 +692,161 @@ const ShoppingScreen = () => {
 
       <Modal
         visible={modalVisible}
+        animationType="slide"
         transparent={true}
-        animationType="fade"
         onRequestClose={() => {
           setModalVisible(false);
-          setEditingItem(null); // Clear editing state when modal closes
+          setEditingItem(null);
         }}
       >
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{modalTitle}</Text>
-            </View>
-
-            <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Item Name:</Text>
-              <TextInput
-                style={styles.input}
-                value={form.name}
-                onChangeText={(text) => setForm({ ...form, name: text })}
-                placeholder="Enter item name"
-                placeholderTextColor="#AAA"
-              />
-
-              <Text style={styles.inputLabel}>Quantity:</Text>
-              <TextInput
-                style={styles.input}
-                value={form.quantity}
-                onChangeText={(text) => setForm({ ...form, quantity: text })}
-                keyboardType="numeric"
-                placeholder="Enter quantity"
-                placeholderTextColor="#AAA"
-              />
-
-              <Text style={styles.inputLabel}>Category:</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={form.category}
-                  style={styles.picker}
-                  onValueChange={(value) =>
-                    setForm({ ...form, category: value })
-                  }
-                  dropdownIconColor="#4F86C6"
-                >
-                  {Object.values(ShoppingCategories).map((category) => (
-                    <Picker.Item
-                      key={category}
-                      label={
-                        category.charAt(0).toUpperCase() + category.slice(1)
-                      }
-                      value={category}
-                    />
-                  ))}
-                </Picker>
-              </View>
-
-              <Text style={styles.inputLabel}>Assign To:</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={form.assignedTo}
-                  style={styles.picker}
-                  onValueChange={(value) =>
-                    setForm({ ...form, assignedTo: value })
-                  }
-                  dropdownIconColor="#4F86C6"
-                >
-                  <Picker.Item label="Unassigned" value="" />
-                  {users.map((user) => (
-                    <Picker.Item
-                      key={user.$id}
-                      label={user.username}
-                      value={user.$id}
-                    />
-                  ))}
-                </Picker>
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
                   setModalVisible(false);
                   setEditingItem(null);
                 }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
-                onPress={handleSubmitForm}
-              >
-                <View style={styles.saveButtonContent}>
-                  <Text style={styles.saveButtonText}>{submitButtonText}</Text>
-                </View>
+              <Text style={styles.modalTitle}>{modalTitle}</Text>
+              <TouchableOpacity onPress={handleSubmitForm}>
+                <Text style={styles.modalSaveText}>{submitButtonText}</Text>
               </TouchableOpacity>
             </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Item Name */}
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Item Name</Text>
+              <TextInput
+                style={styles.input}
+                value={form.name}
+                onChangeText={(text) => setForm({ ...form, name: text })}
+                placeholder="What do you need?"
+                placeholderTextColor="#71717A"
+              />
+
+              {/* Quantity with +/- buttons */}
+              <Text style={styles.inputLabel}>Quantity</Text>
+              <View style={styles.quantityContainer}>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => {
+                    const currentQty = parseInt(form.quantity || "1");
+                    if (currentQty > 1) {
+                      setForm({ ...form, quantity: (currentQty - 1).toString() });
+                    }
+                  }}
+                >
+                  <Ionicons name="remove" size={20} color="#FFF" />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.quantityInput}
+                  value={form.quantity}
+                  onChangeText={(text) => {
+                    const num = parseInt(text) || 1;
+                    setForm({ ...form, quantity: Math.max(1, num).toString() });
+                  }}
+                  keyboardType="numeric"
+                  textAlign="center"
+                />
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => {
+                    const currentQty = parseInt(form.quantity || "1");
+                    setForm({ ...form, quantity: (currentQty + 1).toString() });
+                  }}
+                >
+                  <Ionicons name="add" size={20} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Category - Horizontal scroll chips */}
+              <Text style={styles.inputLabel}>Category</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoryScroll}
+                contentContainerStyle={styles.categoryScrollContent}
+              >
+                {Object.entries(SHOPPING_CATEGORIES_CONFIG).map(([key, cat]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.categoryChip,
+                      form.category === key && { backgroundColor: cat.color, borderColor: cat.color },
+                    ]}
+                    onPress={() => setForm({ ...form, category: key })}
+                  >
+                    <Ionicons 
+                      name={cat.icon} 
+                      size={16} 
+                      color={form.category === key ? "#FFF" : "#71717A"} 
+                    />
+                    <Text style={[
+                      styles.categoryChipText,
+                      form.category === key && { color: "#FFF" },
+                    ]}>
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Assign To - Horizontal scroll user chips */}
+              <Text style={styles.inputLabel}>Assign To</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.userChipsScroll}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.userChip,
+                    !form.assignedTo && styles.userChipSelected,
+                  ]}
+                  onPress={() => setForm({ ...form, assignedTo: "" })}
+                >
+                  <View style={[styles.userChipAvatar, { backgroundColor: "#71717A" }]}>
+                    <Ionicons name="person-outline" size={14} color="#FFF" />
+                  </View>
+                  <Text style={[
+                    styles.userChipText,
+                    !form.assignedTo && styles.userChipTextSelected,
+                  ]}>
+                    Unassigned
+                  </Text>
+                </TouchableOpacity>
+                {users.map((u) => (
+                  <TouchableOpacity
+                    key={u.$id}
+                    style={[
+                      styles.userChip,
+                      form.assignedTo === u.$id && styles.userChipSelected,
+                    ]}
+                    onPress={() => setForm({ ...form, assignedTo: u.$id })}
+                  >
+                    <View style={[styles.userChipAvatar, { backgroundColor: u.color || "#10B981" }]}>
+                      <Text style={styles.userChipAvatarText}>{u.username?.[0]?.toUpperCase()}</Text>
+                    </View>
+                    <Text style={[
+                      styles.userChipText,
+                      form.assignedTo === u.$id && styles.userChipTextSelected,
+                    ]}>
+                      {u.username}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -990,99 +1061,140 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 20,
   },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: "#1A1A1F",
-    borderRadius: 20,
-    width: "90%",
-    maxWidth: 400,
-    overflow: "hidden",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "92%",
   },
   modalHeader: {
-    padding: 20,
+    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#10B981",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: "#FFF",
+  },
+  modalSaveText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#10B981",
   },
   modalBody: {
     padding: 20,
   },
   inputLabel: {
-    color: "#A1A1AA",
-    marginBottom: 6,
-    fontWeight: "500",
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#71717A",
+    marginBottom: 8,
+    marginTop: 16,
   },
   input: {
     backgroundColor: "#111114",
     borderRadius: 12,
+    padding: 14,
+    color: "#FFF",
+    fontSize: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    padding: 14,
-    marginBottom: 16,
-    color: "#FFFFFF",
-    fontSize: 16,
   },
-  pickerContainer: {
+  quantityContainer: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#111114",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
-    marginBottom: 16,
     overflow: "hidden",
   },
-  picker: {
-    color: "#FFFFFF",
+  quantityButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
   },
-  modalButtons: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
-  },
-  modalButton: {
+  quantityInput: {
     flex: 1,
-    padding: 16,
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFF",
+    paddingVertical: 14,
+    textAlign: "center",
   },
-  cancelButton: {
-    borderRightWidth: 1,
-    borderRightColor: "rgba(255,255,255,0.1)",
-    justifyContent: "center",
+  categoryScroll: {
+    marginBottom: 8,
+  },
+  categoryScrollContent: {
+    gap: 8,
+  },
+  categoryChip: {
+    flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#111114",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginRight: 8,
+    gap: 6,
   },
-  cancelButtonText: {
+  categoryChipText: {
+    fontSize: 13,
+    color: "#71717A",
+    fontWeight: "500",
+  },
+  userChipsScroll: {
+    marginBottom: 8,
+  },
+  userChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#111114",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginRight: 8,
+    gap: 8,
+  },
+  userChipSelected: {
+    backgroundColor: "rgba(16, 185, 129, 0.15)",
+    borderColor: "#10B981",
+  },
+  userChipAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userChipAvatarText: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  userChipText: {
+    fontSize: 14,
     color: "#A1A1AA",
-    fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "500",
   },
-  saveButton: {
-    overflow: "hidden",
-  },
-  saveButtonContent: {
-    backgroundColor: "#10B981",
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  saveButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
+  userChipTextSelected: {
+    color: "#FFF",
   },
   itemCardTapped: {
     backgroundColor: "#222228",
