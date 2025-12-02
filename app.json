@@ -3,7 +3,7 @@
     "name": "Tipi",
     "scheme": "tipi",
     "slug": "tipi-app",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.jpg",
     "userInterfaceStyle": "dark",
@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.tipi.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "We need camera access to scan barcodes and take photos of documents and receipts.",
         "NSPhotoLibraryUsageDescription": "We need photo library access to upload documents and receipts."
@@ -26,9 +27,11 @@
         "backgroundColor": "#0A0A0C"
       },
       "package": "com.tipi.app",
+      "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -55,9 +58,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "528bfb31-57b8-42e3-9ad6-25249367191b"
+        "projectId": "7175da16-a39c-472c-a428-e9fb34b69d7d"
       }
     },
-    "owner": "neonzed"
+    "owner": "tomawok"
   }
 }
