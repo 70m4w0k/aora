@@ -19,7 +19,7 @@ import { createUser } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
 
 const SignUp = () => {
-  const { setUser, setIsLogged } = useGlobalContext();
+  const { refreshUser, setIsLogged } = useGlobalContext();
   const [isSubmitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
@@ -36,10 +36,9 @@ const SignUp = () => {
     setSubmitting(true);
 
     try {
-      const result = await createUser(form.email, form.password, form.username);
-
-      setUser(result);
+      await createUser(form.email, form.password, form.username);
       setIsLogged(true);
+      await refreshUser(); // This will fetch user data and household if exists
 
       Alert.alert("Success", "Account created successfully");
       router.replace("/calendar");

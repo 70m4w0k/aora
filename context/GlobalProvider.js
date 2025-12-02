@@ -60,6 +60,7 @@ const GlobalProvider = ({ children }) => {
     }
   };
 
+  // Initial load
   useEffect(() => {
     getCurrentUser()
       .then(async (res) => {
@@ -85,6 +86,17 @@ const GlobalProvider = ({ children }) => {
         setLoading(false);
       });
   }, []);
+
+  // Watch for householdId changes and fetch household data
+  useEffect(() => {
+    if (user?.householdId) {
+      fetchHouseholdData(user.householdId);
+    } else if (user && !user.householdId) {
+      // User exists but has no household - clear household data
+      setHousehold(null);
+      setHouseholdMembers([]);
+    }
+  }, [user?.householdId]);
 
   return (
     <GlobalContext.Provider
