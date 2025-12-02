@@ -731,7 +731,19 @@ const UnifiedCalendar = () => {
       case VIEW_TYPES.DAILY:
         return <DailyView date={currentDate} items={items} />;
       case VIEW_TYPES.WEEKLY:
-        return <WeeklyView date={currentDate} items={items} />;
+        return (
+          <WeeklyView 
+            date={currentDate} 
+            items={items}
+            tasks={tasks}
+            tasksDone={tasksDone}
+            users={users}
+            onDayPress={handleDayPress}
+            onCreateEvent={(date) => openModal("event", date)}
+            onEditEvent={(date, event) => openModal("event", date, event)}
+            onDeleteEvent={handleDeleteEvent}
+          />
+        );
       case VIEW_TYPES.MONTHLY:
         return (
           <MonthlyView 
@@ -1357,11 +1369,263 @@ const DailyView = ({ date, items }) => (
   </View>
 );
 
-const WeeklyView = ({ date, items }) => (
-  <View style={styles.viewContainer}>
-    <Text style={styles.placeholderText}>Weekly View - Coming Soon</Text>
-  </View>
-);
+const WeeklyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreateEvent, onEditEvent, onDeleteEvent }) => {
+  const [expandedDays, setExpandedDays] = useState({});
+  
+  // Get start of week (Monday)
+  const getWeekStart = (date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+    d.setDate(diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+  
+  const weekStart = getWeekStart(date);
+  const weekDays = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(weekStart);
+    day.setDate(weekStart.getDate() + i);
+    weekDays.push(day);
+  }
+  
+  const today = new Date();
+  const isToday = (dayDate) => {
+    return dayDate.getDate() === today.getDate() &&
+           dayDate.getMonth() === today.getMonth() &&
+           dayDate.getFullYear() === today.getFullYear();
+  };
+  
+  const getDayKey = (dayDate) => {
+    return `${dayDate.getFullYear()}-${dayDate.getMonth()}-${dayDate.getDate()}`;
+  };
+  
+  const toggleDay = (dayDate) => {
+    const key = getDayKey(dayDate);
+    setExpandedDays(prev => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+  
+  // Get items for a specific day
+  const getItemsForDay = (dayDate) => {
+    if (!dayDate || !items || !Array.isArray(items)) return [];
+    
+    const dayStart = new Date(dayDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    return items.filter(item => {
+      if (!item || !item.startDate || !item.endDate) return false;
+      
+      try {
+        const itemStart = new Date(item.startDate);
+        const itemEnd = new Date(item.endDate);
+        
+        if (isNaN(itemStart.getTime()) || isNaN(itemEnd.getTime())) {
+          return false;
+        }
+        
+        return (itemStart <= dayEnd && itemEnd >= dayStart);
+      } catch (error) {
+        return false;
+      }
+    });
+  };
+  
+  // Get completed tasks for a specific day
+  const getCompletedTasksForDay = (dayDate) => {
+    if (!dayDate || !tasksDone || !tasks || !Array.isArray(tasksDone)) return [];
+    
+    const dayStart = new Date(dayDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    return tasksDone
+      .filter(td => {
+        if (!td || !td.$createdAt) return false;
+        const completionDate = new Date(td.$createdAt);
+        return completionDate >= dayStart && completionDate <= dayEnd;
+      })
+      .map(td => {
+        const taskId = typeof td.taskId === 'object' ? td.taskId?.$id : td.taskId;
+        const task = tasks.find(t => t.$id === taskId);
+        
+        if (!task) return null;
+        
+        const userId = typeof td.userId === 'object' ? td.userId?.$id : td.userId;
+        const user = users?.find(u => u.$id === userId);
+        
+        return {
+          id: td.$id,
+          type: "completed_task",
+          task: task,
+          completedBy: user,
+          completedAt: new Date(td.$createdAt),
+          data: td,
+        };
+      })
+      .filter(item => item !== null);
+  };
+  
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  
+  return (
+    <ScrollView 
+      style={styles.weeklyContainer}
+      contentContainerStyle={styles.weeklyContent}
+      showsVerticalScrollIndicator={true}
+    >
+      {weekDays.map((dayDate, dayIndex) => {
+        const dayEvents = getItemsForDay(dayDate).filter(item => item.type === "event");
+        const completedTasks = getCompletedTasksForDay(dayDate);
+        const allItems = [...dayEvents, ...completedTasks];
+        const todayDay = isToday(dayDate);
+        const dayKey = getDayKey(dayDate);
+        const isExpanded = expandedDays[dayKey];
+        
+        // Sort items by time (all-day first, then by start time)
+        const sortedItems = [...allItems].sort((a, b) => {
+          if (a.type === "completed_task") return 1;
+          if (b.type === "completed_task") return -1;
+          if (a.allDay && !b.allDay) return -1;
+          if (!a.allDay && b.allDay) return 1;
+          if (a.allDay && b.allDay) return 0;
+          return new Date(a.startDate) - new Date(b.startDate);
+        });
+        
+        return (
+          <View 
+            key={dayIndex} 
+            style={[
+              styles.weeklyDayCard,
+              todayDay && styles.weeklyDayCardToday,
+            ]}
+          >
+            {/* Day Header */}
+            <TouchableOpacity
+              style={styles.weeklyDayCardHeader}
+              onPress={() => toggleDay(dayDate)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.weeklyDayCardHeaderLeft}>
+                <View style={styles.weeklyDayCardDate}>
+                  <Text style={styles.weeklyDayCardDayName}>{dayNames[dayIndex]}</Text>
+                  <Text style={[
+                    styles.weeklyDayCardDateNumber,
+                    todayDay && styles.weeklyDayCardDateNumberToday,
+                  ]}>
+                    {dayDate.getDate()}
+                  </Text>
+                </View>
+                <View style={styles.weeklyDayCardMonth}>
+                  <Text style={styles.weeklyDayCardMonthText}>
+                    {dayDate.toLocaleDateString("en-US", { month: "short" })}
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.weeklyDayCardHeaderRight}>
+                {allItems.length > 0 && (
+                  <View style={styles.weeklyDayCardBadge}>
+                    <Text style={styles.weeklyDayCardBadgeText}>
+                      {allItems.length} {allItems.length === 1 ? 'item' : 'items'}
+                    </Text>
+                  </View>
+                )}
+                <Ionicons 
+                  name={isExpanded ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#71717A" 
+                />
+              </View>
+            </TouchableOpacity>
+            
+            {/* Day Content - Expanded */}
+            {isExpanded && (
+              <View style={styles.weeklyDayCardContent}>
+                {sortedItems.length === 0 ? (
+                  <View style={styles.weeklyDayCardEmpty}>
+                    <Ionicons name="calendar-outline" size={32} color="#3F3F46" />
+                    <Text style={styles.weeklyDayCardEmptyText}>No events on this day</Text>
+                    {onCreateEvent && (
+                      <TouchableOpacity 
+                        style={styles.addEventButton}
+                        onPress={() => onCreateEvent(dayDate)}
+                      >
+                        <Ionicons name="add" size={16} color="#FFF" />
+                        <Text style={styles.addEventButtonText}>Add Event</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ) : (
+                  <View style={styles.weeklyDayCardItems}>
+                    {sortedItems.map((item) => {
+                      if (item.type === "completed_task") {
+                        return (
+                          <View key={item.id} style={styles.completedTaskItem}>
+                            <View style={[styles.completedTaskColor, { backgroundColor: "#06B6D4" }]} />
+                            <View style={styles.completedTaskContent}>
+                              <Text style={styles.completedTaskTitle}>{item.task.title}</Text>
+                              <Text style={styles.completedTaskRecurrence}>
+                                {item.task.recurrence.charAt(0).toUpperCase() + item.task.recurrence.slice(1)}
+                              </Text>
+                              <View style={styles.completedTaskUser}>
+                                <Ionicons name="checkmark-circle" size={14} color="#22C55E" />
+                                <Text style={styles.completedTaskUserText}>
+                                  completed by {item.completedBy?.username || "Unknown"}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      } else {
+                        return (
+                          <TouchableOpacity
+                            key={item.id}
+                            style={styles.eventItem}
+                            onPress={() => item.type === "event" && onEditEvent && onEditEvent(null, item.data)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={[styles.eventItemColor, { backgroundColor: item.color }]} />
+                            <View style={styles.eventItemContent}>
+                              <Text style={styles.eventItemTitle}>{item.title}</Text>
+                              <Text style={styles.eventItemTime}>
+                                {item.allDay 
+                                  ? "All day" 
+                                  : `${item.startDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })} - ${item.endDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
+                                }
+                              </Text>
+                              {item.type === "event" && onDeleteEvent && (
+                                <TouchableOpacity
+                                  style={styles.eventDeleteButton}
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteEvent(item.data);
+                                  }}
+                                >
+                                  <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      }
+                    })}
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </ScrollView>
+  );
+};
 
 const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreateEvent, onEditEvent, onDeleteEvent }) => {
   const [selectedDate, setSelectedDate] = useState(null);
@@ -2863,6 +3127,97 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#71717A",
     marginTop: 6,
+  },
+  // Weekly View Styles
+  weeklyContainer: {
+    flex: 1,
+  },
+  weeklyContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  weeklyDayCard: {
+    backgroundColor: "#1A1A1F",
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    overflow: "hidden",
+  },
+  weeklyDayCardToday: {
+    borderColor: "#06B6D4",
+    borderWidth: 2,
+    backgroundColor: "#0E1F2A",
+  },
+  weeklyDayCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+  },
+  weeklyDayCardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  weeklyDayCardDate: {
+    marginRight: 12,
+  },
+  weeklyDayCardDayName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#A1A1AA",
+    marginBottom: 4,
+  },
+  weeklyDayCardDateNumber: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  weeklyDayCardDateNumberToday: {
+    color: "#06B6D4",
+  },
+  weeklyDayCardMonth: {
+    paddingTop: 4,
+  },
+  weeklyDayCardMonthText: {
+    fontSize: 13,
+    color: "#71717A",
+    fontWeight: "500",
+  },
+  weeklyDayCardHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  weeklyDayCardBadge: {
+    backgroundColor: "#111114",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  weeklyDayCardBadgeText: {
+    fontSize: 12,
+    color: "#71717A",
+    fontWeight: "500",
+  },
+  weeklyDayCardContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  weeklyDayCardEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 32,
+  },
+  weeklyDayCardEmptyText: {
+    fontSize: 14,
+    color: "#71717A",
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  weeklyDayCardItems: {
+    gap: 8,
   },
 });
 
