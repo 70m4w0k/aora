@@ -379,6 +379,12 @@ const Profile = () => {
               {/* Household Actions */}
               <View style={styles.householdActions}>
                 {isAdmin && (
+                  <Pressable style={[styles.actionChip, styles.actionChipPrimary]} onPress={() => router.push("/(household)/manage")}>
+                    <Ionicons name="settings-outline" size={16} color={COLORS.accent.primary} />
+                    <Text style={[styles.actionChipText, styles.actionChipTextPrimary]}>Manage</Text>
+                  </Pressable>
+                )}
+                {isAdmin && (
                   <Pressable style={styles.actionChip} onPress={handleRegenerateCode}>
                     <Ionicons name="refresh" size={16} color={COLORS.textSecondary} />
                     <Text style={styles.actionChipText}>New Code</Text>
@@ -459,8 +465,10 @@ const styles = StyleSheet.create({
   // Household Actions
   householdActions: { flexDirection: 'row', gap: 8 },
   actionChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: COLORS.elevated, borderRadius: 20 },
+  actionChipPrimary: { backgroundColor: `${COLORS.accent.primary}15` },
   actionChipDanger: { backgroundColor: `${COLORS.accent.danger}15` },
   actionChipText: { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
+  actionChipTextPrimary: { color: COLORS.accent.primary },
   actionChipTextDanger: { color: COLORS.accent.danger },
 
   // Settings

@@ -21,6 +21,12 @@ const HouseholdLayout = () => {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="manage"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 };
