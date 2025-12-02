@@ -34,8 +34,7 @@ const RootLayout = () => {
           <Stack.Screen name="index" options={{ headerShown: false }} />
           <Stack.Screen name="(household)" options={{ headerShown: false }} />
           <Stack.Screen name="(calendar)" options={{ headerShown: false }} />
-          <Stack.Screen name="(documents)" options={{ headerShown: false }} />
-          <Stack.Screen name="(prices)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tools)" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
       </GlobalProvider>

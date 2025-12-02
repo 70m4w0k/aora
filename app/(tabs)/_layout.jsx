@@ -30,7 +30,7 @@ const COLORS = {
 // Tab configuration
 const TAB_CONFIG = {
   home: { icon: 'home', label: 'Home', color: COLORS.accent.home, useCustomIcon: true },
-  calendar: { icon: 'calendar', label: 'Chores', color: COLORS.accent.chores },
+  calendar: { icon: 'calendar', label: 'Calendar', color: COLORS.accent.chores },
   shopping: { icon: 'cart', label: 'Shopping', color: COLORS.accent.shopping },
   expenses: { icon: 'wallet', label: 'Expenses', color: COLORS.accent.expenses },
   profile: { icon: 'person', label: 'Profile', color: COLORS.accent.profile },

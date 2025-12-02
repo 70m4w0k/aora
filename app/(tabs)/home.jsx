@@ -7,6 +7,8 @@ import {
   RefreshControl,
   StyleSheet,
   Animated,
+  Dimensions,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +24,8 @@ import {
   getLatestTasksImplByTaskId,
   getHouseholdDocuments
 } from "../../lib/appwrite";
+
+const { width: screenWidth } = Dimensions.get("window");
 
 // Dark theme colors - consistent across app
 const COLORS = {
@@ -227,7 +231,7 @@ const Home = () => {
           <Text style={styles.sectionTitle}>QUICK ACCESS</Text>
           
           <FeatureCard 
-            title="Chores Calendar"
+            title="Calendar"
             subtitle={stats.pendingChores > 0 ? `${stats.pendingChores} tasks pending` : "All caught up!"}
             icon="calendar"
             color={COLORS.accent.chores}
@@ -252,24 +256,35 @@ const Home = () => {
             gradient={[COLORS.accent.expenses, '#E11D48']}
             onPress={() => router.push("/(tabs)/expenses")}
           />
+        </View>
+
+        {/* Tools Section */}
+        <View style={styles.toolsSection}>
+          <Text style={styles.sectionTitle}>TOOLS</Text>
           
-          <FeatureCard 
-            title="Documents"
-            subtitle={stats.documents > 0 ? `${stats.documents} files stored` : "Store your household files"}
-            icon="folder"
-            color={COLORS.accent.primary}
-            gradient={[COLORS.accent.primary, '#7C3AED']}
-            onPress={() => router.push("/(documents)")}
-          />
-          
-          <FeatureCard 
-            title="Price Tracker"
-            subtitle="Compare prices & track spending"
-            icon="pricetag"
-            color="#F59E0B"
-            gradient={['#F59E0B', '#D97706']}
-            onPress={() => router.push("/(prices)")}
-          />
+          <View style={styles.toolsGrid}>
+            <TouchableOpacity 
+              style={styles.toolCard}
+              onPress={() => router.push("/(tools)/documents")}
+            >
+              <View style={[styles.toolIcon, { backgroundColor: `${COLORS.accent.primary}20` }]}>
+                <Ionicons name="folder" size={24} color={COLORS.accent.primary} />
+              </View>
+              <Text style={styles.toolTitle}>Documents</Text>
+              <Text style={styles.toolSubtitle}>{stats.documents} files</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.toolCard}
+              onPress={() => router.push("/(tools)/prices")}
+            >
+              <View style={[styles.toolIcon, { backgroundColor: '#F59E0B20' }]}>
+                <Ionicons name="pricetag" size={24} color="#F59E0B" />
+              </View>
+              <Text style={styles.toolTitle}>Price Tracker</Text>
+              <Text style={styles.toolSubtitle}>Compare prices</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={{ height: 100 }} />
@@ -421,6 +436,43 @@ const styles = StyleSheet.create({
   },
   featureSubtitle: {
     fontSize: 13,
+    color: COLORS.textTertiary,
+  },
+
+  // Tools Section
+  toolsSection: {
+    marginTop: 32,
+  },
+  toolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  toolCard: {
+    width: (screenWidth - 52) / 2, // Account for padding and gap
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  toolIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  toolTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  toolSubtitle: {
+    fontSize: 12,
     color: COLORS.textTertiary,
   },
 });
