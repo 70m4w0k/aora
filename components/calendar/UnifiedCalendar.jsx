@@ -8,8 +8,14 @@ import {
   Dimensions,
   Animated,
   RefreshControl,
+  Modal,
+  TextInput,
+  Platform,
+  KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import {
   getHouseholdEvents,
@@ -19,6 +25,7 @@ import {
   EventCategories,
   getHouseholdTasks,
   getAllTasksDone,
+  getHouseholdMembers,
 } from "../../lib/appwrite";
 import { getWeekNumberByDate } from "../../lib/utils";
 
@@ -50,8 +57,27 @@ const UnifiedCalendar = () => {
   const [events, setEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [tasksDone, setTasksDone] = useState([]);
+  const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Event modal state
+  const [eventModalVisible, setEventModalVisible] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [eventForm, setEventForm] = useState({
+    title: "",
+    description: "",
+    startDate: new Date(),
+    endDate: new Date(),
+    allDay: false,
+    category: EventCategories.OTHER,
+    assignedTo: "",
+    color: null,
+  });
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   useEffect(() => {
     if (household?.$id) {
@@ -89,6 +115,10 @@ const UnifiedCalendar = () => {
         return tdHouseholdId === household.$id;
       }) || [];
       setTasksDone(householdTasksDone);
+
+      // Fetch household members for event assignment
+      const membersData = await getHouseholdMembers(household.$id);
+      setUsers(membersData || []);
     } catch (error) {
       console.error("Error fetching calendar data:", error);
     } finally {
@@ -307,10 +337,185 @@ const UnifiedCalendar = () => {
     console.log("Day pressed:", date);
   };
 
-  const handleCreateEvent = (date) => {
-    // Open event creation modal
-    console.log("Create event for:", date);
-    // TODO: Implement event creation modal
+  const openEventModal = (date = null, event = null) => {
+    if (event) {
+      // Edit mode
+      setEditingEvent(event);
+      const startDate = new Date(event.startDate);
+      const endDate = new Date(event.endDate);
+      setEventForm({
+        title: event.title || "",
+        description: event.description || "",
+        startDate,
+        endDate,
+        allDay: event.allDay || false,
+        category: event.category || EventCategories.OTHER,
+        assignedTo: typeof event.assignedTo === 'object' ? event.assignedTo?.$id : event.assignedTo || "",
+        color: event.color || null,
+      });
+    } else {
+      // Create mode
+      setEditingEvent(null);
+      const defaultDate = date || new Date();
+      defaultDate.setHours(9, 0, 0, 0); // Default to 9 AM
+      const endDate = new Date(defaultDate);
+      endDate.setHours(10, 0, 0, 0); // Default to 10 AM (1 hour duration)
+      
+      setEventForm({
+        title: "",
+        description: "",
+        startDate: defaultDate,
+        endDate: endDate,
+        allDay: false,
+        category: EventCategories.OTHER,
+        assignedTo: "",
+        color: null,
+      });
+    }
+    setEventModalVisible(true);
+  };
+
+  const closeEventModal = () => {
+    setEventModalVisible(false);
+    setEditingEvent(null);
+    setShowStartDatePicker(false);
+    setShowEndDatePicker(false);
+    setShowStartTimePicker(false);
+    setShowEndTimePicker(false);
+  };
+
+  const handleSaveEvent = async () => {
+    if (!eventForm.title.trim()) {
+      Alert.alert("Error", "Please enter an event title");
+      return;
+    }
+
+    if (!household?.$id || !user?.$id) {
+      Alert.alert("Error", "Missing household or user information");
+      return;
+    }
+
+    try {
+      // Format dates for storage
+      const startDate = eventForm.allDay
+        ? new Date(eventForm.startDate.getFullYear(), eventForm.startDate.getMonth(), eventForm.startDate.getDate(), 0, 0, 0, 0)
+        : eventForm.startDate;
+      const endDate = eventForm.allDay
+        ? new Date(eventForm.endDate.getFullYear(), eventForm.endDate.getMonth(), eventForm.endDate.getDate(), 23, 59, 59, 999)
+        : eventForm.endDate;
+
+      if (editingEvent) {
+        // Update existing event
+        await updateEvent(editingEvent.$id, {
+          title: eventForm.title.trim(),
+          description: eventForm.description.trim() || null,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          allDay: eventForm.allDay,
+          category: eventForm.category,
+          assignedTo: eventForm.assignedTo || null,
+          color: eventForm.color || null,
+        });
+        Alert.alert("Success", "Event updated!");
+      } else {
+        // Create new event
+        await createEvent({
+          title: eventForm.title.trim(),
+          description: eventForm.description.trim() || null,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          allDay: eventForm.allDay,
+          category: eventForm.category,
+          assignedTo: eventForm.assignedTo || null,
+          color: eventForm.color || null,
+          householdId: household.$id,
+          userId: user.$id,
+        });
+        Alert.alert("Success", "Event created!");
+      }
+
+      await fetchData();
+      closeEventModal();
+    } catch (error) {
+      console.error("Error saving event:", error);
+      Alert.alert("Error", "Could not save event. " + (error.message || ""));
+    }
+  };
+
+  const handleDeleteEvent = (event) => {
+    Alert.alert(
+      "Delete Event",
+      `Are you sure you want to delete "${event.title}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteEvent(event.$id);
+              Alert.alert("Success", "Event deleted!");
+              await fetchData();
+            } catch (error) {
+              Alert.alert("Error", "Could not delete event");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const formatDateTime = (date, allDay = false) => {
+    if (allDay) {
+      return date.toLocaleDateString("en-US", { 
+        weekday: "short", 
+        month: "short", 
+        day: "numeric" 
+      });
+    }
+    return date.toLocaleString("en-US", { 
+      month: "short", 
+      day: "numeric", 
+      hour: "2-digit", 
+      minute: "2-digit" 
+    });
+  };
+
+  const renderCategorySelector = () => {
+    return (
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        style={styles.categoryScroll}
+        contentContainerStyle={styles.categoryScrollContent}
+      >
+        {Object.entries(EVENT_CATEGORY_CONFIG).map(([key, config]) => (
+          <TouchableOpacity
+            key={key}
+            style={[
+              styles.categoryChip,
+              eventForm.category === key && { 
+                backgroundColor: config.color, 
+                borderColor: config.color 
+              },
+            ]}
+            onPress={() => setEventForm(prev => ({ ...prev, category: key }))}
+          >
+            <Ionicons 
+              name={config.icon} 
+              size={16} 
+              color={eventForm.category === key ? "#FFF" : "#71717A"} 
+            />
+            <Text style={[
+              styles.categoryChipText,
+              eventForm.category === key && { color: "#FFF" },
+            ]}>
+              {config.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    );
   };
 
   const renderViewContent = () => {
@@ -327,7 +532,9 @@ const UnifiedCalendar = () => {
             date={currentDate} 
             items={items}
             onDayPress={handleDayPress}
-            onCreateEvent={handleCreateEvent}
+            onCreateEvent={openEventModal}
+            onEditEvent={openEventModal}
+            onDeleteEvent={handleDeleteEvent}
           />
         );
       case VIEW_TYPES.ANNUAL:
@@ -358,6 +565,282 @@ const UnifiedCalendar = () => {
       >
         {renderViewContent()}
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => openEventModal()}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={28} color="#FFF" />
+      </TouchableOpacity>
+
+      {/* Event Modal */}
+      <Modal
+        visible={eventModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeEventModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closeEventModal}>
+                <Ionicons name="close" size={24} color="#A1A1AA" />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>
+                {editingEvent ? "Edit Event" : "Add Event"}
+              </Text>
+              <TouchableOpacity onPress={handleSaveEvent}>
+                <Text style={styles.modalSaveText}>
+                  {editingEvent ? "Update" : "Save"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Title */}
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Title *</Text>
+              <TextInput
+                style={styles.input}
+                value={eventForm.title}
+                onChangeText={(text) => setEventForm(prev => ({ ...prev, title: text }))}
+                placeholder="Event title"
+                placeholderTextColor="#71717A"
+              />
+
+              {/* All Day Toggle */}
+              <View style={styles.allDayContainer}>
+                <Text style={styles.inputLabel}>All Day</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.toggle,
+                    eventForm.allDay && styles.toggleActive,
+                  ]}
+                  onPress={() => setEventForm(prev => ({ ...prev, allDay: !prev.allDay }))}
+                >
+                  <View style={[
+                    styles.toggleThumb,
+                    eventForm.allDay && styles.toggleThumbActive,
+                  ]} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Start Date/Time */}
+              <Text style={styles.inputLabel}>Start {eventForm.allDay ? "Date" : "Date & Time"}</Text>
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowStartDatePicker(true)}
+              >
+                <Ionicons name="calendar" size={20} color="#06B6D4" />
+                <Text style={styles.dateTimeText}>
+                  {formatDateTime(eventForm.startDate, eventForm.allDay)}
+                </Text>
+              </TouchableOpacity>
+              {!eventForm.allDay && (
+                <TouchableOpacity
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowStartTimePicker(true)}
+                >
+                  <Ionicons name="time" size={20} color="#06B6D4" />
+                  <Text style={styles.dateTimeText}>
+                    {eventForm.startDate.toLocaleTimeString("en-US", { 
+                      hour: "2-digit", 
+                      minute: "2-digit" 
+                    })}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* End Date/Time */}
+              <Text style={styles.inputLabel}>End {eventForm.allDay ? "Date" : "Date & Time"}</Text>
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowEndDatePicker(true)}
+              >
+                <Ionicons name="calendar" size={20} color="#06B6D4" />
+                <Text style={styles.dateTimeText}>
+                  {formatDateTime(eventForm.endDate, eventForm.allDay)}
+                </Text>
+              </TouchableOpacity>
+              {!eventForm.allDay && (
+                <TouchableOpacity
+                  style={styles.dateTimeButton}
+                  onPress={() => setShowEndTimePicker(true)}
+                >
+                  <Ionicons name="time" size={20} color="#06B6D4" />
+                  <Text style={styles.dateTimeText}>
+                    {eventForm.endDate.toLocaleTimeString("en-US", { 
+                      hour: "2-digit", 
+                      minute: "2-digit" 
+                    })}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Category */}
+              <Text style={styles.inputLabel}>Category</Text>
+              {renderCategorySelector()}
+
+              {/* Assigned To */}
+              <Text style={styles.inputLabel}>Assign To (optional)</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.userChipsScroll}
+                contentContainerStyle={styles.userChipsScrollContent}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.userChip,
+                    !eventForm.assignedTo && styles.userChipSelected,
+                  ]}
+                  onPress={() => setEventForm(prev => ({ ...prev, assignedTo: "" }))}
+                >
+                  <View style={[styles.userChipAvatar, { backgroundColor: "#71717A" }]}>
+                    <Ionicons name="person-outline" size={14} color="#FFF" />
+                  </View>
+                  <Text style={[
+                    styles.userChipText,
+                    !eventForm.assignedTo && styles.userChipTextSelected,
+                  ]}>
+                    Unassigned
+                  </Text>
+                </TouchableOpacity>
+                {users.map((u) => (
+                  <TouchableOpacity
+                    key={u.$id}
+                    style={[
+                      styles.userChip,
+                      eventForm.assignedTo === u.$id && styles.userChipSelected,
+                    ]}
+                    onPress={() => setEventForm(prev => ({ ...prev, assignedTo: u.$id }))}
+                  >
+                    <View style={[styles.userChipAvatar, { backgroundColor: u.color || "#10B981" }]}>
+                      <Text style={styles.userChipAvatarText}>
+                        {u.username?.[0]?.toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={[
+                      styles.userChipText,
+                      eventForm.assignedTo === u.$id && styles.userChipTextSelected,
+                    ]}>
+                      {u.username}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Description */}
+              <Text style={styles.inputLabel}>Description (optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={eventForm.description}
+                onChangeText={(text) => setEventForm(prev => ({ ...prev, description: text }))}
+                placeholder="Add notes or details..."
+                placeholderTextColor="#71717A"
+                multiline
+                numberOfLines={4}
+              />
+
+              {/* Delete Button (Edit Mode) */}
+              {editingEvent && (
+                <TouchableOpacity
+                  style={styles.deleteEventButton}
+                  onPress={() => {
+                    closeEventModal();
+                    handleDeleteEvent(editingEvent);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  <Text style={styles.deleteEventButtonText}>Delete Event</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Date/Time Pickers */}
+      {showStartDatePicker && (
+        <DateTimePicker
+          value={eventForm.startDate}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowStartDatePicker(Platform.OS === "ios");
+            if (selectedDate) {
+              const newDate = new Date(selectedDate);
+              newDate.setHours(eventForm.startDate.getHours());
+              newDate.setMinutes(eventForm.startDate.getMinutes());
+              setEventForm(prev => ({ ...prev, startDate: newDate }));
+              // Auto-update end date if it's before start date
+              if (newDate > eventForm.endDate) {
+                const newEndDate = new Date(newDate);
+                newEndDate.setHours(eventForm.endDate.getHours());
+                newEndDate.setMinutes(eventForm.endDate.getMinutes());
+                setEventForm(prev => ({ ...prev, endDate: newEndDate }));
+              }
+            }
+          }}
+        />
+      )}
+
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={eventForm.endDate}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowEndDatePicker(Platform.OS === "ios");
+            if (selectedDate) {
+              const newDate = new Date(selectedDate);
+              newDate.setHours(eventForm.endDate.getHours());
+              newDate.setMinutes(eventForm.endDate.getMinutes());
+              setEventForm(prev => ({ ...prev, endDate: newDate }));
+            }
+          }}
+        />
+      )}
+
+      {showStartTimePicker && (
+        <DateTimePicker
+          value={eventForm.startDate}
+          mode="time"
+          display="default"
+          onChange={(event, selectedTime) => {
+            setShowStartTimePicker(Platform.OS === "ios");
+            if (selectedTime) {
+              const newDate = new Date(eventForm.startDate);
+              newDate.setHours(selectedTime.getHours());
+              newDate.setMinutes(selectedTime.getMinutes());
+              setEventForm(prev => ({ ...prev, startDate: newDate }));
+            }
+          }}
+        />
+      )}
+
+      {showEndTimePicker && (
+        <DateTimePicker
+          value={eventForm.endDate}
+          mode="time"
+          display="default"
+          onChange={(event, selectedTime) => {
+            setShowEndTimePicker(Platform.OS === "ios");
+            if (selectedTime) {
+              const newDate = new Date(eventForm.endDate);
+              newDate.setHours(selectedTime.getHours());
+              newDate.setMinutes(selectedTime.getMinutes());
+              setEventForm(prev => ({ ...prev, endDate: newDate }));
+            }
+          }}
+        />
+      )}
     </View>
   );
 };
@@ -375,7 +858,7 @@ const WeeklyView = ({ date, items }) => (
   </View>
 );
 
-const MonthlyView = ({ date, items, onDayPress, onCreateEvent }) => {
+const MonthlyView = ({ date, items, onDayPress, onCreateEvent, onEditEvent, onDeleteEvent }) => {
   const [selectedDate, setSelectedDate] = useState(null);
   
   // Get first day of month and number of days
@@ -590,7 +1073,12 @@ const MonthlyView = ({ date, items, onDayPress, onCreateEvent }) => {
               </View>
             ) : (
               getItemsForDay(selectedDate).map((item) => (
-                <View key={item.id} style={styles.eventItem}>
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.eventItem}
+                  onPress={() => item.type === "event" && onEditEvent && onEditEvent(null, item.data)}
+                  activeOpacity={0.7}
+                >
                   <View style={[styles.eventItemColor, { backgroundColor: item.color }]} />
                   <View style={styles.eventItemContent}>
                     <Text style={styles.eventItemTitle}>{item.title}</Text>
@@ -606,8 +1094,19 @@ const MonthlyView = ({ date, items, onDayPress, onCreateEvent }) => {
                         <Text style={styles.taskBadgeText}>Task</Text>
                       </View>
                     )}
+                    {item.type === "event" && onDeleteEvent && (
+                      <TouchableOpacity
+                        style={styles.eventDeleteButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          onDeleteEvent(item.data);
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
             )}
           </ScrollView>
@@ -892,6 +1391,215 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#06B6D4",
     fontWeight: "500",
+  },
+  eventDeleteButton: {
+    padding: 4,
+    marginLeft: "auto",
+  },
+  // FAB
+  fab: {
+    position: "absolute",
+    right: 20,
+    bottom: 100,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#06B6D4",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 8,
+    shadowColor: "#06B6D4",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-start",
+  },
+  modalContent: {
+    backgroundColor: "#111114",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "100%",
+    minHeight: "100%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  modalSaveText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#06B6D4",
+  },
+  modalBody: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#71717A",
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  input: {
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 14,
+    color: "#FFF",
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: "top",
+  },
+  allDayContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  toggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#1A1A1F",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    justifyContent: "center",
+    padding: 2,
+  },
+  toggleActive: {
+    backgroundColor: "#06B6D4",
+    borderColor: "#06B6D4",
+  },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#71717A",
+  },
+  toggleThumbActive: {
+    backgroundColor: "#FFF",
+    marginLeft: "auto",
+  },
+  dateTimeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1A1A1F",
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginBottom: 8,
+    gap: 12,
+  },
+  dateTimeText: {
+    fontSize: 16,
+    color: "#FFF",
+    fontWeight: "500",
+  },
+  categoryScroll: {
+    marginBottom: 8,
+  },
+  categoryScrollContent: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  categoryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "#1A1A1F",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginRight: 8,
+    gap: 6,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    color: "#71717A",
+    fontWeight: "500",
+  },
+  userChipsScroll: {
+    marginBottom: 8,
+  },
+  userChipsScrollContent: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  userChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#1A1A1F",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    marginRight: 8,
+    gap: 8,
+  },
+  userChipSelected: {
+    backgroundColor: "rgba(6, 182, 212, 0.15)",
+    borderColor: "#06B6D4",
+  },
+  userChipAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userChipAvatarText: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  userChipText: {
+    fontSize: 14,
+    color: "#A1A1AA",
+    fontWeight: "500",
+  },
+  userChipTextSelected: {
+    color: "#FFF",
+  },
+  deleteEventButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 24,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+    gap: 8,
+  },
+  deleteEventButtonText: {
+    fontSize: 14,
+    color: "#EF4444",
+    fontWeight: "600",
   },
 });
 
