@@ -729,7 +729,19 @@ const UnifiedCalendar = () => {
     
     switch (currentView) {
       case VIEW_TYPES.DAILY:
-        return <DailyView date={currentDate} items={items} />;
+        return (
+          <DailyView 
+            date={currentDate} 
+            items={items}
+            tasks={tasks}
+            tasksDone={tasksDone}
+            users={users}
+            onDayPress={handleDayPress}
+            onCreateEvent={(date) => openModal("event", date)}
+            onEditEvent={(date, event) => openModal("event", date, event)}
+            onDeleteEvent={handleDeleteEvent}
+          />
+        );
       case VIEW_TYPES.WEEKLY:
         return (
           <WeeklyView 
@@ -1362,12 +1374,255 @@ const UnifiedCalendar = () => {
   );
 };
 
-// Placeholder views - will implement these next
-const DailyView = ({ date, items }) => (
-  <View style={styles.viewContainer}>
-    <Text style={styles.placeholderText}>Daily View - Coming Soon</Text>
-  </View>
-);
+const DailyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreateEvent, onEditEvent, onDeleteEvent }) => {
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
+  
+  const today = new Date();
+  const isToday = date.getDate() === today.getDate() &&
+                  date.getMonth() === today.getMonth() &&
+                  date.getFullYear() === today.getFullYear();
+  
+  // Generate time slots (24 hours, every hour)
+  const timeSlots = [];
+  for (let hour = 0; hour < 24; hour++) {
+    timeSlots.push(hour);
+  }
+  
+  // Get items for the selected day
+  const getItemsForDay = (dayDate) => {
+    if (!dayDate || !items || !Array.isArray(items)) return [];
+    
+    const dayStart = new Date(dayDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    return items.filter(item => {
+      if (!item || !item.startDate || !item.endDate) return false;
+      
+      try {
+        const itemStart = new Date(item.startDate);
+        const itemEnd = new Date(item.endDate);
+        
+        if (isNaN(itemStart.getTime()) || isNaN(itemEnd.getTime())) {
+          return false;
+        }
+        
+        return (itemStart <= dayEnd && itemEnd >= dayStart);
+      } catch (error) {
+        return false;
+      }
+    });
+  };
+  
+  // Get completed tasks for the selected day
+  const getCompletedTasksForDay = (dayDate) => {
+    if (!dayDate || !tasksDone || !tasks || !Array.isArray(tasksDone)) return [];
+    
+    const dayStart = new Date(dayDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    return tasksDone
+      .filter(td => {
+        if (!td || !td.$createdAt) return false;
+        const completionDate = new Date(td.$createdAt);
+        return completionDate >= dayStart && completionDate <= dayEnd;
+      })
+      .map(td => {
+        const taskId = typeof td.taskId === 'object' ? td.taskId?.$id : td.taskId;
+        const task = tasks.find(t => t.$id === taskId);
+        
+        if (!task) return null;
+        
+        const userId = typeof td.userId === 'object' ? td.userId?.$id : td.userId;
+        const user = users?.find(u => u.$id === userId);
+        
+        return {
+          id: td.$id,
+          type: "completed_task",
+          task: task,
+          completedBy: user,
+          completedAt: new Date(td.$createdAt),
+          data: td,
+        };
+      })
+      .filter(item => item !== null);
+  };
+  
+  const dayEvents = getItemsForDay(date).filter(item => item.type === "event");
+  const completedTasks = getCompletedTasksForDay(date);
+  const allDayEvents = dayEvents.filter(item => item.allDay);
+  const timedEvents = dayEvents.filter(item => !item.allDay);
+  
+  // Get events for a specific hour
+  const getEventsForHour = (hour) => {
+    return timedEvents.filter(event => {
+      const eventStart = new Date(event.startDate);
+      const eventEnd = new Date(event.endDate);
+      return eventStart.getHours() <= hour && eventEnd.getHours() >= hour;
+    });
+  };
+  
+  // Format time for display
+  const formatTime = (hour) => {
+    if (hour === 0) return "12 AM";
+    if (hour < 12) return `${hour} AM`;
+    if (hour === 12) return "12 PM";
+    return `${hour - 12} PM`;
+  };
+  
+  // Get current hour for highlighting
+  const currentHour = isToday ? today.getHours() : null;
+  
+  return (
+    <View style={styles.dailyContainer}>
+      {/* All-day events section */}
+      {allDayEvents.length > 0 && (
+        <View style={styles.allDaySection}>
+          <View style={styles.allDayHeader}>
+            <Ionicons name="time-outline" size={16} color="#71717A" />
+            <Text style={styles.allDayHeaderText}>All Day</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.allDayEvents}>
+            {allDayEvents.map((event) => (
+              <TouchableOpacity
+                key={event.id}
+                style={[styles.allDayEventCard, { borderLeftColor: event.color }]}
+                onPress={() => onEditEvent && onEditEvent(null, event.data)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.allDayEventTitle} numberOfLines={1}>{event.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+      
+      {/* Completed tasks section */}
+      {completedTasks.length > 0 && (
+        <View style={styles.completedTasksSection}>
+          <View style={styles.completedTasksHeader}>
+            <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+            <Text style={styles.completedTasksHeaderText}>Completed Tasks</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.completedTasksList}>
+            {completedTasks.map((item) => (
+              <View key={item.id} style={styles.completedTaskChip}>
+                <Text style={styles.completedTaskChipText}>{item.task.title}</Text>
+                <Text style={styles.completedTaskChipUser}>
+                  by {item.completedBy?.username || "Unknown"}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+      
+      {/* Time slots */}
+      <ScrollView 
+        style={styles.timeSlotsContainer}
+        contentContainerStyle={styles.timeSlotsContent}
+        showsVerticalScrollIndicator={true}
+      >
+        {timeSlots.map((hour) => {
+          const hourEvents = getEventsForHour(hour);
+          const isCurrentHour = currentHour === hour;
+          const isPast = currentHour !== null && hour < currentHour;
+          
+          return (
+            <View 
+              key={hour} 
+              style={[
+                styles.timeSlotRow,
+                isCurrentHour && styles.timeSlotRowCurrent,
+                isPast && styles.timeSlotRowPast,
+              ]}
+            >
+              {/* Time label */}
+              <View style={styles.timeLabel}>
+                <Text style={[
+                  styles.timeLabelText,
+                  isCurrentHour && styles.timeLabelTextCurrent,
+                ]}>
+                  {formatTime(hour)}
+                </Text>
+              </View>
+              
+              {/* Time slot content */}
+              <View style={styles.timeSlotContent}>
+                {/* Hour line */}
+                <View style={[
+                  styles.hourLine,
+                  isCurrentHour && styles.hourLineCurrent,
+                ]} />
+                
+                {/* Events in this hour */}
+                {hourEvents.length > 0 && (
+                  <View style={styles.hourEvents}>
+                    {hourEvents.map((event) => {
+                      const eventStart = new Date(event.startDate);
+                      const eventEnd = new Date(event.endDate);
+                      const startMinute = eventStart.getMinutes();
+                      const duration = (eventEnd - eventStart) / (1000 * 60); // Duration in minutes
+                      const height = Math.max(40, (duration / 60) * 60); // Minimum 40px, scale by duration
+                      
+                      return (
+                        <TouchableOpacity
+                          key={event.id}
+                          style={[
+                            styles.timedEventCard,
+                            {
+                              backgroundColor: event.color + "20",
+                              borderLeftColor: event.color,
+                              height: height,
+                              marginTop: startMinute > 0 ? (startMinute / 60) * 60 : 0,
+                            },
+                          ]}
+                          onPress={() => onEditEvent && onEditEvent(null, event.data)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.timedEventTitle} numberOfLines={1}>
+                            {event.title}
+                          </Text>
+                          <Text style={styles.timedEventTime}>
+                            {eventStart.toLocaleTimeString("en-US", { 
+                              hour: "2-digit", 
+                              minute: "2-digit" 
+                            })} - {eventEnd.toLocaleTimeString("en-US", { 
+                              hour: "2-digit", 
+                              minute: "2-digit" 
+                            })}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+                
+                {/* Add event button for empty slots */}
+                {hourEvents.length === 0 && (
+                  <TouchableOpacity
+                    style={styles.addEventSlotButton}
+                    onPress={() => {
+                      const newDate = new Date(date);
+                      newDate.setHours(hour, 0, 0, 0);
+                      onCreateEvent && onCreateEvent(newDate);
+                    }}
+                    activeOpacity={0.5}
+                  >
+                    <View style={styles.addEventSlotDot} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+};
 
 const WeeklyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreateEvent, onEditEvent, onDeleteEvent }) => {
   const [expandedDays, setExpandedDays] = useState({});
@@ -3127,6 +3382,173 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#71717A",
     marginTop: 6,
+  },
+  // Daily View Styles
+  dailyContainer: {
+    flex: 1,
+    paddingBottom: 100,
+  },
+  allDaySection: {
+    backgroundColor: "#1A1A1F",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  allDayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 6,
+  },
+  allDayHeaderText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#71717A",
+    textTransform: "uppercase",
+  },
+  allDayEvents: {
+    flexDirection: "row",
+  },
+  allDayEventCard: {
+    backgroundColor: "#111114",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderLeftWidth: 3,
+    minWidth: 120,
+  },
+  allDayEventTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#FFF",
+  },
+  completedTasksSection: {
+    backgroundColor: "#1A1A1F",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  completedTasksHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 6,
+  },
+  completedTasksHeaderText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#71717A",
+    textTransform: "uppercase",
+  },
+  completedTasksList: {
+    flexDirection: "row",
+  },
+  completedTaskChip: {
+    backgroundColor: "#111114",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#06B6D4",
+  },
+  completedTaskChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFF",
+    marginBottom: 2,
+  },
+  completedTaskChipUser: {
+    fontSize: 10,
+    color: "#71717A",
+  },
+  timeSlotsContainer: {
+    flex: 1,
+  },
+  timeSlotsContent: {
+    paddingBottom: 20,
+  },
+  timeSlotRow: {
+    flexDirection: "row",
+    minHeight: 60,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+  timeSlotRowCurrent: {
+    backgroundColor: "rgba(6, 182, 212, 0.05)",
+  },
+  timeSlotRowPast: {
+    opacity: 0.6,
+  },
+  timeLabel: {
+    width: 70,
+    paddingTop: 8,
+    paddingRight: 12,
+    alignItems: "flex-end",
+  },
+  timeLabelText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#71717A",
+  },
+  timeLabelTextCurrent: {
+    color: "#06B6D4",
+    fontWeight: "700",
+  },
+  timeSlotContent: {
+    flex: 1,
+    position: "relative",
+    paddingLeft: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  hourLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  hourLineCurrent: {
+    backgroundColor: "#06B6D4",
+    height: 2,
+  },
+  hourEvents: {
+    position: "relative",
+    minHeight: 40,
+  },
+  timedEventCard: {
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 4,
+    borderLeftWidth: 3,
+    justifyContent: "center",
+  },
+  timedEventTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#FFF",
+    marginBottom: 2,
+  },
+  timedEventTime: {
+    fontSize: 11,
+    color: "#71717A",
+  },
+  addEventSlotButton: {
+    width: "100%",
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addEventSlotDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#3F3F46",
   },
   // Weekly View Styles
   weeklyContainer: {
