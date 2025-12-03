@@ -162,6 +162,7 @@ const UnifiedCalendar = () => {
       
       // Filter tasks done by household
       const allTasksDone = tasksDoneData.status === 'fulfilled' ? (tasksDoneData.value || []) : [];
+      // Filter tasksDone by household - include ALL household members' tasks
       const householdTasksDone = allTasksDone.filter(td => {
         if (!td || !td.householdId) return false;
         const tdHouseholdId = typeof td.householdId === 'object' ? td.householdId?.$id : td.householdId;
@@ -169,7 +170,23 @@ const UnifiedCalendar = () => {
       });
       setTasksDone(householdTasksDone);
       
-      setUsers(membersData.status === 'fulfilled' ? (membersData.value || []) : []);
+      // Set all household members (not just current user)
+      const allMembers = membersData.status === 'fulfilled' ? (membersData.value || []) : [];
+      setUsers(allMembers);
+      
+      // Debug: Log to verify we have all users and their tasks
+      if (__DEV__) {
+        console.log('Calendar data loaded:', {
+          usersCount: allMembers.length,
+          users: allMembers.map(u => ({ id: u.$id, username: u.username })),
+          tasksDoneCount: householdTasksDone.length,
+          tasksDoneByUser: householdTasksDone.reduce((acc, td) => {
+            const userId = typeof td.userId === 'object' ? td.userId?.$id : td.userId;
+            acc[userId] = (acc[userId] || 0) + 1;
+            return acc;
+          }, {}),
+        });
+      }
 
       // Check if any critical fetch failed
       const criticalFailures = [
@@ -1897,7 +1914,11 @@ const WeeklyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreate
                                 {item.task.recurrence.charAt(0).toUpperCase() + item.task.recurrence.slice(1)}
                               </Text>
                               <View style={styles.completedTaskUser}>
-                                <Ionicons name="checkmark-circle" size={14} color="#22C55E" />
+                                <Ionicons 
+                                  name="checkmark-circle" 
+                                  size={14} 
+                                  color={item.completedBy?.color || "#22C55E"} 
+                                />
                                 <Text style={styles.completedTaskUserText}>
                                   completed by {item.completedBy?.username || "Unknown"}
                                 </Text>
@@ -2238,7 +2259,11 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
                           {item.task.recurrence.charAt(0).toUpperCase() + item.task.recurrence.slice(1)}
                         </Text>
                         <View style={styles.completedTaskUser}>
-                          <Ionicons name="checkmark-circle" size={14} color="#22C55E" />
+                          <Ionicons 
+                            name="checkmark-circle" 
+                            size={14} 
+                            color={item.completedBy?.color || "#22C55E"} 
+                          />
                           <Text style={styles.completedTaskUserText}>
                             completed by {item.completedBy?.username || "Unknown"}
                           </Text>
@@ -2322,15 +2347,25 @@ const AnnualView = ({ date, tasks, tasksDone, users }) => {
     "#3B82F6", // Blue
   ];
   
-  // Calculate weekly activity per user
+  // Calculate weekly activity per user - show ALL household members
   const userWeeklyActivity = (users || []).map((u, index) => {
     const weeks = Array(WEEKS_IN_YEAR).fill(0);
     const color = u.color || userColors[index % userColors.length];
     
+    // Count tasks done by this user
     (tasksDone || []).forEach(td => {
       const tdUserId = typeof td.userId === 'object' ? td.userId?.$id : td.userId;
-      if (tdUserId === u.$id && td.weekNumber >= 1 && td.weekNumber <= WEEKS_IN_YEAR) {
-        weeks[td.weekNumber - 1]++;
+      // Match user ID and check weekNumber
+      if (tdUserId === u.$id) {
+        // If weekNumber exists, use it; otherwise calculate from $createdAt
+        let weekNum = td.weekNumber;
+        if (!weekNum && td.$createdAt) {
+          const completionDate = new Date(td.$createdAt);
+          weekNum = getWeekNumberByDate(completionDate);
+        }
+        if (weekNum >= 1 && weekNum <= WEEKS_IN_YEAR) {
+          weeks[weekNum - 1]++;
+        }
       }
     });
     
@@ -2341,13 +2376,19 @@ const AnnualView = ({ date, tasks, tasksDone, users }) => {
       weeks,
       total: weeks.reduce((sum, w) => sum + w, 0),
     };
-  });
+  }); // Show ALL household members, regardless of activity
   
-  // Calculate household total weekly activity
+  // Calculate household total weekly activity (all users combined)
   const weeklyActivity = Array(WEEKS_IN_YEAR).fill(0);
   (tasksDone || []).forEach(td => {
-    if (td.weekNumber && td.weekNumber >= 1 && td.weekNumber <= WEEKS_IN_YEAR) {
-      weeklyActivity[td.weekNumber - 1]++;
+    // Use weekNumber if available, otherwise calculate from $createdAt
+    let weekNum = td.weekNumber;
+    if (!weekNum && td.$createdAt) {
+      const completionDate = new Date(td.$createdAt);
+      weekNum = getWeekNumberByDate(completionDate);
+    }
+    if (weekNum >= 1 && weekNum <= WEEKS_IN_YEAR) {
+      weeklyActivity[weekNum - 1]++;
     }
   });
   
