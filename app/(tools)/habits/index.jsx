@@ -169,6 +169,18 @@ const HabitsTracker = () => {
       const todayQuestsFiltered = await filterQuestsForToday(questsData, user.$id);
       setTodayQuests(todayQuestsFiltered);
       
+      // Calculate streaks for all quests
+      const streaksMap = {};
+      for (const quest of questsData) {
+        try {
+          const streak = await calculateQuestStreak(quest, user.$id);
+          streaksMap[quest.$id] = streak;
+        } catch (error) {
+          streaksMap[quest.$id] = 0;
+        }
+      }
+      setQuestStreaks(streaksMap);
+      
       // Debug: Log quests to see what we're getting
       if (questsData.length > 0) {
         console.log('Total quests fetched:', questsData.length);
@@ -260,6 +272,38 @@ const HabitsTracker = () => {
       const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
       const xpEarned = quest.xpPerCompletion || 10;
       
+      // Calculate current streak before completion
+      const currentStreak = await calculateQuestStreak(quest, user.$id);
+      
+      // Check if quest was already completed today
+      const today = new Date();
+      const startOfDay = new Date(today);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(today);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      let newStreak = currentStreak;
+      
+      try {
+        const todayCompletions = await getQuestCompletions(
+          quest.$id, 
+          user.$id, 
+          startOfDay.toISOString(), 
+          endOfDay.toISOString()
+        );
+        
+        // If not completed today, this completion will extend the streak
+        if (todayCompletions.length === 0) {
+          newStreak = currentStreak + 1;
+        } else {
+          // Already completed today, keep current streak (don't increment)
+          newStreak = currentStreak;
+        }
+      } catch (error) {
+        // If error checking, assume not completed today and increment
+        newStreak = currentStreak + 1;
+      }
+      
       // Get current progress before completion
       const currentProgress = await getUserProgress(user.$id, household.$id);
       const oldLevel = currentProgress?.globalLevel || 1;
@@ -273,7 +317,7 @@ const HabitsTracker = () => {
         householdId: household.$id,
         xpEarned: xpEarned,
         arcId: arcId,
-        streakCount: 1, // TODO: Calculate actual streak
+        streakCount: newStreak,
       });
       
       // Fetch updated progress
@@ -724,6 +768,136 @@ const HabitsTracker = () => {
     }
   };
 
+  // Calculate streak for a quest based on completion history
+  const calculateQuestStreak = async (quest, userId) => {
+    try {
+      const frequency = quest.frequency || QuestFrequencies.DAILY;
+      const completions = await getQuestCompletions(quest.$id, userId);
+      
+      if (completions.length === 0) {
+        return 0;
+      }
+      
+      // Sort completions by date (most recent first)
+      const sortedCompletions = completions
+        .map(c => ({
+          date: new Date(c.completedAt || c.$createdAt),
+          streakCount: c.streakCount || 1,
+        }))
+        .sort((a, b) => b.date - a.date);
+      
+      if (sortedCompletions.length === 0) {
+        return 0;
+      }
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Daily quests: count consecutive days
+      if (frequency === QuestFrequencies.DAILY) {
+        let streak = 0;
+        let expectedDate = new Date(today);
+        expectedDate.setHours(0, 0, 0, 0);
+        
+        // Check if today was completed
+        const todayCompleted = sortedCompletions.some(c => {
+          const completionDate = new Date(c.date);
+          completionDate.setHours(0, 0, 0, 0);
+          return completionDate.getTime() === expectedDate.getTime();
+        });
+        
+        // If today not completed, start from yesterday
+        if (!todayCompleted) {
+          expectedDate.setDate(expectedDate.getDate() - 1);
+        }
+        
+        for (const completion of sortedCompletions) {
+          const completionDate = new Date(completion.date);
+          completionDate.setHours(0, 0, 0, 0);
+          
+          // Check if this completion matches the expected date
+          if (completionDate.getTime() === expectedDate.getTime()) {
+            streak++;
+            expectedDate.setDate(expectedDate.getDate() - 1);
+          } else if (completionDate < expectedDate) {
+            // Gap found, streak is broken
+            break;
+          }
+          // If completionDate > expectedDate, skip (duplicate or future date)
+        }
+        
+        return streak;
+      }
+      
+      // Weekly quests: count consecutive weeks
+      if (frequency === QuestFrequencies.WEEKLY) {
+        let streak = 0;
+        const currentWeek = getWeekNumber(new Date());
+        let expectedWeek = currentWeek;
+        
+        for (const completion of sortedCompletions) {
+          const completionDate = new Date(completion.date);
+          const completionWeek = getWeekNumber(completionDate);
+          
+          if (completionWeek === expectedWeek) {
+            streak++;
+            expectedWeek--;
+            if (expectedWeek < 1) expectedWeek = 52; // Wrap around year
+          } else if (completionWeek < expectedWeek) {
+            break;
+          }
+        }
+        
+        return streak;
+      }
+      
+      // Monthly quests: count consecutive months
+      if (frequency === QuestFrequencies.MONTHLY) {
+        let streak = 0;
+        let expectedMonth = today.getMonth();
+        let expectedYear = today.getFullYear();
+        
+        for (const completion of sortedCompletions) {
+          const completionDate = new Date(completion.date);
+          const completionMonth = completionDate.getMonth();
+          const completionYear = completionDate.getFullYear();
+          
+          if (completionMonth === expectedMonth && completionYear === expectedYear) {
+            streak++;
+            expectedMonth--;
+            if (expectedMonth < 0) {
+              expectedMonth = 11;
+              expectedYear--;
+            }
+          } else {
+            const completionMonthIndex = completionYear * 12 + completionMonth;
+            const expectedMonthIndex = expectedYear * 12 + expectedMonth;
+            if (completionMonthIndex < expectedMonthIndex) {
+              break;
+            }
+          }
+        }
+        
+        return streak;
+      }
+      
+      // For other frequencies, use the streak from the most recent completion
+      return sortedCompletions[0]?.streakCount || 0;
+    } catch (error) {
+      console.error('Error calculating streak:', error);
+      return 0;
+    }
+  };
+
+  // Helper function to get week number
+  const getWeekNumber = (date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  };
+
   // Filter quests for today based on frequency
   const filterQuestsForToday = async (quests, userId) => {
     const today = new Date();
@@ -864,6 +1038,7 @@ const HabitsTracker = () => {
   };
 
   const [questCompletions, setQuestCompletions] = useState({});
+  const [questStreaks, setQuestStreaks] = useState({}); // { questId: streakCount }
 
   useEffect(() => {
     if (todayQuests.length > 0 && user?.$id) {
@@ -1156,6 +1331,12 @@ const HabitsTracker = () => {
                       <Text style={styles.questName}>{quest.name}</Text>
                       <View style={styles.questMeta}>
                         <Text style={styles.questArc}>{arc?.name || 'Unassigned'}</Text>
+                        {questStreaks[quest.$id] > 0 && (
+                          <View style={styles.streakBadge}>
+                            <Ionicons name="flame" size={12} color={COLORS.accent.warning} />
+                            <Text style={styles.streakText}>{questStreaks[quest.$id]}</Text>
+                          </View>
+                        )}
                         <Text style={styles.questXP}>+{quest.xpPerCompletion || 10} XP</Text>
                       </View>
                     </View>
@@ -2132,6 +2313,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.accent.success,
     fontWeight: '600',
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${COLORS.accent.warning}20`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 4,
+  },
+  streakText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.accent.warning,
   },
   questActions: {
     flexDirection: 'row',
