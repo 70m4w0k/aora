@@ -284,6 +284,17 @@ const Home = () => {
               <Text style={styles.toolTitle}>Price Tracker</Text>
               <Text style={styles.toolSubtitle}>Compare prices</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.toolCard}
+              onPress={() => router.push("/(tools)/habits")}
+            >
+              <View style={[styles.toolIcon, { backgroundColor: '#8B5CF620' }]}>
+                <Ionicons name="trophy" size={24} color="#8B5CF6" />
+              </View>
+              <Text style={styles.toolTitle}>NEOSYSTEM</Text>
+              <Text style={styles.toolSubtitle}>Habits Tracker</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

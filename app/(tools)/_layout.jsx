@@ -5,6 +5,7 @@ const ToolsLayout = () => {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="documents" />
       <Stack.Screen name="prices" />
+      <Stack.Screen name="habits" />
     </Stack>
   );
 };
