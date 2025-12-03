@@ -182,6 +182,9 @@ const HabitsTracker = () => {
     startDate: null,
     endDate: null,
   });
+  const [missedQuests, setMissedQuests] = useState([]); // Array of { quest, missedCount, lastCompleted }
+  const [missedQuestsModalVisible, setMissedQuestsModalVisible] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true); // Default enabled
   
   // Arc Modal
   const [arcModalVisible, setArcModalVisible] = useState(false);
@@ -1497,6 +1500,123 @@ const HabitsTracker = () => {
     }
   }, [xpHistoryModalVisible]);
 
+  // Detect missed quests
+  const detectMissedQuests = async () => {
+    if (!user || !quests.length) return;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const missed = [];
+    
+    for (const quest of quests) {
+      try {
+        const frequency = quest.frequency || QuestFrequencies.DAILY;
+        const repetitions = quest.repetitionPerPeriod || 1;
+        const allCompletions = await getQuestCompletions(quest.$id, user.$id);
+        
+        let isMissed = false;
+        let missedCount = 0;
+        let lastCompleted = null;
+        
+        if (allCompletions.length > 0) {
+          const sortedCompletions = [...allCompletions].sort((a, b) => {
+            const dateA = new Date(a.completedAt || a.$createdAt);
+            const dateB = new Date(b.completedAt || b.$createdAt);
+            return dateB - dateA; // Most recent first
+          });
+          lastCompleted = new Date(sortedCompletions[0].completedAt || sortedCompletions[0].$createdAt);
+        }
+        
+        // Daily quests: missed if not completed today
+        if (frequency === QuestFrequencies.DAILY) {
+          const todayCompletions = allCompletions.filter(c => {
+            const completionDate = new Date(c.completedAt || c.$createdAt);
+            completionDate.setHours(0, 0, 0, 0);
+            return completionDate.getTime() === today.getTime();
+          });
+          
+          if (todayCompletions.length < repetitions) {
+            isMissed = true;
+            missedCount = repetitions - todayCompletions.length;
+          }
+        }
+        
+        // Weekly quests: missed if not completed enough times this week
+        else if (frequency === QuestFrequencies.WEEKLY) {
+          const startOfWeek = new Date(today);
+          startOfWeek.setDate(today.getDate() - today.getDay());
+          startOfWeek.setHours(0, 0, 0, 0);
+          
+          const weekCompletions = allCompletions.filter(c => {
+            const completionDate = new Date(c.completedAt || c.$createdAt);
+            return completionDate >= startOfWeek;
+          });
+          
+          if (weekCompletions.length < repetitions) {
+            isMissed = true;
+            missedCount = repetitions - weekCompletions.length;
+          }
+        }
+        
+        // Monthly quests: missed if not completed enough times this month
+        else if (frequency === QuestFrequencies.MONTHLY) {
+          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+          startOfMonth.setHours(0, 0, 0, 0);
+          
+          const monthCompletions = allCompletions.filter(c => {
+            const completionDate = new Date(c.completedAt || c.$createdAt);
+            return completionDate >= startOfMonth;
+          });
+          
+          if (monthCompletions.length < repetitions) {
+            isMissed = true;
+            missedCount = repetitions - monthCompletions.length;
+          }
+        }
+        
+        // Annual quests: missed if not completed this year
+        else if (frequency === QuestFrequencies.ANNUAL) {
+          const startOfYear = new Date(today.getFullYear(), 0, 1);
+          startOfYear.setHours(0, 0, 0, 0);
+          
+          const yearCompletions = allCompletions.filter(c => {
+            const completionDate = new Date(c.completedAt || c.$createdAt);
+            return completionDate >= startOfYear;
+          });
+          
+          if (yearCompletions.length === 0) {
+            isMissed = true;
+            missedCount = 1;
+          }
+        }
+        
+        if (isMissed) {
+          missed.push({
+            quest,
+            missedCount,
+            lastCompleted,
+            daysSinceLastCompletion: lastCompleted 
+              ? Math.floor((today - lastCompleted) / (1000 * 60 * 60 * 24))
+              : null,
+          });
+        }
+      } catch (error) {
+        console.error(`Error detecting missed quest ${quest.$id}:`, error);
+      }
+    }
+    
+    setMissedQuests(missed);
+  };
+  
+  // Detect missed quests when data loads
+  useEffect(() => {
+    if (quests.length > 0 && user && notificationsEnabled) {
+      detectMissedQuests();
+    } else if (!notificationsEnabled) {
+      setMissedQuests([]);
+    }
+  }, [quests, user, notificationsEnabled]);
+
   // Filter quests for today based on frequency
   const filterQuestsForToday = async (quests, userId) => {
     const today = new Date();
@@ -1971,6 +2091,31 @@ const HabitsTracker = () => {
           </TouchableOpacity>
         )}
 
+        {/* Missed Quests Notification Banner */}
+        {notificationsEnabled && missedQuests.length > 0 && (
+          <TouchableOpacity
+            style={styles.missedQuestsBanner}
+            activeOpacity={0.8}
+            onPress={() => setMissedQuestsModalVisible(true)}
+          >
+            <View style={styles.missedQuestsBannerContent}>
+              <Ionicons name="notifications" size={20} color={COLORS.accent.warning} />
+              <View style={styles.missedQuestsBannerText}>
+                <Text style={styles.missedQuestsBannerTitle}>
+                  {missedQuests.length} quest{missedQuests.length > 1 ? 's' : ''} missed
+                </Text>
+                <Text style={styles.missedQuestsBannerSubtitle}>
+                  Tap to view details
+                </Text>
+              </View>
+              <View style={styles.missedQuestsBadge}>
+                <Text style={styles.missedQuestsBadgeText}>{missedQuests.length}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Arcs Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -2058,7 +2203,15 @@ const HabitsTracker = () => {
         {/* Today's Quests Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>TODAY'S QUESTS</Text>
+            <View style={styles.sectionHeaderLeft}>
+              <Text style={styles.sectionTitle}>TODAY'S QUESTS</Text>
+              {notificationsEnabled && missedQuests.length > 0 && (
+                <View style={styles.missedQuestsSectionBadge}>
+                  <Ionicons name="warning" size={14} color={COLORS.accent.warning} />
+                  <Text style={styles.missedQuestsSectionBadgeText}>{missedQuests.length}</Text>
+                </View>
+              )}
+            </View>
             <View style={styles.questHeaderRight}>
               <Text style={styles.questCount}>{todayQuests.length}</Text>
               <TouchableOpacity style={styles.addButton} onPress={() => openQuestModal()}>
@@ -3509,6 +3662,41 @@ const HabitsTracker = () => {
                 </TouchableOpacity>
               </View>
 
+              {/* Notifications Toggle */}
+              <View style={styles.settingsSection}>
+                <Text style={[styles.inputLabel, { marginTop: 24 }]}>Quest Notifications</Text>
+                <Text style={styles.inputHint}>
+                  Get notified about missed quest recurrences
+                </Text>
+                
+                <TouchableOpacity
+                  style={styles.toggleContainer}
+                  onPress={() => {
+                    setNotificationsEnabled(!notificationsEnabled);
+                    if (!notificationsEnabled) {
+                      // Re-detect missed quests when enabling
+                      setTimeout(() => detectMissedQuests(), 500);
+                    }
+                  }}
+                >
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>Enable Missed Quest Notifications</Text>
+                    <Text style={styles.toggleDescription}>
+                      Show warnings and badges for missed quests
+                    </Text>
+                  </View>
+                  <View style={[
+                    styles.toggleSwitch,
+                    notificationsEnabled && styles.toggleSwitchActive
+                  ]}>
+                    <View style={[
+                      styles.toggleThumb,
+                      notificationsEnabled && styles.toggleThumbActive
+                    ]} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+
               {/* Penalty System Toggle */}
               <View style={styles.settingsSection}>
                 <Text style={[styles.inputLabel, { marginTop: 24 }]}>Penalty System</Text>
@@ -3559,6 +3747,354 @@ const HabitsTracker = () => {
                   </View>
                 )}
               </View>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Missed Quests Modal */}
+      <Modal
+        visible={missedQuestsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setMissedQuestsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setMissedQuestsModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalTitle}>Missed Quests</Text>
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {missedQuests.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="checkmark-circle" size={48} color={COLORS.accent.success} />
+                  <Text style={styles.emptyStateText}>All caught up!</Text>
+                  <Text style={styles.emptyStateSubtext}>No missed quests</Text>
+                </View>
+              ) : (
+                <View style={styles.missedQuestsList}>
+                  {missedQuests.map((missed) => {
+                    const arc = arcs.find(a => {
+                      const aId = typeof missed.quest.arcId === 'object' ? missed.quest.arcId.$id : missed.quest.arcId;
+                      return a.$id === aId;
+                    });
+                    
+                    return (
+                      <TouchableOpacity
+                        key={missed.quest.$id}
+                        style={styles.missedQuestCard}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setMissedQuestsModalVisible(false);
+                          setTimeout(() => openQuestModal(missed.quest), 300);
+                        }}
+                      >
+                        <View style={[styles.missedQuestIndicator, styles.missedQuestIndicatorLarge, { backgroundColor: `${COLORS.accent.danger}20` }]}>
+                          <Ionicons name="warning" size={20} color={COLORS.accent.danger} />
+                        </View>
+                        <View style={styles.missedQuestContent}>
+                          <View style={styles.missedQuestHeader}>
+                            <Text style={styles.missedQuestName}>{missed.quest.name}</Text>
+                            <View style={[styles.missedQuestCountBadge, { backgroundColor: COLORS.accent.danger }]}>
+                              <Text style={styles.missedQuestCountText}>{missed.missedCount}x</Text>
+                            </View>
+                          </View>
+                          <View style={styles.missedQuestMeta}>
+                            <View style={styles.missedQuestMetaItem}>
+                              <View style={[styles.missedQuestMetaIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
+                              <Text style={styles.missedQuestMetaText}>{arc?.name || 'Unassigned'}</Text>
+                            </View>
+                            {missed.lastCompleted && (
+                              <View style={styles.missedQuestMetaItem}>
+                                <Ionicons name="time-outline" size={14} color={COLORS.textTertiary} />
+                                <Text style={styles.missedQuestMetaText}>
+                                  {missed.daysSinceLastCompletion === 0 
+                                    ? 'Today' 
+                                    : missed.daysSinceLastCompletion === 1 
+                                    ? 'Yesterday' 
+                                    : `${missed.daysSinceLastCompletion} days ago`}
+                                </Text>
+                              </View>
+                            )}
+                            {!missed.lastCompleted && (
+                              <View style={styles.missedQuestMetaItem}>
+                                <Ionicons name="alert-circle-outline" size={14} color={COLORS.accent.danger} />
+                                <Text style={[styles.missedQuestMetaText, { color: COLORS.accent.danger }]}>
+                                  Never completed
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.missedQuestFrequency}>
+                            <Ionicons name="repeat" size={12} color={COLORS.textTertiary} />
+                            <Text style={styles.missedQuestFrequencyText}>
+                              {missed.quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
+                               missed.quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
+                               missed.quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
+                               missed.quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
+                              {missed.quest.repetitionPerPeriod > 1 && ` • ${missed.quest.repetitionPerPeriod}x`}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.missedQuestCompleteButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleCompleteQuest(missed.quest);
+                            setMissedQuestsModalVisible(false);
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.accent.success} />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Missed Quests Modal */}
+      <Modal
+        visible={missedQuestsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setMissedQuestsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setMissedQuestsModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalTitle}>Missed Quests</Text>
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {missedQuests.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="checkmark-circle" size={48} color={COLORS.accent.success} />
+                  <Text style={styles.emptyStateText}>All caught up!</Text>
+                  <Text style={styles.emptyStateSubtext}>No missed quests</Text>
+                </View>
+              ) : (
+                <View style={styles.missedQuestsList}>
+                  {missedQuests.map((missed) => {
+                    const arc = arcs.find(a => {
+                      const aId = typeof missed.quest.arcId === 'object' ? missed.quest.arcId.$id : missed.quest.arcId;
+                      return a.$id === aId;
+                    });
+                    
+                    return (
+                      <TouchableOpacity
+                        key={missed.quest.$id}
+                        style={styles.missedQuestCard}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setMissedQuestsModalVisible(false);
+                          setTimeout(() => openQuestModal(missed.quest), 300);
+                        }}
+                      >
+                        <View style={[styles.missedQuestIndicator, styles.missedQuestIndicatorLarge, { backgroundColor: `${COLORS.accent.danger}20` }]}>
+                          <Ionicons name="warning" size={20} color={COLORS.accent.danger} />
+                        </View>
+                        <View style={styles.missedQuestContent}>
+                          <View style={styles.missedQuestHeader}>
+                            <Text style={styles.missedQuestName}>{missed.quest.name}</Text>
+                            <View style={[styles.missedQuestCountBadge, { backgroundColor: COLORS.accent.danger }]}>
+                              <Text style={styles.missedQuestCountText}>{missed.missedCount}x</Text>
+                            </View>
+                          </View>
+                          <View style={styles.missedQuestMeta}>
+                            <View style={styles.missedQuestMetaItem}>
+                              <View style={[styles.missedQuestMetaIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
+                              <Text style={styles.missedQuestMetaText}>{arc?.name || 'Unassigned'}</Text>
+                            </View>
+                            {missed.lastCompleted && (
+                              <View style={styles.missedQuestMetaItem}>
+                                <Ionicons name="time-outline" size={14} color={COLORS.textTertiary} />
+                                <Text style={styles.missedQuestMetaText}>
+                                  {missed.daysSinceLastCompletion === 0 
+                                    ? 'Today' 
+                                    : missed.daysSinceLastCompletion === 1 
+                                    ? 'Yesterday' 
+                                    : `${missed.daysSinceLastCompletion} days ago`}
+                                </Text>
+                              </View>
+                            )}
+                            {!missed.lastCompleted && (
+                              <View style={styles.missedQuestMetaItem}>
+                                <Ionicons name="alert-circle-outline" size={14} color={COLORS.accent.danger} />
+                                <Text style={[styles.missedQuestMetaText, { color: COLORS.accent.danger }]}>
+                                  Never completed
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.missedQuestFrequency}>
+                            <Ionicons name="repeat" size={12} color={COLORS.textTertiary} />
+                            <Text style={styles.missedQuestFrequencyText}>
+                              {missed.quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
+                               missed.quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
+                               missed.quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
+                               missed.quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
+                              {missed.quest.repetitionPerPeriod > 1 && ` • ${missed.quest.repetitionPerPeriod}x`}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.missedQuestCompleteButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleCompleteQuest(missed.quest);
+                            setMissedQuestsModalVisible(false);
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.accent.success} />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Missed Quests Modal */}
+      <Modal
+        visible={missedQuestsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setMissedQuestsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setMissedQuestsModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalTitle}>Missed Quests</Text>
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {missedQuests.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="checkmark-circle" size={48} color={COLORS.accent.success} />
+                  <Text style={styles.emptyStateText}>All caught up!</Text>
+                  <Text style={styles.emptyStateSubtext}>No missed quests</Text>
+                </View>
+              ) : (
+                <View style={styles.missedQuestsList}>
+                  {missedQuests.map((missed) => {
+                    const arc = arcs.find(a => {
+                      const aId = typeof missed.quest.arcId === 'object' ? missed.quest.arcId.$id : missed.quest.arcId;
+                      return a.$id === aId;
+                    });
+                    
+                    return (
+                      <TouchableOpacity
+                        key={missed.quest.$id}
+                        style={styles.missedQuestCard}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setMissedQuestsModalVisible(false);
+                          setTimeout(() => openQuestModal(missed.quest), 300);
+                        }}
+                      >
+                        <View style={[styles.missedQuestIndicator, styles.missedQuestIndicatorLarge, { backgroundColor: `${COLORS.accent.danger}20` }]}>
+                          <Ionicons name="warning" size={20} color={COLORS.accent.danger} />
+                        </View>
+                        <View style={styles.missedQuestContent}>
+                          <View style={styles.missedQuestHeader}>
+                            <Text style={styles.missedQuestName}>{missed.quest.name}</Text>
+                            <View style={[styles.missedQuestCountBadge, { backgroundColor: COLORS.accent.danger }]}>
+                              <Text style={styles.missedQuestCountText}>{missed.missedCount}x</Text>
+                            </View>
+                          </View>
+                          <View style={styles.missedQuestMeta}>
+                            <View style={styles.missedQuestMetaItem}>
+                              <View style={[styles.missedQuestMetaIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
+                              <Text style={styles.missedQuestMetaText}>{arc?.name || 'Unassigned'}</Text>
+                            </View>
+                            {missed.lastCompleted && (
+                              <View style={styles.missedQuestMetaItem}>
+                                <Ionicons name="time-outline" size={14} color={COLORS.textTertiary} />
+                                <Text style={styles.missedQuestMetaText}>
+                                  {missed.daysSinceLastCompletion === 0 
+                                    ? 'Today' 
+                                    : missed.daysSinceLastCompletion === 1 
+                                    ? 'Yesterday' 
+                                    : `${missed.daysSinceLastCompletion} days ago`}
+                                </Text>
+                              </View>
+                            )}
+                            {!missed.lastCompleted && (
+                              <View style={styles.missedQuestMetaItem}>
+                                <Ionicons name="alert-circle-outline" size={14} color={COLORS.accent.danger} />
+                                <Text style={[styles.missedQuestMetaText, { color: COLORS.accent.danger }]}>
+                                  Never completed
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.missedQuestFrequency}>
+                            <Ionicons name="repeat" size={12} color={COLORS.textTertiary} />
+                            <Text style={styles.missedQuestFrequencyText}>
+                              {missed.quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
+                               missed.quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
+                               missed.quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
+                               missed.quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
+                              {missed.quest.repetitionPerPeriod > 1 && ` • ${missed.quest.repetitionPerPeriod}x`}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.missedQuestCompleteButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleCompleteQuest(missed.quest);
+                            setMissedQuestsModalVisible(false);
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.accent.success} />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
 
               <View style={{ height: 40 }} />
             </ScrollView>
@@ -6167,6 +6703,152 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.accent.danger,
     fontWeight: '500',
+  },
+  // Missed Quests Styles
+  missedQuestsBanner: {
+    backgroundColor: `${COLORS.accent.warning}15`,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: `${COLORS.accent.warning}30`,
+  },
+  missedQuestsBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  missedQuestsBannerText: {
+    flex: 1,
+  },
+  missedQuestsBannerTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  missedQuestsBannerSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  missedQuestsBadge: {
+    backgroundColor: COLORS.accent.warning,
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  missedQuestsBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  missedQuestsSectionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${COLORS.accent.warning}20`,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  missedQuestsSectionBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.accent.warning,
+  },
+  missedQuestIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: `${COLORS.accent.danger}20`,
+  },
+  missedQuestIndicatorLarge: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  missedQuestIndicatorText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.accent.danger,
+    textTransform: 'uppercase',
+  },
+  missedQuestsList: {
+    gap: 12,
+  },
+  missedQuestCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: `${COLORS.accent.danger}30`,
+    alignItems: 'center',
+    gap: 12,
+  },
+  missedQuestContent: {
+    flex: 1,
+  },
+  missedQuestHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  missedQuestName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  missedQuestCountBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  missedQuestCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  missedQuestMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 6,
+  },
+  missedQuestMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  missedQuestMetaIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  missedQuestMetaText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  missedQuestFrequency: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  missedQuestFrequencyText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  missedQuestCompleteButton: {
+    padding: 8,
   },
 });
 
