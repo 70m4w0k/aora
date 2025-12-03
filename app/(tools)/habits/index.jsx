@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,8 @@ import {
   Platform,
   Modal,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,9 +36,11 @@ import {
   completeTier,
   QuestFrequencies,
   TargetTypes,
+  ProgressionTypes,
   calculateLevel,
   getXPForNextLevel,
   getTotalXPForLevel,
+  updateProgressionType,
 } from '../../../lib/appwrite';
 
 // Dark theme colors - consistent with app
@@ -106,6 +108,25 @@ const HabitsTracker = () => {
     xpReward: '100',
     titleReward: '',
   });
+
+  // Settings Modal
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false);
+
+  // Custom Alert Modal
+  const [alertModalVisible, setAlertModalVisible] = useState(false);
+  const [alertData, setAlertData] = useState({ title: '', message: '', buttons: [] });
+
+  // Level Up Modal
+  const [levelUpModalVisible, setLevelUpModalVisible] = useState(false);
+  const [levelUpData, setLevelUpData] = useState({ type: null, level: null, xpEarned: null, arc: null });
+
+  // XP Notification
+  const [xpNotification, setXpNotification] = useState(null);
+  const xpAnim = useRef(new Animated.Value(0)).current;
+  const xpScale = useRef(new Animated.Value(0)).current;
+  
+  // XP Bar Pulse Animation
+  const xpBarPulse = useRef(new Animated.Value(1)).current;
   
   useEffect(() => {
     if (household?.$id && user?.$id) {
@@ -144,14 +165,8 @@ const HabitsTracker = () => {
       }
       setTierCompletions(completionsMap);
       
-      // Filter today's quests
-      // Show all quests for now (daily, weekly, monthly, annual, unique)
-      // TODO: Add proper filtering logic based on frequency and date
-      const todayQuestsFiltered = questsData.filter(quest => {
-        // For now, show all quests except those that are explicitly filtered out
-        // This ensures users can see their quests regardless of frequency
-        return true;
-      });
+      // Filter today's quests based on frequency
+      const todayQuestsFiltered = await filterQuestsForToday(questsData, user.$id);
       setTodayQuests(todayQuestsFiltered);
       
       // Debug: Log quests to see what we're getting
@@ -175,20 +190,118 @@ const HabitsTracker = () => {
     setRefreshing(false);
   };
 
+  // Custom Alert Function
+  const showAlert = (title, message, buttons = [{ text: 'OK', onPress: () => {} }]) => {
+    setAlertData({ title, message, buttons });
+    setAlertModalVisible(true);
+  };
+
+  // Show Level Up Modal
+  const showLevelUp = (type, level, xpEarned, arc = null) => {
+    setLevelUpData({ type, level, xpEarned, arc });
+    setLevelUpModalVisible(true);
+  };
+
+  // Show XP Notification
+  const showXPNotification = (xp, arcColor = null) => {
+    setXpNotification({ xp, arcColor });
+    
+    // Reset animations
+    xpAnim.setValue(0);
+    xpScale.setValue(0);
+    
+    // Animate scale (pop in)
+    Animated.spring(xpScale, {
+      toValue: 1,
+      tension: 100,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+    
+    // Animate upward and fade out
+    Animated.parallel([
+      Animated.timing(xpAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.timing(xpScale, {
+          toValue: 0.8,
+          duration: 1700,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start(() => {
+      // Reset after animation
+      setXpNotification(null);
+      xpAnim.setValue(0);
+      xpScale.setValue(0);
+    });
+    
+    // Pulse XP bar
+    Animated.sequence([
+      Animated.timing(xpBarPulse, {
+        toValue: 1.05,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(xpBarPulse, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
   const handleCompleteQuest = async (quest) => {
     try {
       const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
+      const xpEarned = quest.xpPerCompletion || 10;
+      
+      // Get current progress before completion
+      const currentProgress = await getUserProgress(user.$id, household.$id);
+      const oldLevel = currentProgress?.globalLevel || 1;
+      const oldArcProgress = currentProgress?.arcProgress ? 
+        (typeof currentProgress.arcProgress === 'string' ? JSON.parse(currentProgress.arcProgress) : currentProgress.arcProgress) : {};
+      const oldArcLevel = arcId && oldArcProgress[arcId] ? oldArcProgress[arcId].level : 1;
+      
       await completeQuest({
         questId: quest.$id,
         userId: user.$id,
         householdId: household.$id,
-        xpEarned: quest.xpPerCompletion || 10,
+        xpEarned: xpEarned,
         arcId: arcId,
         streakCount: 1, // TODO: Calculate actual streak
       });
+      
+      // Fetch updated progress
+      const updatedProgress = await getUserProgress(user.$id, household.$id);
+      const newLevel = updatedProgress?.globalLevel || 1;
+      const newArcProgress = updatedProgress?.arcProgress ? 
+        (typeof updatedProgress.arcProgress === 'string' ? JSON.parse(updatedProgress.arcProgress) : updatedProgress.arcProgress) : {};
+      const newArcLevel = arcId && newArcProgress[arcId] ? newArcProgress[arcId].level : 1;
+      
+      // Show XP notification
+      const arc = arcs.find(a => a.$id === arcId);
+      showXPNotification(xpEarned, arc?.color);
+      
+      // Check for level-ups
+      if (newLevel > oldLevel) {
+        setTimeout(() => {
+          showLevelUp('global', newLevel, xpEarned, null);
+        }, 500);
+      } else if (arcId && newArcLevel > oldArcLevel) {
+        setTimeout(() => {
+          showLevelUp('arc', newArcLevel, xpEarned, arc);
+        }, 500);
+      }
+      
       await fetchData();
     } catch (error) {
       console.error('Error completing quest:', error);
+      showAlert('Error', 'Could not complete quest', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
     }
   };
 
@@ -227,7 +340,7 @@ const HabitsTracker = () => {
 
   const handleSaveArc = async () => {
     if (!arcForm.name.trim()) {
-      Alert.alert('Error', 'Please enter an arc name');
+      showAlert('Error', 'Please enter an arc name', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
       return;
     }
 
@@ -253,26 +366,26 @@ const HabitsTracker = () => {
       closeArcModal();
     } catch (error) {
       console.error('Error saving arc:', error);
-      Alert.alert('Error', 'Could not save arc');
+      showAlert('Error', 'Could not save arc', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
     }
   };
 
   const handleDeleteArc = (arc) => {
-    Alert.alert(
+    showAlert(
       'Delete Arc',
       `Are you sure you want to delete "${arc.name}"? This will also delete all associated quests and tiers.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', onPress: () => setAlertModalVisible(false) },
         {
           text: 'Delete',
-          style: 'destructive',
           onPress: async () => {
+            setAlertModalVisible(false);
             try {
               await deleteArc(arc.$id);
               await fetchData();
             } catch (error) {
               console.error('Error deleting arc:', error);
-              Alert.alert('Error', 'Could not delete arc');
+              showAlert('Error', 'Could not delete arc', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
             }
           },
         },
@@ -325,11 +438,11 @@ const HabitsTracker = () => {
 
   const handleSaveQuest = async () => {
     if (!questForm.name.trim()) {
-      Alert.alert('Error', 'Please enter a quest name');
+      showAlert('Error', 'Please enter a quest name', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
       return;
     }
     if (!questForm.arcId) {
-      Alert.alert('Error', 'Please select an arc');
+      showAlert('Error', 'Please select an arc', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
       return;
     }
 
@@ -361,26 +474,26 @@ const HabitsTracker = () => {
       closeQuestModal();
     } catch (error) {
       console.error('Error saving quest:', error);
-      Alert.alert('Error', 'Could not save quest');
+      showAlert('Error', 'Could not save quest', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
     }
   };
 
   const handleDeleteQuest = (quest) => {
-    Alert.alert(
+    showAlert(
       'Delete Quest',
       `Are you sure you want to delete "${quest.name}"?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', onPress: () => setAlertModalVisible(false) },
         {
           text: 'Delete',
-          style: 'destructive',
           onPress: async () => {
+            setAlertModalVisible(false);
             try {
               await deleteQuest(quest.$id);
               await fetchData();
             } catch (error) {
               console.error('Error deleting quest:', error);
-              Alert.alert('Error', 'Could not delete quest');
+              showAlert('Error', 'Could not delete quest', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
             }
           },
         },
@@ -429,11 +542,11 @@ const HabitsTracker = () => {
 
   const handleSaveTier = async () => {
     if (!tierForm.name.trim()) {
-      Alert.alert('Error', 'Please enter a tier name');
+      showAlert('Error', 'Please enter a tier name', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
       return;
     }
     if (!tierForm.arcId) {
-      Alert.alert('Error', 'Please select an arc');
+      showAlert('Error', 'Please select an arc', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
       return;
     }
 
@@ -463,26 +576,26 @@ const HabitsTracker = () => {
       closeTierModal();
     } catch (error) {
       console.error('Error saving tier:', error);
-      Alert.alert('Error', 'Could not save tier');
+      showAlert('Error', 'Could not save tier', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
     }
   };
 
   const handleDeleteTier = (tier) => {
-    Alert.alert(
+    showAlert(
       'Delete Tier',
       `Are you sure you want to delete "${tier.name}"?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', onPress: () => setAlertModalVisible(false) },
         {
           text: 'Delete',
-          style: 'destructive',
           onPress: async () => {
+            setAlertModalVisible(false);
             try {
               await deleteTier(tier.$id);
               await fetchData();
             } catch (error) {
               console.error('Error deleting tier:', error);
-              Alert.alert('Error', 'Could not delete tier');
+              showAlert('Error', 'Could not delete tier', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
             }
           },
         },
@@ -493,18 +606,49 @@ const HabitsTracker = () => {
   const handleCompleteTier = async (tier) => {
     try {
       const arcId = typeof tier.arcId === 'object' ? tier.arcId.$id : tier.arcId;
+      const xpEarned = tier.xpReward || 100;
+      
+      // Get current progress before completion
+      const currentProgress = await getUserProgress(user.$id, household.$id);
+      const oldLevel = currentProgress?.globalLevel || 1;
+      const oldArcProgress = currentProgress?.arcProgress ? 
+        (typeof currentProgress.arcProgress === 'string' ? JSON.parse(currentProgress.arcProgress) : currentProgress.arcProgress) : {};
+      const oldArcLevel = arcId && oldArcProgress[arcId] ? oldArcProgress[arcId].level : 1;
+      
       await completeTier({
         tierId: tier.$id,
         userId: user.$id,
         householdId: household.$id,
-        xpEarned: tier.xpReward || 100,
+        xpEarned: xpEarned,
         arcId: arcId,
       });
+      
+      // Fetch updated progress
+      const updatedProgress = await getUserProgress(user.$id, household.$id);
+      const newLevel = updatedProgress?.globalLevel || 1;
+      const newArcProgress = updatedProgress?.arcProgress ? 
+        (typeof updatedProgress.arcProgress === 'string' ? JSON.parse(updatedProgress.arcProgress) : updatedProgress.arcProgress) : {};
+      const newArcLevel = arcId && newArcProgress[arcId] ? newArcProgress[arcId].level : 1;
+      
+      // Show XP notification
+      const arc = arcs.find(a => a.$id === arcId);
+      showXPNotification(xpEarned, arc?.color);
+      
+      // Check for level-ups
+      if (newLevel > oldLevel) {
+        setTimeout(() => {
+          showLevelUp('global', newLevel, xpEarned, null);
+        }, 500);
+      } else if (arcId && newArcLevel > oldArcLevel) {
+        setTimeout(() => {
+          showLevelUp('arc', newArcLevel, xpEarned, arc);
+        }, 500);
+      }
+      
       await fetchData();
-      Alert.alert('Success', `Tier "${tier.name}" completed! +${tier.xpReward || 100} XP`);
     } catch (error) {
       console.error('Error completing tier:', error);
-      Alert.alert('Error', 'Could not complete tier');
+      showAlert('Error', 'Could not complete tier', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
     }
   };
 
@@ -580,6 +724,145 @@ const HabitsTracker = () => {
     }
   };
 
+  // Filter quests for today based on frequency
+  const filterQuestsForToday = async (quests, userId) => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const dayOfMonth = today.getDate(); // 1-31
+    const month = today.getMonth(); // 0-11
+    const year = today.getFullYear();
+    
+    const filteredQuests = [];
+    
+    for (const quest of quests) {
+      const frequency = quest.frequency || QuestFrequencies.DAILY;
+      
+      // Daily: show every day
+      if (frequency === QuestFrequencies.DAILY) {
+        filteredQuests.push(quest);
+        continue;
+      }
+      
+      // Weekly: show every day, but check if completed enough times this week
+      // Users can complete weekly quests on any day of the week
+      if (frequency === QuestFrequencies.WEEKLY) {
+        // Check if quest has been completed enough times this week
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - dayOfWeek);
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        try {
+          const completions = await getQuestCompletions(
+            quest.$id, 
+            userId, 
+            startOfWeek.toISOString(), 
+            endOfWeek.toISOString()
+          );
+          const repetitions = quest.repetitionPerPeriod || 1;
+          
+          // Show if not completed enough times this week
+          if (completions.length < repetitions) {
+            filteredQuests.push(quest);
+          }
+        } catch (error) {
+          // If error, show the quest to avoid hiding valid quests
+          filteredQuests.push(quest);
+        }
+        continue;
+      }
+      
+      // Monthly: show on specific dates of the month
+      // Show on the 1st, 15th, and last day of month
+      // TODO: Add specific date selection in quest creation
+      if (frequency === QuestFrequencies.MONTHLY) {
+        const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+        const showDates = [1, 15, lastDayOfMonth];
+        
+        if (showDates.includes(dayOfMonth)) {
+          // Check if already completed enough times this month
+          const startOfMonth = new Date(year, month, 1);
+          startOfMonth.setHours(0, 0, 0, 0);
+          
+          const endOfMonth = new Date(year, month + 1, 0);
+          endOfMonth.setHours(23, 59, 59, 999);
+          
+          try {
+            const completions = await getQuestCompletions(
+              quest.$id, 
+              userId, 
+              startOfMonth.toISOString(), 
+              endOfMonth.toISOString()
+            );
+            const repetitions = quest.repetitionPerPeriod || 1;
+            
+            // Show if not completed enough times this month
+            if (completions.length < repetitions) {
+              filteredQuests.push(quest);
+            }
+          } catch (error) {
+            // If error, show the quest to avoid hiding valid quests
+            filteredQuests.push(quest);
+          }
+        }
+        continue;
+      }
+      
+      // Annual: show on specific date each year
+      // Show on January 1st
+      // TODO: Add specific date selection in quest creation
+      if (frequency === QuestFrequencies.ANNUAL) {
+        if (month === 0 && dayOfMonth === 1) {
+          // Check if already completed this year
+          const startOfYear = new Date(year, 0, 1);
+          startOfYear.setHours(0, 0, 0, 0);
+          
+          const endOfYear = new Date(year, 11, 31);
+          endOfYear.setHours(23, 59, 59, 999);
+          
+          try {
+            const completions = await getQuestCompletions(
+              quest.$id, 
+              userId, 
+              startOfYear.toISOString(), 
+              endOfYear.toISOString()
+            );
+            
+            // Show if not completed this year
+            if (completions.length === 0) {
+              filteredQuests.push(quest);
+            }
+          } catch (error) {
+            // If error, show the quest to avoid hiding valid quests
+            filteredQuests.push(quest);
+          }
+        }
+        continue;
+      }
+      
+      // Unique: show until completed (once)
+      if (frequency === QuestFrequencies.UNIQUE) {
+        try {
+          const completions = await getQuestCompletions(quest.$id, userId);
+          
+          // Show if never completed
+          if (completions.length === 0) {
+            filteredQuests.push(quest);
+          }
+        } catch (error) {
+          // If error, show the quest to avoid hiding valid quests
+          filteredQuests.push(quest);
+        }
+        continue;
+      }
+    }
+    
+    return filteredQuests;
+  };
+
   const [questCompletions, setQuestCompletions] = useState({});
 
   useEffect(() => {
@@ -630,6 +913,49 @@ const HabitsTracker = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* XP Notification */}
+      {xpNotification && (
+        <Animated.View
+          style={[
+            styles.xpNotification,
+            {
+              opacity: xpAnim.interpolate({
+                inputRange: [0, 0.3, 1],
+                outputRange: [0, 1, 0],
+              }),
+              transform: [
+                {
+                  translateY: xpAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -100],
+                  }),
+                },
+                {
+                  scale: xpScale.interpolate({
+                    inputRange: [0, 0.5, 1],
+                    outputRange: [0, 1.2, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+          pointerEvents="none"
+        >
+          <View style={[
+            styles.xpNotificationContent,
+            xpNotification.arcColor && { borderColor: xpNotification.arcColor },
+          ]}>
+            <Ionicons name="star" size={20} color={xpNotification.arcColor || COLORS.accent.primary} />
+            <Text style={[
+              styles.xpNotificationText,
+              xpNotification.arcColor && { color: xpNotification.arcColor },
+            ]}>
+              +{xpNotification.xp} XP
+            </Text>
+          </View>
+        </Animated.View>
+      )}
+
       {/* Header */}
       <View style={[styles.header, Platform.OS === 'android' && styles.headerAndroid]}>
         <TouchableOpacity
@@ -642,7 +968,12 @@ const HabitsTracker = () => {
           <Text style={styles.headerTitle}>NEOSYSTEM</Text>
           <Text style={styles.headerSubtitle}>Habits Tracker</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => setSettingsModalVisible(true)}
+        >
+          <Ionicons name="settings-outline" size={24} color={COLORS.textPrimary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -665,7 +996,14 @@ const HabitsTracker = () => {
                 <Text style={styles.globalXP}>{userProgress.totalXP || 0}</Text>
               </View>
             </View>
-            <View style={styles.xpBarContainer}>
+            <Animated.View 
+              style={[
+                styles.xpBarContainer,
+                {
+                  transform: [{ scale: xpBarPulse }],
+                },
+              ]}
+            >
               {(() => {
                 const currentLevel = userProgress.globalLevel || 1;
                 const currentXP = userProgress.totalXP || 0;
@@ -678,7 +1016,7 @@ const HabitsTracker = () => {
                 return (
                   <>
                     <View style={styles.xpBarBackground}>
-                      <View 
+                      <Animated.View 
                         style={[
                           styles.xpBarFill, 
                           { width: `${progressPercent}%` }
@@ -691,7 +1029,7 @@ const HabitsTracker = () => {
                   </>
                 );
               })()}
-            </View>
+            </Animated.View>
           </View>
         )}
 
@@ -742,22 +1080,36 @@ const HabitsTracker = () => {
                       <View style={styles.arcInfo}>
                         <Text style={styles.arcName}>{arc.name}</Text>
                         <Text style={styles.arcStats}>
-                          Level {progress.level} • {arcQuests.length} quests
+                          Level {progress.level || 1} • {progress.questsCompleted || 0} quests • {progress.tiersCompleted || 0} tiers
                         </Text>
                       </View>
                     </View>
                     <View style={styles.arcProgressBar}>
-                      <View 
-                        style={[
-                          styles.arcProgressFill, 
-                          { 
-                            width: `${Math.min((progress.totalXP % 100) / 100 * 100, 100)}%`,
-                            backgroundColor: arc.color || COLORS.accent.primary,
-                          }
-                        ]} 
-                      />
+                      {(() => {
+                        const progressionType = userProgress?.progressionType || 'progressive';
+                        const arcLevel = progress.level || 1;
+                        const arcXP = progress.totalXP || 0;
+                        const xpForNextLevel = getXPForNextLevel(arcLevel, progressionType);
+                        const xpForCurrentLevel = getTotalXPForLevel(arcLevel, progressionType);
+                        const xpInCurrentLevel = Math.max(0, arcXP - xpForCurrentLevel);
+                        const progressPercent = Math.min((xpInCurrentLevel / xpForNextLevel) * 100, 100);
+                        
+                        return (
+                          <>
+                            <View 
+                              style={[
+                                styles.arcProgressFill, 
+                                { 
+                                  width: `${progressPercent}%`,
+                                  backgroundColor: arc.color || COLORS.accent.primary,
+                                }
+                              ]} 
+                            />
+                          </>
+                        );
+                      })()}
                     </View>
-                    <Text style={styles.arcXP}>{progress.totalXP} XP</Text>
+                    <Text style={styles.arcXP}>{progress.totalXP || 0} XP • Level {progress.level || 1}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -1348,6 +1700,200 @@ const HabitsTracker = () => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Settings Modal */}
+      <Modal
+        visible={settingsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSettingsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setSettingsModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Settings</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Progression Type */}
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Progression Type</Text>
+              <Text style={styles.inputHint}>
+                Choose how XP requirements scale as you level up
+              </Text>
+              
+              <View style={styles.progressionTypeContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.progressionTypeCard,
+                    userProgress?.progressionType === ProgressionTypes.LINEAR && styles.progressionTypeCardSelected,
+                  ]}
+                  onPress={async () => {
+                    try {
+                      await updateProgressionType(user.$id, household.$id, ProgressionTypes.LINEAR);
+                      await fetchData();
+                      showAlert('Success', 'Progression type updated to Linear', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
+                    } catch (error) {
+                      console.error('Error updating progression type:', error);
+                      showAlert('Error', 'Could not update progression type', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
+                    }
+                  }}
+                >
+                  <Text style={styles.progressionTypeTitle}>Linear</Text>
+                  <Text style={styles.progressionTypeDescription}>
+                    100 XP per level{'\n'}
+                    Consistent progression
+                  </Text>
+                  {userProgress?.progressionType === ProgressionTypes.LINEAR && (
+                    <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.primary} style={styles.progressionTypeCheck} />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.progressionTypeCard,
+                    (!userProgress?.progressionType || userProgress?.progressionType === ProgressionTypes.PROGRESSIVE) && styles.progressionTypeCardSelected,
+                  ]}
+                  onPress={async () => {
+                    try {
+                      await updateProgressionType(user.$id, household.$id, ProgressionTypes.PROGRESSIVE);
+                      await fetchData();
+                      showAlert('Success', 'Progression type updated to Progressive', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
+                    } catch (error) {
+                      console.error('Error updating progression type:', error);
+                      showAlert('Error', 'Could not update progression type', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
+                    }
+                  }}
+                >
+                  <Text style={styles.progressionTypeTitle}>Progressive</Text>
+                  <Text style={styles.progressionTypeDescription}>
+                    Exponential growth{'\n'}
+                    Level 1: 50 XP, Level 2: 75 XP, etc.
+                  </Text>
+                  {(!userProgress?.progressionType || userProgress?.progressionType === ProgressionTypes.PROGRESSIVE) && (
+                    <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.primary} style={styles.progressionTypeCheck} />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Custom Alert Modal */}
+      <Modal
+        visible={alertModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setAlertModalVisible(false)}
+      >
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertContent}>
+            <Text style={styles.alertTitle}>{alertData.title}</Text>
+            <Text style={styles.alertMessage}>{alertData.message}</Text>
+            <View style={styles.alertButtons}>
+              {alertData.buttons.map((button, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.alertButton,
+                    index === alertData.buttons.length - 1 && alertData.buttons.length > 1 && styles.alertButtonPrimary,
+                    button.text === 'Delete' && styles.alertButtonDanger,
+                  ]}
+                  onPress={() => {
+                    if (button.onPress) button.onPress();
+                    setAlertModalVisible(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.alertButtonText,
+                    index === alertData.buttons.length - 1 && alertData.buttons.length > 1 && styles.alertButtonTextPrimary,
+                    button.text === 'Delete' && styles.alertButtonTextDanger,
+                  ]}>
+                    {button.text}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Level Up Modal */}
+      <Modal
+        visible={levelUpModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setLevelUpModalVisible(false)}
+      >
+        <View style={styles.levelUpOverlay}>
+          <View style={[
+            styles.levelUpContent,
+            levelUpData.arc && { borderColor: levelUpData.arc.color || COLORS.accent.primary },
+          ]}>
+            {/* Icon/Emoji */}
+            <View style={[
+              styles.levelUpIconContainer,
+              levelUpData.arc && { backgroundColor: `${levelUpData.arc.color || COLORS.accent.primary}20` },
+            ]}>
+              {levelUpData.arc?.icon ? (
+                <Ionicons 
+                  name={levelUpData.arc.icon} 
+                  size={40} 
+                  color={levelUpData.arc.color || COLORS.accent.primary} 
+                />
+              ) : (
+                <Text style={styles.levelUpEmoji}>
+                  {levelUpData.type === 'global' ? '🎉' : '⭐'}
+                </Text>
+              )}
+            </View>
+
+            {/* Title */}
+            <Text style={[
+              styles.levelUpTitle,
+              levelUpData.arc && { color: levelUpData.arc.color || COLORS.accent.primary },
+            ]}>
+              {levelUpData.type === 'global' ? 'Level Up!' : `${levelUpData.arc?.name || 'Arc'} Level Up!`}
+            </Text>
+
+            {/* Level Display */}
+            <View style={styles.levelUpLevelContainer}>
+              <Text style={styles.levelUpLevelLabel}>Level</Text>
+              <Text style={[
+                styles.levelUpLevelValue,
+                levelUpData.arc && { color: levelUpData.arc.color || COLORS.accent.primary },
+              ]}>
+                {levelUpData.level}
+              </Text>
+            </View>
+
+            {/* XP Earned */}
+            <Text style={styles.levelUpXP}>
+              +{levelUpData.xpEarned} XP earned
+            </Text>
+
+            {/* Close Button */}
+            <TouchableOpacity
+              style={[
+                styles.levelUpButton,
+                levelUpData.arc && { backgroundColor: levelUpData.arc.color || COLORS.accent.primary },
+              ]}
+              onPress={() => setLevelUpModalVisible(false)}
+            >
+              <Text style={styles.levelUpButtonText}>Awesome!</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1785,6 +2331,210 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textTertiary,
     textAlign: 'center',
+  },
+  // Progression Type Styles
+  progressionTypeContainer: {
+    gap: 12,
+    marginTop: 8,
+  },
+  progressionTypeCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    position: 'relative',
+  },
+  progressionTypeCardSelected: {
+    borderColor: COLORS.accent.primary,
+    backgroundColor: COLORS.accent.primary + '10',
+  },
+  progressionTypeTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  progressionTypeDescription: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  progressionTypeCheck: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  // XP Notification Styles
+  xpNotification: {
+    position: 'absolute',
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    pointerEvents: 'none',
+  },
+  xpNotificationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: COLORS.accent.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    gap: 8,
+  },
+  xpNotificationText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+    letterSpacing: 0.5,
+  },
+  // Alert Modal Styles
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  alertContent: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  alertTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  alertMessage: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  alertButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  alertButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  alertButtonPrimary: {
+    backgroundColor: COLORS.accent.primary,
+    borderColor: COLORS.accent.primary,
+  },
+  alertButtonDanger: {
+    backgroundColor: COLORS.accent.danger,
+    borderColor: COLORS.accent.danger,
+  },
+  alertButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  alertButtonTextPrimary: {
+    color: COLORS.textPrimary,
+  },
+  alertButtonTextDanger: {
+    color: COLORS.textPrimary,
+  },
+  // Level Up Modal Styles
+  levelUpOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  levelUpContent: {
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.accent.primary,
+  },
+  levelUpIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${COLORS.accent.primary}20`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  levelUpEmoji: {
+    fontSize: 48,
+  },
+  levelUpTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  levelUpLevelContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  levelUpLevelLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  levelUpLevelValue: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+    lineHeight: 56,
+  },
+  levelUpXP: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 20,
+  },
+  levelUpButton: {
+    backgroundColor: COLORS.accent.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 20,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  levelUpButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
   },
   // Modal Styles
   modalOverlay: {
