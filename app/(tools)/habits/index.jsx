@@ -46,6 +46,7 @@ import {
   calculatePenaltyXP,
   togglePenaltySystem,
   overridePenalty,
+  getXpHistory,
 } from '../../../lib/appwrite';
 
 // Dark theme colors - consistent with app
@@ -172,6 +173,15 @@ const HabitsTracker = () => {
   const [streakCalendarModalVisible, setStreakCalendarModalVisible] = useState(false);
   const [selectedQuestForStreak, setSelectedQuestForStreak] = useState(null); // null = all quests
   const [streakCalendarData, setStreakCalendarData] = useState({}); // { date: { questId: streakCount } }
+  const [xpHistoryModalVisible, setXpHistoryModalVisible] = useState(false);
+  const [xpHistory, setXpHistory] = useState([]);
+  const [xpHistoryLoading, setXpHistoryLoading] = useState(false);
+  const [xpHistoryFilters, setXpHistoryFilters] = useState({
+    arcId: null,
+    sourceType: null, // 'quest' or 'tier'
+    startDate: null,
+    endDate: null,
+  });
   
   // Arc Modal
   const [arcModalVisible, setArcModalVisible] = useState(false);
@@ -597,6 +607,7 @@ const HabitsTracker = () => {
         }
       }
       
+      const questArcForLog = arcs.find(a => a.$id === arcId);
       await completeQuest({
         questId: quest.$id,
         userId: user.$id,
@@ -607,6 +618,8 @@ const HabitsTracker = () => {
         penaltyXP: penaltyXP,
         newTitles: newTitles,
         newAchievements: newAchievements,
+        questName: quest.name,
+        arcName: questArcForLog?.name,
       });
       
       // Fetch updated progress (optimized - only fetch progress, not all data)
@@ -629,8 +642,7 @@ const HabitsTracker = () => {
       }
       
       // Show XP notification
-      const arc = arcs.find(a => a.$id === arcId);
-      showXPNotification(xpEarned, arc?.color);
+      showXPNotification(xpEarned, questArcForLog?.color);
       
       // Check for title/achievement unlocks and show celebration
       if (titleUnlocks.titles.length > 0) {
@@ -1156,6 +1168,7 @@ const HabitsTracker = () => {
       }
       const newAchievements = titleUnlocks.achievements.map(a => a.id);
       
+      const tierArc = arcs.find(a => a.$id === arcId);
       await completeTier({
         tierId: tier.$id,
         userId: user.$id,
@@ -1164,6 +1177,8 @@ const HabitsTracker = () => {
         arcId: arcId,
         newTitles: newTitles,
         newAchievements: newAchievements,
+        tierName: tier.name,
+        arcName: tierArc?.name,
       });
       
       // Fetch updated progress
@@ -1174,8 +1189,7 @@ const HabitsTracker = () => {
       const newArcLevel = arcId && newArcProgress[arcId] ? newArcProgress[arcId].level : 1;
       
       // Show XP notification
-      const arc = arcs.find(a => a.$id === arcId);
-      showXPNotification(xpEarned, arc?.color);
+      showXPNotification(xpEarned, tierArc?.color);
       
       // Check for title unlocks and show celebration
       if (titleUnlocks.titles.length > 0) {
@@ -1453,6 +1467,35 @@ const HabitsTracker = () => {
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   };
+
+  // Load XP History
+  const loadXpHistory = async () => {
+    if (!user || !household) return;
+    
+    setXpHistoryLoading(true);
+    try {
+      const filters = {
+        arcId: xpHistoryFilters.arcId,
+        sourceType: xpHistoryFilters.sourceType,
+        startDate: xpHistoryFilters.startDate,
+        endDate: xpHistoryFilters.endDate,
+      };
+      
+      const history = await getXpHistory(user.$id, household.$id, filters);
+      setXpHistory(history);
+    } catch (error) {
+      console.error('Error loading XP history:', error);
+    } finally {
+      setXpHistoryLoading(false);
+    }
+  };
+
+  // Load XP history when modal opens
+  useEffect(() => {
+    if (xpHistoryModalVisible && user && household) {
+      loadXpHistory();
+    }
+  }, [xpHistoryModalVisible]);
 
   // Filter quests for today based on frequency
   const filterQuestsForToday = async (quests, userId) => {
@@ -1902,11 +1945,28 @@ const HabitsTracker = () => {
               })()}
             </Animated.View>
             <View style={styles.globalProgressFooter}>
-              <Ionicons name="trophy-outline" size={16} color={COLORS.textSecondary} />
-              <Text style={styles.globalProgressFooterText}>
-                {unlockedTitles.length + unlockedAchievements.length} unlocked
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+              <TouchableOpacity 
+                style={styles.globalProgressFooterItem}
+                activeOpacity={0.7}
+                onPress={() => setTitlesAchievementsModalVisible(true)}
+              >
+                <Ionicons name="trophy-outline" size={16} color={COLORS.textSecondary} />
+                <Text style={styles.globalProgressFooterText}>
+                  {unlockedTitles.length + unlockedAchievements.length} unlocked
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.globalProgressFooterItem}
+                activeOpacity={0.7}
+                onPress={() => setXpHistoryModalVisible(true)}
+              >
+                <Ionicons name="time-outline" size={16} color={COLORS.accent.primary} />
+                <Text style={[styles.globalProgressFooterText, { color: COLORS.accent.primary }]}>
+                  XP History
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.accent.primary} />
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         )}
@@ -3448,6 +3508,245 @@ const HabitsTracker = () => {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* XP History Modal */}
+      <Modal
+        visible={xpHistoryModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setXpHistoryModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setXpHistoryModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalTitle}>XP History</Text>
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Filters */}
+              <View style={styles.xpHistoryFilters}>
+                <Text style={styles.inputLabel}>Filters</Text>
+                
+                {/* Arc Filter */}
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>Arc</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.filterChip,
+                        xpHistoryFilters.arcId === null && styles.filterChipActive,
+                      ]}
+                      onPress={() => {
+                        setXpHistoryFilters(prev => ({ ...prev, arcId: null }));
+                      }}
+                    >
+                      <Text style={[
+                        styles.filterChipText,
+                        xpHistoryFilters.arcId === null && styles.filterChipTextActive,
+                      ]}>
+                        All
+                      </Text>
+                    </TouchableOpacity>
+                    {arcs.map((arc) => (
+                      <TouchableOpacity
+                        key={arc.$id}
+                        style={[
+                          styles.filterChip,
+                          xpHistoryFilters.arcId === arc.$id && styles.filterChipActive,
+                          xpHistoryFilters.arcId === arc.$id && { borderColor: arc.color },
+                        ]}
+                        onPress={() => {
+                          setXpHistoryFilters(prev => ({ ...prev, arcId: arc.$id }));
+                        }}
+                      >
+                        <View style={[styles.filterChipIndicator, { backgroundColor: arc.color }]} />
+                        <Text style={[
+                          styles.filterChipText,
+                          xpHistoryFilters.arcId === arc.$id && styles.filterChipTextActive,
+                        ]}>
+                          {arc.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Source Type Filter */}
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>Source</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.filterChip,
+                        xpHistoryFilters.sourceType === null && styles.filterChipActive,
+                      ]}
+                      onPress={() => {
+                        setXpHistoryFilters(prev => ({ ...prev, sourceType: null }));
+                      }}
+                    >
+                      <Text style={[
+                        styles.filterChipText,
+                        xpHistoryFilters.sourceType === null && styles.filterChipTextActive,
+                      ]}>
+                        All
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.filterChip,
+                        xpHistoryFilters.sourceType === 'quest' && styles.filterChipActive,
+                      ]}
+                      onPress={() => {
+                        setXpHistoryFilters(prev => ({ ...prev, sourceType: 'quest' }));
+                      }}
+                    >
+                      <Text style={[
+                        styles.filterChipText,
+                        xpHistoryFilters.sourceType === 'quest' && styles.filterChipTextActive,
+                      ]}>
+                        Quests
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.filterChip,
+                        xpHistoryFilters.sourceType === 'tier' && styles.filterChipActive,
+                      ]}
+                      onPress={() => {
+                        setXpHistoryFilters(prev => ({ ...prev, sourceType: 'tier' }));
+                      }}
+                    >
+                      <Text style={[
+                        styles.filterChipText,
+                        xpHistoryFilters.sourceType === 'tier' && styles.filterChipTextActive,
+                      ]}>
+                        Tiers
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Apply Filters Button */}
+                <TouchableOpacity
+                  style={styles.applyFiltersButton}
+                  onPress={loadXpHistory}
+                >
+                  <Text style={styles.applyFiltersButtonText}>Apply Filters</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* XP History Timeline */}
+              {xpHistoryLoading ? (
+                <View style={styles.xpHistoryLoading}>
+                  <ActivityIndicator size="small" color={COLORS.accent.primary} />
+                  <Text style={styles.xpHistoryLoadingText}>Loading history...</Text>
+                </View>
+              ) : xpHistory.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="time-outline" size={48} color={COLORS.textTertiary} />
+                  <Text style={styles.emptyStateText}>No XP history yet</Text>
+                  <Text style={styles.emptyStateSubtext}>Complete quests and tiers to see your XP gains</Text>
+                </View>
+              ) : (
+                <View style={styles.xpHistoryTimeline}>
+                  {xpHistory.map((entry, index) => {
+                    const arc = arcs.find(a => {
+                      const aId = typeof entry.arcId === 'object' ? entry.arcId?.$id : entry.arcId;
+                      return a.$id === aId;
+                    });
+                    const date = new Date(entry.earnedAt || entry.$createdAt);
+                    const isToday = date.toDateString() === new Date().toDateString();
+                    const isYesterday = date.toDateString() === new Date(Date.now() - 86400000).toDateString();
+                    
+                    let dateLabel = '';
+                    if (isToday) {
+                      dateLabel = 'Today';
+                    } else if (isYesterday) {
+                      dateLabel = 'Yesterday';
+                    } else {
+                      dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
+                    }
+                    
+                    const timeLabel = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                    
+                    return (
+                      <View key={entry.$id} style={styles.xpHistoryEntry}>
+                        <View style={styles.xpHistoryTimelineLine}>
+                          <View style={[
+                            styles.xpHistoryTimelineDot,
+                            { backgroundColor: arc?.color || COLORS.accent.primary },
+                          ]} />
+                          {index < xpHistory.length - 1 && <View style={styles.xpHistoryTimelineLineConnector} />}
+                        </View>
+                        <View style={styles.xpHistoryEntryContent}>
+                          <View style={styles.xpHistoryEntryHeader}>
+                            <View style={styles.xpHistoryEntryInfo}>
+                              <Text style={styles.xpHistoryEntrySource}>
+                                {entry.questName || entry.tierName || 'Unknown'}
+                              </Text>
+                              {entry.arcName && (
+                                <Text style={styles.xpHistoryEntryArc}>
+                                  {entry.arcName}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={styles.xpHistoryEntryXP}>
+                              <Text style={[
+                                styles.xpHistoryEntryXPAmount,
+                                entry.penaltyXP > 0 && { color: COLORS.accent.danger },
+                              ]}>
+                                {entry.penaltyXP > 0 ? '-' : '+'}{entry.xpAmount}
+                              </Text>
+                              <Text style={styles.xpHistoryEntryXPLabel}>XP</Text>
+                            </View>
+                          </View>
+                          <View style={styles.xpHistoryEntryMeta}>
+                            <View style={[
+                              styles.xpHistoryEntrySourceType,
+                              { backgroundColor: entry.sourceType === 'quest' ? COLORS.accent.primary + '20' : COLORS.accent.success + '20' },
+                            ]}>
+                              <Ionicons 
+                                name={entry.sourceType === 'quest' ? 'checkmark-circle' : 'trophy'} 
+                                size={12} 
+                                color={entry.sourceType === 'quest' ? COLORS.accent.primary : COLORS.accent.success} 
+                              />
+                              <Text style={[
+                                styles.xpHistoryEntrySourceTypeText,
+                                { color: entry.sourceType === 'quest' ? COLORS.accent.primary : COLORS.accent.success },
+                              ]}>
+                                {entry.sourceType === 'quest' ? 'Quest' : 'Tier'}
+                              </Text>
+                            </View>
+                            <Text style={styles.xpHistoryEntryDate}>
+                              {dateLabel} • {timeLabel}
+                            </Text>
+                            {entry.penaltyXP > 0 && (
+                              <Text style={styles.xpHistoryEntryPenalty}>
+                                Penalty: -{entry.penaltyXP} XP
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Streak Calendar Modal */}
       <Modal
         visible={streakCalendarModalVisible}
@@ -3904,12 +4203,19 @@ const styles = StyleSheet.create({
   globalProgressFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-around',
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+    gap: 8,
+  },
+  globalProgressFooterItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
+    flex: 1,
+    justifyContent: 'center',
   },
   globalProgressFooterText: {
     fontSize: 12,
@@ -5495,6 +5801,170 @@ const styles = StyleSheet.create({
   streakCalendarLoadingText: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  // XP History Styles
+  xpHistoryFilters: {
+    marginBottom: 24,
+  },
+  filterRow: {
+    marginBottom: 16,
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 6,
+  },
+  filterChipActive: {
+    borderWidth: 2,
+    backgroundColor: COLORS.card,
+  },
+  filterChipIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  applyFiltersButton: {
+    backgroundColor: COLORS.accent.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  applyFiltersButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  xpHistoryLoading: {
+    padding: 40,
+    alignItems: 'center',
+    gap: 12,
+  },
+  xpHistoryLoadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  xpHistoryTimeline: {
+    marginTop: 8,
+  },
+  xpHistoryEntry: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  xpHistoryTimelineLine: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 20,
+  },
+  xpHistoryTimelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: COLORS.card,
+  },
+  xpHistoryTimelineLineConnector: {
+    width: 2,
+    flex: 1,
+    backgroundColor: COLORS.border,
+    marginTop: 4,
+    minHeight: 40,
+  },
+  xpHistoryEntryContent: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  xpHistoryEntryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  xpHistoryEntryInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  xpHistoryEntrySource: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  xpHistoryEntryArc: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  xpHistoryEntryXP: {
+    alignItems: 'flex-end',
+  },
+  xpHistoryEntryXPAmount: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+    marginBottom: 2,
+  },
+  xpHistoryEntryXPLabel: {
+    fontSize: 10,
+    color: COLORS.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  xpHistoryEntryMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  xpHistoryEntrySourceType: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  xpHistoryEntrySourceTypeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  xpHistoryEntryDate: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  xpHistoryEntryPenalty: {
+    fontSize: 11,
+    color: COLORS.accent.danger,
+    fontWeight: '500',
   },
 });
 
