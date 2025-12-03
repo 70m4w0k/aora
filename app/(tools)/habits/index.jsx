@@ -71,6 +71,7 @@ const HabitsTracker = () => {
   const [quests, setQuests] = useState([]);
   const [tiers, setTiers] = useState([]);
   const [tierCompletions, setTierCompletions] = useState({}); // { tierId: completion }
+  const [tierProgress, setTierProgress] = useState({}); // { tierId: { current, target, percentage } }
   const [userProgress, setUserProgress] = useState(null);
   const [todayQuests, setTodayQuests] = useState([]);
   
@@ -164,6 +165,18 @@ const HabitsTracker = () => {
         }
       }
       setTierCompletions(completionsMap);
+      
+      // Calculate tier progress for all tiers
+      const progressMap = {};
+      for (const tier of tiersData) {
+        try {
+          const progress = await getTierProgress(tier);
+          progressMap[tier.$id] = progress;
+        } catch (error) {
+          progressMap[tier.$id] = { current: 0, target: tier.targetValue || 100, percentage: 0 };
+        }
+      }
+      setTierProgress(progressMap);
       
       // Filter today's quests based on frequency
       const todayQuestsFiltered = await filterQuestsForToday(questsData, user.$id);
@@ -343,6 +356,23 @@ const HabitsTracker = () => {
       }
       
       await fetchData();
+      
+      // Update tier progress for affected tiers
+      const affectedTiers = tiers.filter(t => {
+        const tArcId = typeof t.arcId === 'object' ? t.arcId.$id : t.arcId;
+        return tArcId === arcId;
+      });
+      
+      const updatedProgressMap = { ...tierProgress };
+      for (const tier of affectedTiers) {
+        try {
+          const progress = await getTierProgress(tier);
+          updatedProgressMap[tier.$id] = progress;
+        } catch (error) {
+          // Keep existing progress on error
+        }
+      }
+      setTierProgress(updatedProgressMap);
     } catch (error) {
       console.error('Error completing quest:', error);
       showAlert('Error', 'Could not complete quest', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
@@ -698,7 +728,9 @@ const HabitsTracker = () => {
 
   // Calculate tier progress based on quest completions
   const getTierProgress = async (tier) => {
-    if (!tier || !user?.$id) return { current: 0, target: tier?.targetValue || 100, percentage: 0 };
+    if (!tier || !user?.$id || !quests.length) {
+      return { current: 0, target: tier?.targetValue || 100, percentage: 0 };
+    }
     
     try {
       const arcId = typeof tier.arcId === 'object' ? tier.arcId.$id : tier.arcId;
@@ -707,31 +739,46 @@ const HabitsTracker = () => {
         return qArcId === arcId;
       });
 
+      if (arcQuests.length === 0) {
+        return { current: 0, target: tier.targetValue || 100, percentage: 0 };
+      }
+
       if (tier.targetType === TargetTypes.DAYS) {
-        // Count unique days with quest completions
+        // Count unique days with quest completions within the target period
         const today = new Date();
+        today.setHours(23, 59, 59, 999);
         const startDate = new Date(today);
         startDate.setDate(startDate.getDate() - (tier.targetValue || 100));
+        startDate.setHours(0, 0, 0, 0);
         
         const completionDates = new Set();
         for (const quest of arcQuests) {
           try {
-            const completions = await getQuestCompletions(quest.$id, user.$id, startDate.toISOString(), today.toISOString());
+            const completions = await getQuestCompletions(
+              quest.$id, 
+              user.$id, 
+              startDate.toISOString(), 
+              today.toISOString()
+            );
             completions.forEach(c => {
-              const date = new Date(c.completedAt);
-              completionDates.add(date.toDateString());
+              const completionDate = new Date(c.completedAt || c.$createdAt);
+              completionDate.setHours(0, 0, 0, 0);
+              completionDates.add(completionDate.toISOString());
             });
           } catch (error) {
             // Skip if error
           }
         }
+        
+        const current = completionDates.size;
+        const target = tier.targetValue || 100;
         return {
-          current: completionDates.size,
-          target: tier.targetValue || 100,
-          percentage: Math.min((completionDates.size / (tier.targetValue || 100)) * 100, 100),
+          current,
+          target,
+          percentage: Math.min((current / target) * 100, 100),
         };
       } else if (tier.targetType === TargetTypes.COUNT) {
-        // Count total quest completions
+        // Count total quest completions for all quests in the arc
         let totalCompletions = 0;
         for (const quest of arcQuests) {
           try {
@@ -741,10 +788,33 @@ const HabitsTracker = () => {
             // Skip if error
           }
         }
+        
+        const current = totalCompletions;
+        const target = tier.targetValue || 100;
         return {
-          current: totalCompletions,
-          target: tier.targetValue || 100,
-          percentage: Math.min((totalCompletions / (tier.targetValue || 100)) * 100, 100),
+          current,
+          target,
+          percentage: Math.min((current / target) * 100, 100),
+        };
+      } else if (tier.targetType === TargetTypes.AMOUNT) {
+        // For amount type, we'll use count as a placeholder
+        // TODO: Implement actual amount calculation if needed
+        let totalCompletions = 0;
+        for (const quest of arcQuests) {
+          try {
+            const completions = await getQuestCompletions(quest.$id, user.$id);
+            totalCompletions += completions.length;
+          } catch (error) {
+            // Skip if error
+          }
+        }
+        
+        const current = totalCompletions;
+        const target = tier.targetValue || 100;
+        return {
+          current,
+          target,
+          percentage: Math.min((current / target) * 100, 100),
         };
       }
       
@@ -1388,8 +1458,8 @@ const HabitsTracker = () => {
                   return a.$id === aId;
                 });
                 
-                // Calculate progress (simplified - will be enhanced)
-                const progress = { current: 0, target: tier.targetValue || 100, percentage: 0 };
+                // Get calculated progress from state
+                const progress = tierProgress[tier.$id] || { current: 0, target: tier.targetValue || 100, percentage: 0 };
                 const isCompleted = tierCompletions[tier.$id] !== null && tierCompletions[tier.$id] !== undefined;
                 
                 return (
@@ -1425,7 +1495,10 @@ const HabitsTracker = () => {
                           />
                         </View>
                         <Text style={styles.tierProgressText}>
-                          {isCompleted ? 'Completed!' : `${progress.current} / ${progress.target} ${tier.targetType || 'days'}`}
+                          {isCompleted 
+                            ? 'Completed!' 
+                            : `${Math.floor(progress.current)} / ${progress.target} ${tier.targetType === TargetTypes.DAYS ? 'days' : tier.targetType === TargetTypes.COUNT ? 'completions' : 'items'}`
+                          }
                         </Text>
                       </View>
                     </View>
