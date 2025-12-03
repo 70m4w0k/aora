@@ -41,6 +41,10 @@ import {
   getXPForNextLevel,
   getTotalXPForLevel,
   updateProgressionType,
+  calculateMissedRecurrences,
+  calculatePenaltyXP,
+  togglePenaltySystem,
+  overridePenalty,
 } from '../../../lib/appwrite';
 
 // Dark theme colors - consistent with app
@@ -75,6 +79,7 @@ const HabitsTracker = () => {
   const [userProgress, setUserProgress] = useState(null);
   const [todayQuests, setTodayQuests] = useState([]);
   const [statistics, setStatistics] = useState(null); // { arcStats, weeklySummary, monthlySummary, trends }
+  const [questPenalties, setQuestPenalties] = useState({}); // { questId: { missedRecurrences, penaltyXP } }
   
   // Arc Modal
   const [arcModalVisible, setArcModalVisible] = useState(false);
@@ -89,6 +94,9 @@ const HabitsTracker = () => {
   // Quest Modal
   const [questModalVisible, setQuestModalVisible] = useState(false);
   const [editingQuest, setEditingQuest] = useState(null);
+  const [questModalTab, setQuestModalTab] = useState('details'); // 'details', 'history', 'stats'
+  const [questCompletionsHistory, setQuestCompletionsHistory] = useState([]);
+  const [questStats, setQuestStats] = useState(null);
   const [questForm, setQuestForm] = useState({
     name: '',
     arcId: '',
@@ -365,6 +373,18 @@ const HabitsTracker = () => {
         (typeof currentProgress.arcProgress === 'string' ? JSON.parse(currentProgress.arcProgress) : currentProgress.arcProgress) : {};
       const oldArcLevel = arcId && oldArcProgress[arcId] ? oldArcProgress[arcId].level : 1;
       
+      // Calculate missed recurrences and penalty if penalty system is active
+      let penaltyXP = 0;
+      if (currentProgress?.penaltySystemActive) {
+        try {
+          const allCompletions = await getQuestCompletions(quest.$id, user.$id);
+          const missedRecurrences = calculateMissedRecurrences(quest, allCompletions);
+          penaltyXP = calculatePenaltyXP(quest, missedRecurrences);
+        } catch (error) {
+          console.error('Error calculating penalty:', error);
+        }
+      }
+      
       await completeQuest({
         questId: quest.$id,
         userId: user.$id,
@@ -372,6 +392,7 @@ const HabitsTracker = () => {
         xpEarned: xpEarned,
         arcId: arcId,
         streakCount: newStreak,
+        penaltyXP: penaltyXP,
       });
       
       // Fetch updated progress
@@ -509,7 +530,7 @@ const HabitsTracker = () => {
   };
 
   // Quest Management
-  const openQuestModal = (quest = null) => {
+  const openQuestModal = async (quest = null) => {
     if (quest) {
       setEditingQuest(quest);
       const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
@@ -522,6 +543,63 @@ const HabitsTracker = () => {
         xpPerCompletion: quest.xpPerCompletion?.toString() || '10',
         accessLevel: quest.accessLevel?.toString() || '',
       });
+      
+      // Load completion history and stats
+      try {
+        const completions = await getQuestCompletions(quest.$id, user.$id);
+        setQuestCompletionsHistory(completions.sort((a, b) => {
+          const dateA = new Date(a.completedAt || a.$createdAt);
+          const dateB = new Date(b.completedAt || b.$createdAt);
+          return dateB - dateA;
+        }));
+        
+        // Calculate stats
+        const currentStreak = await calculateQuestStreak(quest, user.$id);
+        const totalCompletions = completions.length;
+        const totalXP = completions.reduce((sum, c) => sum + (c.xpEarned || quest.xpPerCompletion || 10), 0);
+        const firstCompletion = completions.length > 0 ? new Date(completions[completions.length - 1].completedAt || completions[completions.length - 1].$createdAt) : null;
+        const lastCompletion = completions.length > 0 ? new Date(completions[0].completedAt || completions[0].$createdAt) : null;
+        
+        // Calculate best streak
+        let bestStreak = 0;
+        let currentStreakCount = 0;
+        const sortedCompletions = [...completions].sort((a, b) => {
+          const dateA = new Date(a.completedAt || a.$createdAt);
+          const dateB = new Date(b.completedAt || b.$createdAt);
+          return dateA - dateB;
+        });
+        
+        for (let i = 0; i < sortedCompletions.length; i++) {
+          if (i === 0) {
+            currentStreakCount = 1;
+          } else {
+            const prevDate = new Date(sortedCompletions[i - 1].completedAt || sortedCompletions[i - 1].$createdAt);
+            const currDate = new Date(sortedCompletions[i].completedAt || sortedCompletions[i].$createdAt);
+            const daysDiff = Math.floor((currDate - prevDate) / (1000 * 60 * 60 * 24));
+            
+            if (daysDiff <= 1) {
+              currentStreakCount++;
+            } else {
+              bestStreak = Math.max(bestStreak, currentStreakCount);
+              currentStreakCount = 1;
+            }
+          }
+        }
+        bestStreak = Math.max(bestStreak, currentStreakCount);
+        
+        setQuestStats({
+          totalCompletions,
+          totalXP,
+          currentStreak,
+          bestStreak,
+          firstCompletion,
+          lastCompletion,
+        });
+      } catch (error) {
+        console.error('Error loading quest history:', error);
+        setQuestCompletionsHistory([]);
+        setQuestStats(null);
+      }
     } else {
       setEditingQuest(null);
       setQuestForm({
@@ -533,13 +611,19 @@ const HabitsTracker = () => {
         xpPerCompletion: '10',
         accessLevel: '',
       });
+      setQuestCompletionsHistory([]);
+      setQuestStats(null);
     }
+    setQuestModalTab('details');
     setQuestModalVisible(true);
   };
 
   const closeQuestModal = () => {
     setQuestModalVisible(false);
     setEditingQuest(null);
+    setQuestModalTab('details');
+    setQuestCompletionsHistory([]);
+    setQuestStats(null);
     setQuestForm({
       name: '',
       arcId: arcs.length > 0 ? arcs[0].$id : '',
@@ -1593,6 +1677,34 @@ const HabitsTracker = () => {
                         )}
                         <Text style={styles.questXP}>+{quest.xpPerCompletion || 10} XP</Text>
                       </View>
+                      {/* Penalty Warning */}
+                      {userProgress?.penaltySystemActive && questPenalties[quest.$id] && (
+                        <View style={styles.penaltyWarning}>
+                          <Ionicons name="warning" size={14} color={COLORS.accent.danger} />
+                          <Text style={styles.penaltyText}>
+                            {questPenalties[quest.$id].missedRecurrences} missed • -{questPenalties[quest.$id].penaltyXP} XP
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.penaltyOverrideButton}
+                            onPress={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
+                                const result = await overridePenalty(user.$id, household.$id, quest.$id, arcId);
+                                if (result.success) {
+                                  await fetchData();
+                                  showAlert('Success', `Penalty overridden! ${result.restoredXP} XP restored.`, [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
+                                }
+                              } catch (error) {
+                                console.error('Error overriding penalty:', error);
+                                showAlert('Error', 'Could not override penalty', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
+                              }
+                            }}
+                          >
+                            <Ionicons name="refresh" size={12} color={COLORS.accent.primary} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                     <View style={styles.questActions}>
                       <TouchableOpacity
@@ -1932,13 +2044,76 @@ const HabitsTracker = () => {
               <TouchableOpacity onPress={closeQuestModal}>
                 <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>{editingQuest ? 'Edit Quest' : 'Add Quest'}</Text>
-              <TouchableOpacity onPress={handleSaveQuest}>
-                <Text style={styles.modalSaveText}>{editingQuest ? 'Update' : 'Save'}</Text>
-              </TouchableOpacity>
+              <Text style={styles.modalTitle}>
+                {editingQuest ? (editingQuest.name || 'Quest Details') : 'Add Quest'}
+              </Text>
+              {editingQuest ? (
+                <View style={{ width: 40 }} />
+              ) : (
+                <TouchableOpacity onPress={handleSaveQuest}>
+                  <Text style={styles.modalSaveText}>Save</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
+            {/* Tabs for editing quest */}
+            {editingQuest && (
+              <View style={styles.modalTabs}>
+                <TouchableOpacity
+                  style={[styles.modalTab, questModalTab === 'details' && styles.modalTabActive]}
+                  onPress={() => setQuestModalTab('details')}
+                >
+                  <Ionicons 
+                    name="create-outline" 
+                    size={18} 
+                    color={questModalTab === 'details' ? COLORS.accent.primary : COLORS.textSecondary} 
+                  />
+                  <Text style={[
+                    styles.modalTabText,
+                    questModalTab === 'details' && styles.modalTabTextActive
+                  ]}>
+                    Edit
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalTab, questModalTab === 'history' && styles.modalTabActive]}
+                  onPress={() => setQuestModalTab('history')}
+                >
+                  <Ionicons 
+                    name="time-outline" 
+                    size={18} 
+                    color={questModalTab === 'history' ? COLORS.accent.primary : COLORS.textSecondary} 
+                  />
+                  <Text style={[
+                    styles.modalTabText,
+                    questModalTab === 'history' && styles.modalTabTextActive
+                  ]}>
+                    History
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalTab, questModalTab === 'stats' && styles.modalTabActive]}
+                  onPress={() => setQuestModalTab('stats')}
+                >
+                  <Ionicons 
+                    name="stats-chart-outline" 
+                    size={18} 
+                    color={questModalTab === 'stats' ? COLORS.accent.primary : COLORS.textSecondary} 
+                  />
+                  <Text style={[
+                    styles.modalTabText,
+                    questModalTab === 'stats' && styles.modalTabTextActive
+                  ]}>
+                    Stats
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Details Tab */}
+              {(!editingQuest || questModalTab === 'details') && (
+                <>
               {/* Quest Name */}
               <Text style={[styles.inputLabel, { marginTop: 0 }]}>Quest Name</Text>
               <TextInput
@@ -2072,21 +2247,190 @@ const HabitsTracker = () => {
                 keyboardType="numeric"
               />
 
-              {/* Delete Button (only when editing) */}
-              {editingQuest && (
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => {
-                    closeQuestModal();
-                    handleDeleteQuest(editingQuest);
-                  }}
-                >
-                  <Ionicons name="trash-outline" size={18} color={COLORS.accent.danger} />
-                  <Text style={styles.deleteButtonText}>Delete Quest</Text>
-                </TouchableOpacity>
+                  {/* Save Button (when editing in details tab) */}
+                  {editingQuest && questModalTab === 'details' && (
+                    <TouchableOpacity
+                      style={styles.saveButton}
+                      onPress={async () => {
+                        await handleSaveQuest();
+                      }}
+                    >
+                      <Text style={styles.saveButtonText}>Save Changes</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Delete Button (only when editing in details tab) */}
+                  {editingQuest && questModalTab === 'details' && (
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => {
+                        closeQuestModal();
+                        handleDeleteQuest(editingQuest);
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={COLORS.accent.danger} />
+                      <Text style={styles.deleteButtonText}>Delete Quest</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {!editingQuest && <View style={{ height: 40 }} />}
+                </>
               )}
 
-              <View style={{ height: 40 }} />
+              {/* History Tab */}
+              {editingQuest && questModalTab === 'history' && (
+                <>
+                  <View style={styles.questHistoryHeader}>
+                    <Text style={styles.questHistoryTitle}>Completion History</Text>
+                    <Text style={styles.questHistorySubtitle}>
+                      {questCompletionsHistory.length} total completion{questCompletionsHistory.length !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+
+                  {questCompletionsHistory.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="time-outline" size={48} color={COLORS.textTertiary} />
+                      <Text style={styles.emptyStateText}>No completions yet</Text>
+                      <Text style={styles.emptyStateSubtext}>Complete this quest to see history</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.completionHistoryList}>
+                      {questCompletionsHistory.map((completion, index) => {
+                        const completionDate = new Date(completion.completedAt || completion.$createdAt);
+                        const isToday = completionDate.toDateString() === new Date().toDateString();
+                        const isYesterday = completionDate.toDateString() === new Date(Date.now() - 86400000).toDateString();
+                        
+                        let dateLabel = '';
+                        if (isToday) {
+                          dateLabel = 'Today';
+                        } else if (isYesterday) {
+                          dateLabel = 'Yesterday';
+                        } else {
+                          dateLabel = completionDate.toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric',
+                            year: completionDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+                          });
+                        }
+                        
+                        return (
+                          <View key={completion.$id || index} style={styles.completionHistoryItem}>
+                            <View style={styles.completionHistoryIndicator}>
+                              <Ionicons name="checkmark-circle" size={20} color={COLORS.accent.success} />
+                            </View>
+                            <View style={styles.completionHistoryContent}>
+                              <Text style={styles.completionHistoryDate}>{dateLabel}</Text>
+                              <Text style={styles.completionHistoryTime}>
+                                {completionDate.toLocaleTimeString('en-US', { 
+                                  hour: 'numeric', 
+                                  minute: '2-digit' 
+                                })}
+                              </Text>
+                            </View>
+                            <View style={styles.completionHistoryMeta}>
+                              {completion.streakCount > 0 && (
+                                <View style={styles.completionStreakBadge}>
+                                  <Ionicons name="flame" size={12} color={COLORS.accent.warning} />
+                                  <Text style={styles.completionStreakText}>{completion.streakCount}</Text>
+                                </View>
+                              )}
+                              <Text style={styles.completionHistoryXP}>
+                                +{completion.xpEarned || editingQuest.xpPerCompletion || 10} XP
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                  <View style={{ height: 40 }} />
+                </>
+              )}
+
+              {/* Stats Tab */}
+              {editingQuest && questModalTab === 'stats' && questStats && (
+                <>
+                  <View style={styles.questStatsContainer}>
+                    {/* Current Streak */}
+                    <View style={styles.questStatCard}>
+                      <View style={styles.questStatHeader}>
+                        <Ionicons name="flame" size={24} color={COLORS.accent.warning} />
+                        <Text style={styles.questStatLabel}>Current Streak</Text>
+                      </View>
+                      <Text style={styles.questStatValue}>{questStats.currentStreak}</Text>
+                      <Text style={styles.questStatUnit}>days</Text>
+                    </View>
+
+                    {/* Best Streak */}
+                    <View style={styles.questStatCard}>
+                      <View style={styles.questStatHeader}>
+                        <Ionicons name="trophy" size={24} color={COLORS.accent.primary} />
+                        <Text style={styles.questStatLabel}>Best Streak</Text>
+                      </View>
+                      <Text style={styles.questStatValue}>{questStats.bestStreak}</Text>
+                      <Text style={styles.questStatUnit}>days</Text>
+                    </View>
+
+                    {/* Total Completions */}
+                    <View style={styles.questStatCard}>
+                      <View style={styles.questStatHeader}>
+                        <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.success} />
+                        <Text style={styles.questStatLabel}>Total Completions</Text>
+                      </View>
+                      <Text style={styles.questStatValue}>{questStats.totalCompletions}</Text>
+                      <Text style={styles.questStatUnit}>times</Text>
+                    </View>
+
+                    {/* Total XP Earned */}
+                    <View style={styles.questStatCard}>
+                      <View style={styles.questStatHeader}>
+                        <Ionicons name="star" size={24} color={COLORS.accent.primary} />
+                        <Text style={styles.questStatLabel}>Total XP Earned</Text>
+                      </View>
+                      <Text style={styles.questStatValue}>{questStats.totalXP}</Text>
+                      <Text style={styles.questStatUnit}>XP</Text>
+                    </View>
+                  </View>
+
+                  {/* Additional Stats */}
+                  <View style={styles.questStatsDetails}>
+                    {questStats.firstCompletion && (
+                      <View style={styles.questStatDetailItem}>
+                        <Text style={styles.questStatDetailLabel}>First Completion</Text>
+                        <Text style={styles.questStatDetailValue}>
+                          {questStats.firstCompletion.toLocaleDateString('en-US', { 
+                            month: 'long', 
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                    )}
+                    {questStats.lastCompletion && (
+                      <View style={styles.questStatDetailItem}>
+                        <Text style={styles.questStatDetailLabel}>Last Completion</Text>
+                        <Text style={styles.questStatDetailValue}>
+                          {questStats.lastCompletion.toLocaleDateString('en-US', { 
+                            month: 'long', 
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                    )}
+                    {questStats.firstCompletion && questStats.lastCompletion && (
+                      <View style={styles.questStatDetailItem}>
+                        <Text style={styles.questStatDetailLabel}>Quest Duration</Text>
+                        <Text style={styles.questStatDetailValue}>
+                          {Math.floor((questStats.lastCompletion - questStats.firstCompletion) / (1000 * 60 * 60 * 24))} days
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={{ height: 40 }} />
+                </>
+              )}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -2326,6 +2670,57 @@ const HabitsTracker = () => {
                     <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.primary} style={styles.progressionTypeCheck} />
                   )}
                 </TouchableOpacity>
+              </View>
+
+              {/* Penalty System Toggle */}
+              <View style={styles.settingsSection}>
+                <Text style={[styles.inputLabel, { marginTop: 24 }]}>Penalty System</Text>
+                <Text style={styles.inputHint}>
+                  When active, missing quest recurrences will deduct XP (50% of quest XP per miss)
+                </Text>
+                
+                <TouchableOpacity
+                  style={styles.toggleContainer}
+                  onPress={async () => {
+                    try {
+                      const newState = !userProgress?.penaltySystemActive;
+                      await togglePenaltySystem(user.$id, household.$id, newState);
+                      await fetchData();
+                    } catch (error) {
+                      console.error('Error toggling penalty system:', error);
+                    }
+                  }}
+                >
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>Enable Penalty System</Text>
+                    <Text style={styles.toggleDescription}>
+                      Track missed recurrences and apply XP penalties
+                    </Text>
+                  </View>
+                  <View style={[
+                    styles.toggleSwitch,
+                    userProgress?.penaltySystemActive && styles.toggleSwitchActive
+                  ]}>
+                    <View style={[
+                      styles.toggleThumb,
+                      userProgress?.penaltySystemActive && styles.toggleThumbActive
+                    ]} />
+                  </View>
+                </TouchableOpacity>
+                
+                {userProgress?.penaltySystemActive && (
+                  <View style={styles.penaltyStats}>
+                    <Text style={styles.penaltyStatsLabel}>Penalty Statistics</Text>
+                    <View style={styles.penaltyStatsRow}>
+                      <Text style={styles.penaltyStatsValue}>
+                        Total Penalties: {userProgress?.totalPenalties || 0}
+                      </Text>
+                      <Text style={styles.penaltyStatsValue}>
+                        Total XP Lost: -{userProgress?.totalPenaltyXP || 0}
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </View>
 
               <View style={{ height: 40 }} />
@@ -2884,6 +3279,282 @@ const styles = StyleSheet.create({
   arcStatDetailText: {
     fontSize: 11,
     color: COLORS.textTertiary,
+  },
+  // Penalty Styles
+  penaltyWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: COLORS.accent.danger + '20',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  penaltyText: {
+    fontSize: 11,
+    color: COLORS.accent.danger,
+    fontWeight: '600',
+    flex: 1,
+  },
+  penaltyOverrideButton: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  settingsSection: {
+    marginTop: 8,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  toggleInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  toggleDescription: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
+  },
+  toggleSwitch: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: COLORS.elevated,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
+    padding: 2,
+  },
+  toggleSwitchActive: {
+    backgroundColor: COLORS.accent.primary,
+    borderColor: COLORS.accent.primary,
+  },
+  toggleThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.textTertiary,
+  },
+  toggleThumbActive: {
+    backgroundColor: COLORS.textPrimary,
+    alignSelf: 'flex-end',
+  },
+  penaltyStats: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  penaltyStatsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  penaltyStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  penaltyStatsValue: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  // Quest Modal Tabs
+  modalTabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: 16,
+  },
+  modalTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  modalTabActive: {
+    borderBottomColor: COLORS.accent.primary,
+  },
+  modalTabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  modalTabTextActive: {
+    color: COLORS.accent.primary,
+    fontWeight: '600',
+  },
+  // Quest History Styles
+  questHistoryHeader: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: 16,
+  },
+  questHistoryTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  questHistorySubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  completionHistoryList: {
+    gap: 8,
+  },
+  completionHistoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+  },
+  completionHistoryIndicator: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.accent.success + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  completionHistoryContent: {
+    flex: 1,
+  },
+  completionHistoryDate: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 2,
+  },
+  completionHistoryTime: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  completionHistoryMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  completionStreakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.accent.warning + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  completionStreakText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.accent.warning,
+  },
+  completionHistoryXP: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.accent.primary,
+  },
+  // Quest Stats Styles
+  questStatsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
+  },
+  questStatCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  questStatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  questStatLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  questStatValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginTop: 4,
+  },
+  questStatUnit: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    marginTop: 4,
+  },
+  questStatsDetails: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  questStatDetailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  questStatDetailLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  questStatDetailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  saveButton: {
+    backgroundColor: COLORS.accent.primary,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 12,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
   },
   // Quest Modal Styles
   arcChipsScroll: {
