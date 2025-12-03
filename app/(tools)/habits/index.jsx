@@ -8,6 +8,10 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +23,12 @@ import {
   getQuestCompletions,
   getUserProgress,
   completeQuest,
+  createArc,
+  updateArc,
+  deleteArc,
+  createQuest,
+  updateQuest,
+  deleteQuest,
   QuestFrequencies,
   calculateLevel,
   getXPForNextLevel,
@@ -54,6 +64,29 @@ const HabitsTracker = () => {
   const [userProgress, setUserProgress] = useState(null);
   const [todayQuests, setTodayQuests] = useState([]);
   
+  // Arc Modal
+  const [arcModalVisible, setArcModalVisible] = useState(false);
+  const [editingArc, setEditingArc] = useState(null);
+  const [arcForm, setArcForm] = useState({
+    name: '',
+    color: '#8B5CF6',
+    icon: '',
+    description: '',
+  });
+
+  // Quest Modal
+  const [questModalVisible, setQuestModalVisible] = useState(false);
+  const [editingQuest, setEditingQuest] = useState(null);
+  const [questForm, setQuestForm] = useState({
+    name: '',
+    arcId: '',
+    frequency: QuestFrequencies.DAILY,
+    repetitionPerPeriod: '1',
+    intensity: '1',
+    xpPerCompletion: '10',
+    accessLevel: '',
+  });
+  
   useEffect(() => {
     if (household?.$id && user?.$id) {
       fetchData();
@@ -76,13 +109,23 @@ const HabitsTracker = () => {
       setUserProgress(progressData);
       
       // Filter today's quests
-      const today = new Date();
+      // Show all quests for now (daily, weekly, monthly, annual, unique)
+      // TODO: Add proper filtering logic based on frequency and date
       const todayQuestsFiltered = questsData.filter(quest => {
-        if (quest.frequency === QuestFrequencies.DAILY) return true;
-        // TODO: Add logic for weekly/monthly quests
-        return false;
+        // For now, show all quests except those that are explicitly filtered out
+        // This ensures users can see their quests regardless of frequency
+        return true;
       });
       setTodayQuests(todayQuestsFiltered);
+      
+      // Debug: Log quests to see what we're getting
+      if (questsData.length > 0) {
+        console.log('Total quests fetched:', questsData.length);
+        console.log('Today quests filtered:', todayQuestsFiltered.length);
+        questsData.forEach(q => {
+          console.log(`Quest: "${q.name}", Frequency: "${q.frequency}", ArcId: ${typeof q.arcId === 'object' ? q.arcId.$id : q.arcId}`);
+        });
+      }
     } catch (error) {
       console.error('Error fetching habits data:', error);
     } finally {
@@ -111,6 +154,202 @@ const HabitsTracker = () => {
     } catch (error) {
       console.error('Error completing quest:', error);
     }
+  };
+
+  // Arc Management
+  const openArcModal = (arc = null) => {
+    if (arc) {
+      setEditingArc(arc);
+      setArcForm({
+        name: arc.name || '',
+        color: arc.color || '#8B5CF6',
+        icon: arc.icon || '',
+        description: arc.description || '',
+      });
+    } else {
+      setEditingArc(null);
+      setArcForm({
+        name: '',
+        color: '#8B5CF6',
+        icon: '',
+        description: '',
+      });
+    }
+    setArcModalVisible(true);
+  };
+
+  const closeArcModal = () => {
+    setArcModalVisible(false);
+    setEditingArc(null);
+    setArcForm({
+      name: '',
+      color: '#8B5CF6',
+      icon: '',
+      description: '',
+    });
+  };
+
+  const handleSaveArc = async () => {
+    if (!arcForm.name.trim()) {
+      Alert.alert('Error', 'Please enter an arc name');
+      return;
+    }
+
+    try {
+      if (editingArc) {
+        await updateArc(editingArc.$id, {
+          name: arcForm.name.trim(),
+          color: arcForm.color,
+          icon: arcForm.icon || null,
+          description: arcForm.description.trim() || null,
+        });
+      } else {
+        await createArc({
+          name: arcForm.name.trim(),
+          color: arcForm.color,
+          icon: arcForm.icon || null,
+          description: arcForm.description.trim() || null,
+          householdId: household.$id,
+          userId: user.$id,
+        });
+      }
+      await fetchData();
+      closeArcModal();
+    } catch (error) {
+      console.error('Error saving arc:', error);
+      Alert.alert('Error', 'Could not save arc');
+    }
+  };
+
+  const handleDeleteArc = (arc) => {
+    Alert.alert(
+      'Delete Arc',
+      `Are you sure you want to delete "${arc.name}"? This will also delete all associated quests and tiers.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteArc(arc.$id);
+              await fetchData();
+            } catch (error) {
+              console.error('Error deleting arc:', error);
+              Alert.alert('Error', 'Could not delete arc');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Quest Management
+  const openQuestModal = (quest = null) => {
+    if (quest) {
+      setEditingQuest(quest);
+      const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
+      setQuestForm({
+        name: quest.name || '',
+        arcId: arcId || '',
+        frequency: quest.frequency || QuestFrequencies.DAILY,
+        repetitionPerPeriod: quest.repetitionPerPeriod?.toString() || '1',
+        intensity: quest.intensity?.toString() || '1',
+        xpPerCompletion: quest.xpPerCompletion?.toString() || '10',
+        accessLevel: quest.accessLevel?.toString() || '',
+      });
+    } else {
+      setEditingQuest(null);
+      setQuestForm({
+        name: '',
+        arcId: arcs.length > 0 ? arcs[0].$id : '',
+        frequency: QuestFrequencies.DAILY,
+        repetitionPerPeriod: '1',
+        intensity: '1',
+        xpPerCompletion: '10',
+        accessLevel: '',
+      });
+    }
+    setQuestModalVisible(true);
+  };
+
+  const closeQuestModal = () => {
+    setQuestModalVisible(false);
+    setEditingQuest(null);
+    setQuestForm({
+      name: '',
+      arcId: arcs.length > 0 ? arcs[0].$id : '',
+      frequency: QuestFrequencies.DAILY,
+      repetitionPerPeriod: '1',
+      intensity: '1',
+      xpPerCompletion: '10',
+      accessLevel: '',
+    });
+  };
+
+  const handleSaveQuest = async () => {
+    if (!questForm.name.trim()) {
+      Alert.alert('Error', 'Please enter a quest name');
+      return;
+    }
+    if (!questForm.arcId) {
+      Alert.alert('Error', 'Please select an arc');
+      return;
+    }
+
+    try {
+      if (editingQuest) {
+        await updateQuest(editingQuest.$id, {
+          name: questForm.name.trim(),
+          arcId: questForm.arcId,
+          frequency: questForm.frequency,
+          repetitionPerPeriod: parseInt(questForm.repetitionPerPeriod) || 1,
+          intensity: parseInt(questForm.intensity) || 1,
+          xpPerCompletion: parseInt(questForm.xpPerCompletion) || 10,
+          accessLevel: questForm.accessLevel ? parseInt(questForm.accessLevel) : null,
+        });
+      } else {
+        await createQuest({
+          name: questForm.name.trim(),
+          arcId: questForm.arcId,
+          frequency: questForm.frequency,
+          repetitionPerPeriod: parseInt(questForm.repetitionPerPeriod) || 1,
+          intensity: parseInt(questForm.intensity) || 1,
+          xpPerCompletion: parseInt(questForm.xpPerCompletion) || 10,
+          accessLevel: questForm.accessLevel ? parseInt(questForm.accessLevel) : null,
+          householdId: household.$id,
+          userId: user.$id,
+        });
+      }
+      await fetchData();
+      closeQuestModal();
+    } catch (error) {
+      console.error('Error saving quest:', error);
+      Alert.alert('Error', 'Could not save quest');
+    }
+  };
+
+  const handleDeleteQuest = (quest) => {
+    Alert.alert(
+      'Delete Quest',
+      `Are you sure you want to delete "${quest.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteQuest(quest.$id);
+              await fetchData();
+            } catch (error) {
+              console.error('Error deleting quest:', error);
+              Alert.alert('Error', 'Could not delete quest');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getArcProgress = (arcId) => {
@@ -245,7 +484,7 @@ const HabitsTracker = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>ARCS</Text>
-            <TouchableOpacity style={styles.addButton}>
+            <TouchableOpacity style={styles.addButton} onPress={() => openArcModal()}>
               <Ionicons name="add" size={20} color={COLORS.accent.primary} />
             </TouchableOpacity>
           </View>
@@ -270,6 +509,8 @@ const HabitsTracker = () => {
                     key={arc.$id}
                     style={[styles.arcCard, { borderLeftColor: arc.color || COLORS.accent.primary }]}
                     activeOpacity={0.8}
+                    onPress={() => openArcModal(arc)}
+                    onLongPress={() => handleDeleteArc(arc)}
                   >
                     <View style={styles.arcCardHeader}>
                       <View style={styles.arcIconContainer}>
@@ -313,7 +554,12 @@ const HabitsTracker = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>TODAY'S QUESTS</Text>
-            <Text style={styles.questCount}>{todayQuests.length}</Text>
+            <View style={styles.questHeaderRight}>
+              <Text style={styles.questCount}>{todayQuests.length}</Text>
+              <TouchableOpacity style={styles.addButton} onPress={() => openQuestModal()}>
+                <Ionicons name="add" size={20} color={COLORS.accent.primary} />
+              </TouchableOpacity>
+            </View>
           </View>
           
           {todayQuests.length === 0 ? (
@@ -335,7 +581,8 @@ const HabitsTracker = () => {
                     key={quest.$id}
                     style={styles.questCard}
                     activeOpacity={0.7}
-                    onPress={() => handleCompleteQuest(quest)}
+                    onPress={() => openQuestModal(quest)}
+                    onLongPress={() => handleDeleteQuest(quest)}
                   >
                     <View style={[styles.questIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
                     <View style={styles.questContent}>
@@ -345,16 +592,21 @@ const HabitsTracker = () => {
                         <Text style={styles.questXP}>+{quest.xpPerCompletion || 10} XP</Text>
                       </View>
                     </View>
-                    <TouchableOpacity
-                      style={styles.completeButton}
-                      onPress={() => handleCompleteQuest(quest)}
-                    >
-                      <Ionicons 
-                        name={questCompletions[quest.$id] ? "checkmark-circle" : "checkmark-circle-outline"} 
-                        size={24} 
-                        color={questCompletions[quest.$id] ? COLORS.accent.success : COLORS.textTertiary} 
-                      />
-                    </TouchableOpacity>
+                    <View style={styles.questActions}>
+                      <TouchableOpacity
+                        style={styles.completeButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleCompleteQuest(quest);
+                        }}
+                      >
+                        <Ionicons 
+                          name={questCompletions[quest.$id] ? "checkmark-circle" : "checkmark-circle-outline"} 
+                          size={24} 
+                          color={questCompletions[quest.$id] ? COLORS.accent.success : COLORS.textTertiary} 
+                        />
+                      </TouchableOpacity>
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -364,6 +616,283 @@ const HabitsTracker = () => {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Arc Management Modal */}
+      <Modal
+        visible={arcModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeArcModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closeArcModal}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>{editingArc ? 'Edit Arc' : 'Add Arc'}</Text>
+              <TouchableOpacity onPress={handleSaveArc}>
+                <Text style={styles.modalSaveText}>{editingArc ? 'Update' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Arc Name */}
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Arc Name</Text>
+              <TextInput
+                style={styles.input}
+                value={arcForm.name}
+                onChangeText={(text) => setArcForm({ ...arcForm, name: text })}
+                placeholder="e.g., Mental, Physical, Finance"
+                placeholderTextColor={COLORS.textTertiary}
+                maxLength={100}
+              />
+
+              {/* Color Selection */}
+              <Text style={styles.inputLabel}>Color</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.colorScroll}>
+                {[
+                  '#8B5CF6', '#F43F5E', '#06B6D4', '#22C55E', '#F59E0B',
+                  '#EC4899', '#14B8A6', '#3B82F6', '#EF4444', '#10B981',
+                ].map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      styles.colorChip,
+                      arcForm.color === color && { borderColor: color, borderWidth: 2 },
+                    ]}
+                    onPress={() => setArcForm({ ...arcForm, color })}
+                  >
+                    <View style={[styles.colorChipInner, { backgroundColor: color }]} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Icon Selection */}
+              <Text style={styles.inputLabel}>Icon (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={arcForm.icon}
+                onChangeText={(text) => setArcForm({ ...arcForm, icon: text })}
+                placeholder="e.g., fitness, meditation, wallet"
+                placeholderTextColor={COLORS.textTertiary}
+                maxLength={100}
+              />
+              <Text style={styles.inputHint}>
+                Enter an Ionicons name (e.g., "fitness", "meditation", "wallet")
+              </Text>
+
+              {/* Description */}
+              <Text style={styles.inputLabel}>Description (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={arcForm.description}
+                onChangeText={(text) => setArcForm({ ...arcForm, description: text })}
+                placeholder="Describe this arc..."
+                placeholderTextColor={COLORS.textTertiary}
+                multiline
+                numberOfLines={3}
+                maxLength={500}
+              />
+
+              {/* Delete Button (only when editing) */}
+              {editingArc && (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => {
+                    closeArcModal();
+                    handleDeleteArc(editingArc);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color={COLORS.accent.danger} />
+                  <Text style={styles.deleteButtonText}>Delete Arc</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Quest Management Modal */}
+      <Modal
+        visible={questModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeQuestModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closeQuestModal}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>{editingQuest ? 'Edit Quest' : 'Add Quest'}</Text>
+              <TouchableOpacity onPress={handleSaveQuest}>
+                <Text style={styles.modalSaveText}>{editingQuest ? 'Update' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Quest Name */}
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Quest Name</Text>
+              <TextInput
+                style={styles.input}
+                value={questForm.name}
+                onChangeText={(text) => setQuestForm({ ...questForm, name: text })}
+                placeholder="e.g., Meditate 1x per day, Run 4x per week"
+                placeholderTextColor={COLORS.textTertiary}
+                maxLength={200}
+              />
+
+              {/* Arc Selection */}
+              <Text style={styles.inputLabel}>Arc</Text>
+              {arcs.length === 0 ? (
+                <View style={styles.emptyArcWarning}>
+                  <Ionicons name="alert-circle-outline" size={20} color={COLORS.accent.warning} />
+                  <Text style={styles.emptyArcWarningText}>Create an arc first</Text>
+                </View>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.arcChipsScroll}>
+                  {arcs.map((arc) => (
+                    <TouchableOpacity
+                      key={arc.$id}
+                      style={[
+                        styles.arcChip,
+                        questForm.arcId === arc.$id && { backgroundColor: `${arc.color || COLORS.accent.primary}20`, borderColor: arc.color || COLORS.accent.primary },
+                      ]}
+                      onPress={() => setQuestForm({ ...questForm, arcId: arc.$id })}
+                    >
+                      <View style={[styles.arcChipIndicator, { backgroundColor: arc.color || COLORS.accent.primary }]} />
+                      <Text style={[
+                        styles.arcChipText,
+                        questForm.arcId === arc.$id && { color: COLORS.textPrimary },
+                      ]}>
+                        {arc.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Frequency */}
+              <Text style={styles.inputLabel}>Frequency</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.frequencyScroll}>
+                {Object.entries({
+                  [QuestFrequencies.DAILY]: 'Daily',
+                  [QuestFrequencies.WEEKLY]: 'Weekly',
+                  [QuestFrequencies.MONTHLY]: 'Monthly',
+                  [QuestFrequencies.ANNUAL]: 'Annual',
+                  [QuestFrequencies.UNIQUE]: 'Unique',
+                }).map(([value, label]) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[
+                      styles.frequencyChip,
+                      questForm.frequency === value && styles.frequencyChipActive,
+                    ]}
+                    onPress={() => setQuestForm({ ...questForm, frequency: value })}
+                  >
+                    <Text style={[
+                      styles.frequencyChipText,
+                      questForm.frequency === value && styles.frequencyChipTextActive,
+                    ]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Repetition Per Period */}
+              <Text style={styles.inputLabel}>Repetition Per Period</Text>
+              <TextInput
+                style={styles.input}
+                value={questForm.repetitionPerPeriod}
+                onChangeText={(text) => {
+                  const num = parseInt(text) || 1;
+                  setQuestForm({ ...questForm, repetitionPerPeriod: Math.max(1, num).toString() });
+                }}
+                placeholder="e.g., 3 (for 3x per week)"
+                placeholderTextColor={COLORS.textTertiary}
+                keyboardType="numeric"
+              />
+              <Text style={styles.inputHint}>
+                How many times per period (e.g., 3 for "3x per week")
+              </Text>
+
+              {/* Intensity/Difficulty */}
+              <Text style={styles.inputLabel}>Intensity / Difficulty (1-5)</Text>
+              <View style={styles.intensityContainer}>
+                {[1, 2, 3, 4, 5].map((level) => (
+                  <TouchableOpacity
+                    key={level}
+                    style={[
+                      styles.intensityButton,
+                      parseInt(questForm.intensity) === level && styles.intensityButtonActive,
+                    ]}
+                    onPress={() => setQuestForm({ ...questForm, intensity: level.toString() })}
+                  >
+                    <Text style={[
+                      styles.intensityButtonText,
+                      parseInt(questForm.intensity) === level && styles.intensityButtonTextActive,
+                    ]}>
+                      {level}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* XP Per Completion */}
+              <Text style={styles.inputLabel}>XP Per Completion</Text>
+              <TextInput
+                style={styles.input}
+                value={questForm.xpPerCompletion}
+                onChangeText={(text) => {
+                  const num = parseInt(text) || 10;
+                  setQuestForm({ ...questForm, xpPerCompletion: Math.max(1, num).toString() });
+                }}
+                placeholder="10"
+                placeholderTextColor={COLORS.textTertiary}
+                keyboardType="numeric"
+              />
+
+              {/* Access Level (Optional) */}
+              <Text style={styles.inputLabel}>Access Level (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={questForm.accessLevel}
+                onChangeText={(text) => setQuestForm({ ...questForm, accessLevel: text })}
+                placeholder="Leave empty if no requirement"
+                placeholderTextColor={COLORS.textTertiary}
+                keyboardType="numeric"
+              />
+
+              {/* Delete Button (only when editing) */}
+              {editingQuest && (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => {
+                    closeQuestModal();
+                    handleDeleteQuest(editingQuest);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color={COLORS.accent.danger} />
+                  <Text style={styles.deleteButtonText}>Delete Quest</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -494,6 +1023,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  questHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   questCount: {
     fontSize: 13,
     color: COLORS.textTertiary,
@@ -598,11 +1132,93 @@ const styles = StyleSheet.create({
     color: COLORS.accent.success,
     fontWeight: '600',
   },
+  questActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   completeButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Quest Modal Styles
+  arcChipsScroll: {
+    marginBottom: 8,
+  },
+  arcChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: 8,
+    gap: 6,
+  },
+  arcChipIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  arcChipText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  frequencyScroll: {
+    marginBottom: 8,
+  },
+  frequencyChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: 8,
+  },
+  frequencyChipActive: {
+    backgroundColor: COLORS.accent.primary,
+    borderColor: COLORS.accent.primary,
+  },
+  frequencyChipText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  frequencyChipTextActive: {
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  intensityContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  intensityButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  intensityButtonActive: {
+    backgroundColor: COLORS.accent.primary,
+    borderColor: COLORS.accent.primary,
+  },
+  intensityButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  intensityButtonTextActive: {
+    color: COLORS.textPrimary,
   },
   // Empty States
   emptyState: {
@@ -620,6 +1236,113 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textTertiary,
     marginTop: 4,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '92%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  modalSaveText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.accent.primary,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textTertiary,
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  input: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 14,
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  inputHint: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  colorScroll: {
+    marginBottom: 8,
+  },
+  colorChip: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 12,
+    padding: 2,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorChipInner: {
+    flex: 1,
+    borderRadius: 20,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: `${COLORS.accent.danger}15`,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 24,
+    borderWidth: 1,
+    borderColor: `${COLORS.accent.danger}30`,
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.accent.danger,
+  },
+  emptyArcWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: `${COLORS.accent.warning}15`,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: `${COLORS.accent.warning}30`,
+  },
+  emptyArcWarningText: {
+    fontSize: 13,
+    color: COLORS.accent.warning,
+    fontWeight: '500',
   },
 });
 
