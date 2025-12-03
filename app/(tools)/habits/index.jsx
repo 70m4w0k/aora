@@ -2310,64 +2310,122 @@ const HabitsTracker = () => {
               </View>
             </View>
 
-            {/* Progress Trends */}
+            {/* Progress Trends - Enhanced Bar Chart */}
             <View style={styles.statCard}>
-              <Text style={styles.statCardTitle}>4-Week Trend</Text>
-              <View style={styles.trendsContainer}>
-                {statistics.trends.map((trend, index) => {
-                  const maxCompletions = Math.max(...statistics.trends.map(t => t.completions), 1);
+              <Text style={styles.statCardTitle}>4-Week Completion Trend</Text>
+              <View style={styles.chartContainer}>
+                <View style={styles.barChart}>
+                  {statistics.trends.map((trend, index) => {
+                    const maxCompletions = Math.max(...statistics.trends.map(t => t.completions), 1);
+                    const barHeight = maxCompletions > 0 ? (trend.completions / maxCompletions) * 100 : 0;
+                    const isCurrentWeek = index === statistics.trends.length - 1;
+                    
+                    return (
+                      <View key={index} style={styles.barChartItem}>
+                        <View style={styles.barChartBarContainer}>
+                          <Animated.View
+                            style={[
+                              styles.barChartBar,
+                              {
+                                height: `${barHeight}%`,
+                                backgroundColor: isCurrentWeek ? COLORS.accent.primary : COLORS.accent.primary + '80',
+                                borderColor: isCurrentWeek ? COLORS.accent.primary : 'transparent',
+                              }
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.barChartLabel} numberOfLines={1}>
+                          {trend.week.length > 10 ? trend.week.substring(0, 8) + '...' : trend.week}
+                        </Text>
+                        <Text style={styles.barChartValue}>{trend.completions}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+                <View style={styles.chartYAxis}>
+                  <Text style={styles.chartYAxisLabel}>{Math.max(...statistics.trends.map(t => t.completions), 1)}</Text>
+                  <Text style={styles.chartYAxisLabel}>0</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Arc Completion Rates - Enhanced Horizontal Bar Chart */}
+            <View style={styles.statCard}>
+              <Text style={styles.statCardTitle}>Completion Rates by Arc</Text>
+              <View style={styles.horizontalBarChart}>
+                {statistics.arcStats.map((arcStat) => {
+                  const maxRate = Math.max(...statistics.arcStats.map(a => a.completionRate), 100);
+                  const barWidth = maxRate > 0 ? (arcStat.completionRate / maxRate) * 100 : 0;
+                  
                   return (
-                    <View key={index} style={styles.trendItem}>
-                      <Text style={styles.trendLabel}>{trend.week}</Text>
-                      <View style={styles.trendBarContainer}>
-                        <View 
+                    <View key={arcStat.arcId} style={styles.horizontalBarChartItem}>
+                      <View style={styles.horizontalBarChartHeader}>
+                        <View style={styles.horizontalBarChartLabelContainer}>
+                          <View style={[styles.horizontalBarChartIndicator, { backgroundColor: arcStat.arcColor || COLORS.accent.primary }]} />
+                          <Text style={styles.horizontalBarChartLabel} numberOfLines={1}>
+                            {arcStat.arcName}
+                          </Text>
+                        </View>
+                        <Text style={styles.horizontalBarChartValue}>
+                          {arcStat.completionRate.toFixed(0)}%
+                        </Text>
+                      </View>
+                      <View style={styles.horizontalBarChartBarContainer}>
+                        <Animated.View
                           style={[
-                            styles.trendBar,
+                            styles.horizontalBarChartBar,
                             {
-                              width: `${Math.min((trend.completions / maxCompletions) * 100, 100)}%`,
-                              backgroundColor: COLORS.accent.primary,
+                              width: `${barWidth}%`,
+                              backgroundColor: arcStat.arcColor || COLORS.accent.primary,
                             }
                           ]}
                         />
                       </View>
-                      <Text style={styles.trendValue}>{trend.completions}</Text>
+                      <View style={styles.horizontalBarChartDetails}>
+                        <Text style={styles.horizontalBarChartDetailText}>
+                          {arcStat.weeklyCompletions} this week • {arcStat.monthlyCompletions} this month
+                        </Text>
+                      </View>
                     </View>
                   );
                 })}
               </View>
             </View>
 
-            {/* Arc Completion Rates */}
-            <View style={styles.statCard}>
-              <Text style={styles.statCardTitle}>Completion Rates by Arc</Text>
-              <View style={styles.arcStatsList}>
-                {statistics.arcStats.map((arcStat) => (
-                  <View key={arcStat.arcId} style={styles.arcStatItem}>
-                    <View style={styles.arcStatHeader}>
-                      <View style={[styles.arcStatIndicator, { backgroundColor: arcStat.arcColor || COLORS.accent.primary }]} />
-                      <Text style={styles.arcStatName}>{arcStat.arcName}</Text>
-                      <Text style={styles.arcStatRate}>{arcStat.completionRate.toFixed(0)}%</Text>
-                    </View>
-                    <View style={styles.arcStatProgressBar}>
-                      <View 
-                        style={[
-                          styles.arcStatProgressFill,
-                          {
-                            width: `${Math.min(arcStat.completionRate, 100)}%`,
-                            backgroundColor: arcStat.arcColor || COLORS.accent.primary,
-                          }
-                        ]}
-                      />
-                    </View>
-                    <View style={styles.arcStatDetails}>
-                      <Text style={styles.arcStatDetailText}>
-                        {arcStat.weeklyCompletions} this week • {arcStat.monthlyCompletions} this month
-                      </Text>
-                    </View>
+            {/* Arc Comparison Chart */}
+            {statistics.arcStats.length > 1 && (
+              <View style={styles.statCard}>
+                <Text style={styles.statCardTitle}>Arc Comparison</Text>
+                <View style={styles.comparisonChart}>
+                  <View style={styles.comparisonChartBars}>
+                    {statistics.arcStats.map((arcStat) => {
+                      const maxCompletions = Math.max(...statistics.arcStats.map(a => a.weeklyCompletions), 1);
+                      const barHeight = maxCompletions > 0 ? (arcStat.weeklyCompletions / maxCompletions) * 100 : 0;
+                      
+                      return (
+                        <View key={arcStat.arcId} style={styles.comparisonChartItem}>
+                          <View style={styles.comparisonChartBarContainer}>
+                            <Animated.View
+                              style={[
+                                styles.comparisonChartBar,
+                                {
+                                  height: `${barHeight}%`,
+                                  backgroundColor: arcStat.arcColor || COLORS.accent.primary,
+                                }
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.comparisonChartValue}>{arcStat.weeklyCompletions}</Text>
+                          <Text style={styles.comparisonChartLabel} numberOfLines={1}>
+                            {arcStat.arcName}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
-                ))}
+                </View>
               </View>
-            </View>
+            )}
           </View>
         )}
 
@@ -4535,6 +4593,150 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     width: 40,
     textAlign: 'right',
+  },
+  // Enhanced Chart Styles
+  chartContainer: {
+    flexDirection: 'row',
+    marginTop: 16,
+  },
+  barChart: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-around',
+    height: 180,
+    paddingHorizontal: 8,
+  },
+  barChartItem: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  barChartBarContainer: {
+    width: '100%',
+    height: 120,
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+  },
+  barChartBar: {
+    width: '100%',
+    minHeight: 4,
+    borderRadius: 4,
+    borderWidth: 2,
+  },
+  barChartLabel: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  barChartValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  chartYAxis: {
+    width: 30,
+    justifyContent: 'space-between',
+    paddingRight: 8,
+    height: 120,
+    marginTop: 8,
+  },
+  chartYAxisLabel: {
+    fontSize: 10,
+    color: COLORS.textTertiary,
+  },
+  horizontalBarChart: {
+    marginTop: 16,
+    gap: 16,
+  },
+  horizontalBarChartItem: {
+    marginBottom: 4,
+  },
+  horizontalBarChartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  horizontalBarChartLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+  },
+  horizontalBarChartIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  horizontalBarChartLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  horizontalBarChartValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+    marginLeft: 8,
+  },
+  horizontalBarChartBarContainer: {
+    height: 24,
+    backgroundColor: COLORS.elevated,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  horizontalBarChartBar: {
+    height: '100%',
+    borderRadius: 12,
+    minWidth: 4,
+  },
+  horizontalBarChartDetails: {
+    marginTop: 4,
+  },
+  horizontalBarChartDetailText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  comparisonChart: {
+    marginTop: 16,
+  },
+  comparisonChartBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-around',
+    height: 200,
+    paddingHorizontal: 8,
+  },
+  comparisonChartItem: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  comparisonChartBarContainer: {
+    width: '100%',
+    height: 150,
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+  },
+  comparisonChartBar: {
+    width: '100%',
+    minHeight: 4,
+    borderRadius: 4,
+  },
+  comparisonChartValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  comparisonChartLabel: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
   arcStatsList: {
     gap: 12,
