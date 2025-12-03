@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -34,6 +34,9 @@ import {
   getTaskDoneByTaskId,
 } from "../../lib/appwrite";
 import { getWeekNumberByDate } from "../../lib/utils";
+import { handleError, parseAppwriteError } from "../../lib/errorHandler";
+import ErrorDisplay from "../ErrorDisplay";
+import { CalendarSkeleton } from "../LoadingSkeleton";
 
 const WEEKS_IN_YEAR = 52;
 
@@ -68,6 +71,7 @@ const UnifiedCalendar = () => {
   const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
@@ -109,48 +113,87 @@ const UnifiedCalendar = () => {
     if (household?.$id) {
       fetchData();
     }
-  }, [household?.$id, currentDate, currentView]);
+  }, [fetchData]);
 
-  const fetchData = async () => {
-    if (!household?.$id) return;
+  const fetchData = useCallback(async () => {
+    if (!household?.$id) {
+      setLoading(false);
+      return;
+    }
     
     setLoading(true);
+    setError(null);
+    
     try {
       // Calculate date range based on current view
       const { startDate, endDate } = getDateRange(currentDate, currentView);
       
-      // Fetch events for the date range
-      try {
-        const eventsData = await getHouseholdEvents(household.$id, startDate, endDate);
-        setEvents(eventsData || []);
-      } catch (error) {
-        console.warn("Error fetching events (collection may not exist yet):", error);
-        setEvents([]); // Set empty array if collection doesn't exist
-      }
+      // Fetch all data in parallel for better performance
+      const [eventsData, tasksData, tasksDoneData, membersData] = await Promise.allSettled([
+        // Fetch events for the date range
+        getHouseholdEvents(household.$id, startDate, endDate).catch(err => {
+          // Events collection might not exist yet, return empty array
+          console.warn("Error fetching events (collection may not exist yet):", err);
+          return [];
+        }),
+        // Fetch tasks (they're recurring, so we fetch all)
+        getHouseholdTasks(household.$id).catch(err => {
+          console.error("Error fetching tasks:", err);
+          handleError(err, 'fetchTasks', false);
+          return [];
+        }),
+        // Fetch tasks done
+        getAllTasksDone().catch(err => {
+          console.error("Error fetching tasks done:", err);
+          handleError(err, 'fetchTasksDone', false);
+          return [];
+        }),
+        // Fetch household members for event assignment
+        getHouseholdMembers(household.$id).catch(err => {
+          console.error("Error fetching household members:", err);
+          handleError(err, 'fetchMembers', false);
+          return [];
+        }),
+      ]);
 
-      // Fetch tasks (they're recurring, so we fetch all)
-      const tasksData = await getHouseholdTasks(household.$id);
-      setTasks(tasksData || []);
-
-      // Fetch tasks done
-      const tasksDoneData = await getAllTasksDone();
-      // Filter by household if needed
-      const householdTasksDone = tasksDoneData?.filter(td => {
+      // Process results
+      setEvents(eventsData.status === 'fulfilled' ? (eventsData.value || []) : []);
+      setTasks(tasksData.status === 'fulfilled' ? (tasksData.value || []) : []);
+      
+      // Filter tasks done by household
+      const allTasksDone = tasksDoneData.status === 'fulfilled' ? (tasksDoneData.value || []) : [];
+      const householdTasksDone = allTasksDone.filter(td => {
         if (!td || !td.householdId) return false;
         const tdHouseholdId = typeof td.householdId === 'object' ? td.householdId?.$id : td.householdId;
         return tdHouseholdId === household.$id;
-      }) || [];
+      });
       setTasksDone(householdTasksDone);
+      
+      setUsers(membersData.status === 'fulfilled' ? (membersData.value || []) : []);
 
-      // Fetch household members for event assignment
-      const membersData = await getHouseholdMembers(household.$id);
-      setUsers(membersData || []);
+      // Check if any critical fetch failed
+      const criticalFailures = [
+        tasksData.status === 'rejected',
+        membersData.status === 'rejected',
+      ].filter(Boolean);
+
+      if (criticalFailures.length > 0) {
+        setError({
+          message: 'Some data could not be loaded. Please try refreshing.',
+          type: 'partial',
+        });
+      }
     } catch (error) {
       console.error("Error fetching calendar data:", error);
+      setError({
+        message: parseAppwriteError(error),
+        type: 'full',
+      });
+      handleError(error, 'fetchCalendarData', false);
     } finally {
       setLoading(false);
     }
-  };
+  }, [household?.$id, currentDate, currentView]);
 
   const getDateRange = (date, view) => {
     const start = new Date(date);
@@ -248,8 +291,8 @@ const UnifiedCalendar = () => {
     }
   };
 
-  // Combine events and tasks for display
-  const getCombinedItems = () => {
+  // Combine events and tasks for display (memoized for performance)
+  const getCombinedItems = useCallback(() => {
     const items = [];
     
     // Add events
@@ -309,7 +352,7 @@ const UnifiedCalendar = () => {
     }
 
     return items.sort((a, b) => a.startDate - b.startDate);
-  };
+  }, [events, tasks, currentDate]);
 
   const renderViewSwitcher = () => {
     return (
@@ -501,7 +544,7 @@ const UnifiedCalendar = () => {
       closeModal();
     } catch (error) {
       console.error("Error saving event:", error);
-      Alert.alert("Error", "Could not save event. " + (error.message || ""));
+      handleError(error, 'saveEvent', true);
     }
   };
 
@@ -538,7 +581,7 @@ const UnifiedCalendar = () => {
       closeModal();
     } catch (error) {
       console.error("Error saving chore:", error);
-      Alert.alert("Error", "Could not save chore. " + (error.message || ""));
+      handleError(error, 'saveChore', true);
     }
   };
 
@@ -557,7 +600,7 @@ const UnifiedCalendar = () => {
               Alert.alert("Success", "Event deleted!");
               await fetchData();
             } catch (error) {
-              Alert.alert("Error", "Could not delete event");
+              handleError(error, 'deleteEvent', true);
             }
           },
         },
@@ -725,14 +768,12 @@ const UnifiedCalendar = () => {
   };
 
   const renderViewContent = () => {
-    const items = getCombinedItems();
-    
     switch (currentView) {
       case VIEW_TYPES.DAILY:
         return (
           <DailyView 
             date={currentDate} 
-            items={items}
+            items={combinedItems}
             tasks={tasks}
             tasksDone={tasksDone}
             users={users}
@@ -746,7 +787,7 @@ const UnifiedCalendar = () => {
         return (
           <WeeklyView 
             date={currentDate} 
-            items={items}
+            items={combinedItems}
             tasks={tasks}
             tasksDone={tasksDone}
             users={users}
@@ -760,7 +801,7 @@ const UnifiedCalendar = () => {
         return (
           <MonthlyView 
             date={currentDate} 
-            items={items}
+            items={combinedItems}
             tasks={tasks}
             tasksDone={tasksDone}
             users={users}
@@ -777,11 +818,26 @@ const UnifiedCalendar = () => {
     }
   };
 
-  if (loading) {
+  // Memoize combined items to avoid recalculation on every render
+  const combinedItems = useMemo(() => {
+    return getCombinedItems();
+  }, [getCombinedItems]);
+
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading calendar...</Text>
+        <CalendarSkeleton />
       </View>
+    );
+  }
+
+  if (error && error.type === 'full' && !loading) {
+    return (
+      <ErrorDisplay
+        error={error}
+        onRetry={fetchData}
+        title="Failed to load calendar"
+      />
     );
   }
 
@@ -789,6 +845,17 @@ const UnifiedCalendar = () => {
     <View style={styles.container}>
       {renderHeader()}
       {renderViewSwitcher()}
+      
+      {/* Show partial error banner if there's a partial error */}
+      {error && error.type === 'partial' && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="warning" size={16} color="#F59E0B" />
+          <Text style={styles.errorBannerText}>{error.message}</Text>
+          <TouchableOpacity onPress={fetchData} style={styles.errorBannerButton}>
+            <Ionicons name="refresh" size={16} color="#F59E0B" />
+          </TouchableOpacity>
+        </View>
+      )}
       
       <ScrollView
         style={styles.content}
@@ -2452,6 +2519,26 @@ const styles = StyleSheet.create({
   loadingText: {
     color: "#71717A",
     fontSize: 14,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E1E24",
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#F59E0B",
+    gap: 8,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: "#F59E0B",
+    fontSize: 12,
+  },
+  errorBannerButton: {
+    padding: 4,
   },
   header: {
     flexDirection: "row",
