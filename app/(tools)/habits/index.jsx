@@ -49,8 +49,9 @@ import {
   getXpHistory,
 } from '../../../lib/appwrite';
 
-// Import constants and components
+// Import constants, components, and utilities
 import { COLORS, TITLES, ACHIEVEMENTS } from './constants';
+import { checkTitleUnlocks } from './utils';
 import GlobalProgressCard from './components/GlobalProgressCard';
 import MissedQuestsBanner from './components/MissedQuestsBanner';
 import ArcsSection from './components/ArcsSection';
@@ -61,58 +62,8 @@ import StreakStatisticsSection from './components/StreakStatisticsSection';
 import StreakCalendarSection from './components/StreakCalendarSection';
 import ArcModal from './components/ArcModal';
 import TierModal from './components/TierModal';
+import QuestModal from './components/QuestModal';
 
-// Helper function to check and unlock titles/achievements
-const checkTitleUnlocks = (userProgress, tiersCompleted, questsCompleted, totalXP, bestStreak) => {
-  const unlocked = [];
-  const currentUnlocked = userProgress?.unlockedTitles || [];
-  
-  // Check tier-based titles
-  Object.values(TITLES).forEach(title => {
-    if (title.tierRequirement && tiersCompleted >= title.tierRequirement) {
-      if (!currentUnlocked.includes(title.id)) {
-        unlocked.push(title);
-      }
-    }
-    if (title.questRequirement && questsCompleted >= title.questRequirement) {
-      if (!currentUnlocked.includes(title.id)) {
-        unlocked.push(title);
-      }
-    }
-    if (title.xpRequirement && totalXP >= title.xpRequirement) {
-      if (!currentUnlocked.includes(title.id)) {
-        unlocked.push(title);
-      }
-    }
-    if (title.streakRequirement && bestStreak >= title.streakRequirement) {
-      if (!currentUnlocked.includes(title.id)) {
-        unlocked.push(title);
-      }
-    }
-  });
-  
-  // Check achievements
-  const achievements = [];
-  const currentAchievements = userProgress?.unlockedAchievements || [];
-  
-  if (questsCompleted >= 1 && !currentAchievements.includes(ACHIEVEMENTS.FIRST_QUEST.id)) {
-    achievements.push(ACHIEVEMENTS.FIRST_QUEST);
-  }
-  if (tiersCompleted >= 1 && !currentAchievements.includes(ACHIEVEMENTS.FIRST_TIER.id)) {
-    achievements.push(ACHIEVEMENTS.FIRST_TIER);
-  }
-  if (userProgress?.globalLevel >= 10 && !currentAchievements.includes(ACHIEVEMENTS.LEVEL_10.id)) {
-    achievements.push(ACHIEVEMENTS.LEVEL_10);
-  }
-  if (userProgress?.globalLevel >= 25 && !currentAchievements.includes(ACHIEVEMENTS.LEVEL_25.id)) {
-    achievements.push(ACHIEVEMENTS.LEVEL_25);
-  }
-  if (userProgress?.globalLevel >= 50 && !currentAchievements.includes(ACHIEVEMENTS.LEVEL_50.id)) {
-    achievements.push(ACHIEVEMENTS.LEVEL_50);
-  }
-  
-  return { titles: unlocked, achievements };
-};
 
 const HabitsTracker = () => {
   const { user, household } = useGlobalContext();
@@ -298,8 +249,10 @@ const HabitsTracker = () => {
       // Set loading to false to show UI immediately
       setLoading(false);
       
-      // Load detailed data in background (non-blocking)
-      loadDetailedData(arcsData, questsData, tiersData, user.$id);
+      // Load detailed data in background (non-blocking) - delay to let UI render first
+      setTimeout(() => {
+        loadDetailedData(arcsData, questsData, tiersData, user.$id);
+      }, 100);
       
     } catch (error) {
       console.error('Error fetching habits data:', error);
@@ -329,17 +282,47 @@ const HabitsTracker = () => {
         ),
         // Filter today's quests
         filterQuestsForToday(questsData, userId),
-        // Calculate streaks in parallel (limit concurrent requests)
-        Promise.all(
-          questsData.map(async (quest) => {
-            try {
-              const streak = await calculateQuestStreak(quest, userId);
-              return { questId: quest.$id, streak };
-            } catch (error) {
-              return { questId: quest.$id, streak: 0 };
-            }
-          })
-        ),
+        // Calculate streaks in parallel (limit to first 10 for initial load, rest in background)
+        (async () => {
+          const initialQuests = questsData.slice(0, 10);
+          const remainingQuests = questsData.slice(10);
+          
+          // Load first 10 immediately
+          const initialStreaks = await Promise.all(
+            initialQuests.map(async (quest) => {
+              try {
+                const streak = await calculateQuestStreak(quest, userId);
+                return { questId: quest.$id, streak };
+              } catch (error) {
+                return { questId: quest.$id, streak: 0 };
+              }
+            })
+          );
+          
+          // Load remaining in background
+          if (remainingQuests.length > 0) {
+            setTimeout(async () => {
+              const remainingStreaks = await Promise.all(
+                remainingQuests.map(async (quest) => {
+                  try {
+                    const streak = await calculateQuestStreak(quest, userId);
+                    return { questId: quest.$id, streak };
+                  } catch (error) {
+                    return { questId: quest.$id, streak: 0 };
+                  }
+                })
+              );
+              const allStreaks = [...initialStreaks, ...remainingStreaks];
+              const streaksMap = {};
+              allStreaks.forEach(({ questId, streak }) => {
+                streaksMap[questId] = streak;
+              });
+              setQuestStreaks(streaksMap);
+            }, 500);
+          }
+          
+          return initialStreaks;
+        })(),
       ]);
       
       // Update state with calculated values
@@ -830,6 +813,10 @@ const HabitsTracker = () => {
 
   // Quest Management
   const openQuestModal = async (quest = null) => {
+    // Open modal immediately
+    setQuestModalTab('details');
+    setQuestModalVisible(true);
+    
     if (quest) {
       setEditingQuest(quest);
       const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
@@ -843,62 +830,68 @@ const HabitsTracker = () => {
         accessLevel: quest.accessLevel?.toString() || '',
       });
       
-      // Load completion history and stats
-      try {
-        const completions = await getQuestCompletions(quest.$id, user.$id);
-        setQuestCompletionsHistory(completions.sort((a, b) => {
-          const dateA = new Date(a.completedAt || a.$createdAt);
-          const dateB = new Date(b.completedAt || b.$createdAt);
-          return dateB - dateA;
-        }));
-        
-        // Calculate stats
-        const currentStreak = await calculateQuestStreak(quest, user.$id);
-        const totalCompletions = completions.length;
-        const totalXP = completions.reduce((sum, c) => sum + (c.xpEarned || quest.xpPerCompletion || 10), 0);
-        const firstCompletion = completions.length > 0 ? new Date(completions[completions.length - 1].completedAt || completions[completions.length - 1].$createdAt) : null;
-        const lastCompletion = completions.length > 0 ? new Date(completions[0].completedAt || completions[0].$createdAt) : null;
-        
-        // Calculate best streak
-        let bestStreak = 0;
-        let currentStreakCount = 0;
-        const sortedCompletions = [...completions].sort((a, b) => {
-          const dateA = new Date(a.completedAt || a.$createdAt);
-          const dateB = new Date(b.completedAt || b.$createdAt);
-          return dateA - dateB;
-        });
-        
-        for (let i = 0; i < sortedCompletions.length; i++) {
-          if (i === 0) {
-            currentStreakCount = 1;
-          } else {
-            const prevDate = new Date(sortedCompletions[i - 1].completedAt || sortedCompletions[i - 1].$createdAt);
-            const currDate = new Date(sortedCompletions[i].completedAt || sortedCompletions[i].$createdAt);
-            const daysDiff = Math.floor((currDate - prevDate) / (1000 * 60 * 60 * 24));
-            
-            if (daysDiff <= 1) {
-              currentStreakCount++;
-            } else {
-              bestStreak = Math.max(bestStreak, currentStreakCount);
+      // Initialize with empty data for immediate display
+      setQuestCompletionsHistory([]);
+      setQuestStats(null);
+      
+      // Load completion history and stats in background
+      setTimeout(async () => {
+        try {
+          const completions = await getQuestCompletions(quest.$id, user.$id);
+          setQuestCompletionsHistory(completions.sort((a, b) => {
+            const dateA = new Date(a.completedAt || a.$createdAt);
+            const dateB = new Date(b.completedAt || b.$createdAt);
+            return dateB - dateA;
+          }));
+          
+          // Calculate stats
+          const currentStreak = await calculateQuestStreak(quest, user.$id);
+          const totalCompletions = completions.length;
+          const totalXP = completions.reduce((sum, c) => sum + (c.xpEarned || quest.xpPerCompletion || 10), 0);
+          const firstCompletion = completions.length > 0 ? new Date(completions[completions.length - 1].completedAt || completions[completions.length - 1].$createdAt) : null;
+          const lastCompletion = completions.length > 0 ? new Date(completions[0].completedAt || completions[0].$createdAt) : null;
+          
+          // Calculate best streak
+          let bestStreak = 0;
+          let currentStreakCount = 0;
+          const sortedCompletions = [...completions].sort((a, b) => {
+            const dateA = new Date(a.completedAt || a.$createdAt);
+            const dateB = new Date(b.completedAt || b.$createdAt);
+            return dateA - dateB;
+          });
+          
+          for (let i = 0; i < sortedCompletions.length; i++) {
+            if (i === 0) {
               currentStreakCount = 1;
+            } else {
+              const prevDate = new Date(sortedCompletions[i - 1].completedAt || sortedCompletions[i - 1].$createdAt);
+              const currDate = new Date(sortedCompletions[i].completedAt || sortedCompletions[i].$createdAt);
+              const daysDiff = Math.floor((currDate - prevDate) / (1000 * 60 * 60 * 24));
+              
+              if (daysDiff <= 1) {
+                currentStreakCount++;
+              } else {
+                bestStreak = Math.max(bestStreak, currentStreakCount);
+                currentStreakCount = 1;
+              }
             }
           }
+          bestStreak = Math.max(bestStreak, currentStreakCount);
+          
+          setQuestStats({
+            totalCompletions,
+            totalXP,
+            currentStreak,
+            bestStreak,
+            firstCompletion,
+            lastCompletion,
+          });
+        } catch (error) {
+          console.error('Error loading quest history:', error);
+          setQuestCompletionsHistory([]);
+          setQuestStats(null);
         }
-        bestStreak = Math.max(bestStreak, currentStreakCount);
-        
-        setQuestStats({
-          totalCompletions,
-          totalXP,
-          currentStreak,
-          bestStreak,
-          firstCompletion,
-          lastCompletion,
-        });
-      } catch (error) {
-        console.error('Error loading quest history:', error);
-        setQuestCompletionsHistory([]);
-        setQuestStats(null);
-      }
+      }, 100);
     } else {
       setEditingQuest(null);
       setQuestForm({
@@ -913,8 +906,6 @@ const HabitsTracker = () => {
       setQuestCompletionsHistory([]);
       setQuestStats(null);
     }
-    setQuestModalTab('details');
-    setQuestModalVisible(true);
   };
 
   const closeQuestModal = () => {
@@ -1467,7 +1458,7 @@ const HabitsTracker = () => {
     }
   }, [xpHistoryModalVisible]);
 
-  // Detect missed quests
+  // Detect missed quests (optimized - only check first 10 initially)
   const detectMissedQuests = async () => {
     if (!user || !quests.length) return;
     
@@ -1475,7 +1466,11 @@ const HabitsTracker = () => {
     today.setHours(0, 0, 0, 0);
     const missed = [];
     
-    for (const quest of quests) {
+    // Check first 10 quests immediately, rest in background
+    const initialQuests = quests.slice(0, 10);
+    const remainingQuests = quests.slice(10);
+    
+    for (const quest of initialQuests) {
       try {
         const frequency = quest.frequency || QuestFrequencies.DAILY;
         const repetitions = quest.repetitionPerPeriod || 1;
@@ -1573,6 +1568,82 @@ const HabitsTracker = () => {
     }
     
     setMissedQuests(missed);
+    
+    // Check remaining quests in background
+    if (remainingQuests.length > 0) {
+      setTimeout(async () => {
+        const additionalMissed = [];
+        for (const quest of remainingQuests) {
+          try {
+            const frequency = quest.frequency || QuestFrequencies.DAILY;
+            const repetitions = quest.repetitionPerPeriod || 1;
+            const allCompletions = await getQuestCompletions(quest.$id, user.$id);
+            
+            let isMissed = false;
+            let missedCount = 0;
+            let lastCompleted = null;
+            
+            if (allCompletions.length > 0) {
+              const sortedCompletions = [...allCompletions].sort((a, b) => {
+                const dateA = new Date(a.completedAt || a.$createdAt);
+                const dateB = new Date(b.completedAt || b.$createdAt);
+                return dateB - dateA;
+              });
+              lastCompleted = new Date(sortedCompletions[0].completedAt || sortedCompletions[0].$createdAt);
+            }
+            
+            if (frequency === QuestFrequencies.DAILY) {
+              const todayCompletions = allCompletions.filter(c => {
+                const completionDate = new Date(c.completedAt || c.$createdAt);
+                completionDate.setHours(0, 0, 0, 0);
+                return completionDate.getTime() === today.getTime();
+              });
+              if (todayCompletions.length < repetitions) {
+                isMissed = true;
+                missedCount = repetitions - todayCompletions.length;
+              }
+            } else if (frequency === QuestFrequencies.WEEKLY) {
+              const startOfWeek = new Date(today);
+              startOfWeek.setDate(today.getDate() - today.getDay());
+              startOfWeek.setHours(0, 0, 0, 0);
+              const weekCompletions = allCompletions.filter(c => {
+                const completionDate = new Date(c.completedAt || c.$createdAt);
+                return completionDate >= startOfWeek;
+              });
+              if (weekCompletions.length < repetitions) {
+                isMissed = true;
+                missedCount = repetitions - weekCompletions.length;
+              }
+            } else if (frequency === QuestFrequencies.MONTHLY) {
+              const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+              startOfMonth.setHours(0, 0, 0, 0);
+              const monthCompletions = allCompletions.filter(c => {
+                const completionDate = new Date(c.completedAt || c.$createdAt);
+                return completionDate >= startOfMonth;
+              });
+              if (monthCompletions.length < repetitions) {
+                isMissed = true;
+                missedCount = repetitions - monthCompletions.length;
+              }
+            }
+            
+            if (isMissed) {
+              additionalMissed.push({
+                quest,
+                missedCount,
+                lastCompleted,
+                daysSinceLastCompletion: lastCompleted 
+                  ? Math.floor((today - lastCompleted) / (1000 * 60 * 60 * 24))
+                  : null,
+              });
+            }
+          } catch (error) {
+            console.error(`Error detecting missed quest ${quest.$id}:`, error);
+          }
+        }
+        setMissedQuests(prev => [...prev, ...additionalMissed]);
+      }, 1000);
+    }
   };
   
   // Detect missed quests when data loads
@@ -2254,412 +2325,20 @@ const HabitsTracker = () => {
       />
 
       {/* Quest Management Modal */}
-      <Modal
+      <QuestModal
         visible={questModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeQuestModal}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={closeQuestModal}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <Text style={styles.modalTitle}>
-                {editingQuest ? (editingQuest.name || 'Quest Details') : 'Add Quest'}
-              </Text>
-              {editingQuest ? (
-                <View style={{ width: 40 }} />
-              ) : (
-                <TouchableOpacity onPress={handleSaveQuest}>
-                  <Text style={styles.modalSaveText}>Save</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Tabs for editing quest */}
-            {editingQuest && (
-              <View style={styles.modalTabs}>
-                <TouchableOpacity
-                  style={[styles.modalTab, questModalTab === 'details' && styles.modalTabActive]}
-                  onPress={() => setQuestModalTab('details')}
-                >
-                  <Ionicons 
-                    name="create-outline" 
-                    size={18} 
-                    color={questModalTab === 'details' ? COLORS.accent.primary : COLORS.textSecondary} 
-                  />
-                  <Text style={[
-                    styles.modalTabText,
-                    questModalTab === 'details' && styles.modalTabTextActive
-                  ]}>
-                    Edit
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalTab, questModalTab === 'history' && styles.modalTabActive]}
-                  onPress={() => setQuestModalTab('history')}
-                >
-                  <Ionicons 
-                    name="time-outline" 
-                    size={18} 
-                    color={questModalTab === 'history' ? COLORS.accent.primary : COLORS.textSecondary} 
-                  />
-                  <Text style={[
-                    styles.modalTabText,
-                    questModalTab === 'history' && styles.modalTabTextActive
-                  ]}>
-                    History
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalTab, questModalTab === 'stats' && styles.modalTabActive]}
-                  onPress={() => setQuestModalTab('stats')}
-                >
-                  <Ionicons 
-                    name="stats-chart-outline" 
-                    size={18} 
-                    color={questModalTab === 'stats' ? COLORS.accent.primary : COLORS.textSecondary} 
-                  />
-                  <Text style={[
-                    styles.modalTabText,
-                    questModalTab === 'stats' && styles.modalTabTextActive
-                  ]}>
-                    Stats
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Details Tab */}
-              {(!editingQuest || questModalTab === 'details') && (
-                <>
-              {/* Quest Name */}
-              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Quest Name</Text>
-              <TextInput
-                style={styles.input}
-                value={questForm.name}
-                onChangeText={(text) => setQuestForm({ ...questForm, name: text })}
-                placeholder="e.g., Meditate 1x per day, Run 4x per week"
-                placeholderTextColor={COLORS.textTertiary}
-                maxLength={200}
-              />
-
-              {/* Arc Selection */}
-              <Text style={styles.inputLabel}>Arc</Text>
-              {arcs.length === 0 ? (
-                <View style={styles.emptyArcWarning}>
-                  <Ionicons name="alert-circle-outline" size={20} color={COLORS.accent.warning} />
-                  <Text style={styles.emptyArcWarningText}>Create an arc first</Text>
-                </View>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.arcChipsScroll}>
-                  {arcs.map((arc) => (
-                    <TouchableOpacity
-                      key={arc.$id}
-                      style={[
-                        styles.arcChip,
-                        questForm.arcId === arc.$id && { backgroundColor: `${arc.color || COLORS.accent.primary}20`, borderColor: arc.color || COLORS.accent.primary },
-                      ]}
-                      onPress={() => setQuestForm({ ...questForm, arcId: arc.$id })}
-                    >
-                      <View style={[styles.arcChipIndicator, { backgroundColor: arc.color || COLORS.accent.primary }]} />
-                      <Text style={[
-                        styles.arcChipText,
-                        questForm.arcId === arc.$id && { color: COLORS.textPrimary },
-                      ]}>
-                        {arc.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              )}
-
-              {/* Frequency */}
-              <Text style={styles.inputLabel}>Frequency</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.frequencyScroll}>
-                {Object.entries({
-                  [QuestFrequencies.DAILY]: 'Daily',
-                  [QuestFrequencies.WEEKLY]: 'Weekly',
-                  [QuestFrequencies.MONTHLY]: 'Monthly',
-                  [QuestFrequencies.ANNUAL]: 'Annual',
-                  [QuestFrequencies.UNIQUE]: 'Unique',
-                }).map(([value, label]) => (
-                  <TouchableOpacity
-                    key={value}
-                    style={[
-                      styles.frequencyChip,
-                      questForm.frequency === value && styles.frequencyChipActive,
-                    ]}
-                    onPress={() => setQuestForm({ ...questForm, frequency: value })}
-                  >
-                    <Text style={[
-                      styles.frequencyChipText,
-                      questForm.frequency === value && styles.frequencyChipTextActive,
-                    ]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Repetition Per Period */}
-              <Text style={styles.inputLabel}>Repetition Per Period</Text>
-              <TextInput
-                style={styles.input}
-                value={questForm.repetitionPerPeriod}
-                onChangeText={(text) => {
-                  const num = parseInt(text) || 1;
-                  setQuestForm({ ...questForm, repetitionPerPeriod: Math.max(1, num).toString() });
-                }}
-                placeholder="e.g., 3 (for 3x per week)"
-                placeholderTextColor={COLORS.textTertiary}
-                keyboardType="numeric"
-              />
-              <Text style={styles.inputHint}>
-                How many times per period (e.g., 3 for "3x per week")
-              </Text>
-
-              {/* Intensity/Difficulty */}
-              <Text style={styles.inputLabel}>Intensity / Difficulty (1-5)</Text>
-              <View style={styles.intensityContainer}>
-                {[1, 2, 3, 4, 5].map((level) => (
-                  <TouchableOpacity
-                    key={level}
-                    style={[
-                      styles.intensityButton,
-                      parseInt(questForm.intensity) === level && styles.intensityButtonActive,
-                    ]}
-                    onPress={() => setQuestForm({ ...questForm, intensity: level.toString() })}
-                  >
-                    <Text style={[
-                      styles.intensityButtonText,
-                      parseInt(questForm.intensity) === level && styles.intensityButtonTextActive,
-                    ]}>
-                      {level}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* XP Per Completion */}
-              <Text style={styles.inputLabel}>XP Per Completion</Text>
-              <TextInput
-                style={styles.input}
-                value={questForm.xpPerCompletion}
-                onChangeText={(text) => {
-                  const num = parseInt(text) || 10;
-                  setQuestForm({ ...questForm, xpPerCompletion: Math.max(1, num).toString() });
-                }}
-                placeholder="10"
-                placeholderTextColor={COLORS.textTertiary}
-                keyboardType="numeric"
-              />
-
-              {/* Access Level (Optional) */}
-              <Text style={styles.inputLabel}>Access Level (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                value={questForm.accessLevel}
-                onChangeText={(text) => setQuestForm({ ...questForm, accessLevel: text })}
-                placeholder="Leave empty if no requirement"
-                placeholderTextColor={COLORS.textTertiary}
-                keyboardType="numeric"
-              />
-
-                  {/* Save Button (when editing in details tab) */}
-                  {editingQuest && questModalTab === 'details' && (
-                    <TouchableOpacity
-                      style={styles.saveButton}
-                      onPress={async () => {
-                        await handleSaveQuest();
-                      }}
-                    >
-                      <Text style={styles.saveButtonText}>Save Changes</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Delete Button (only when editing in details tab) */}
-                  {editingQuest && questModalTab === 'details' && (
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => {
-                        closeQuestModal();
-                        handleDeleteQuest(editingQuest);
-                      }}
-                    >
-                      <Ionicons name="trash-outline" size={18} color={COLORS.accent.danger} />
-                      <Text style={styles.deleteButtonText}>Delete Quest</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {!editingQuest && <View style={{ height: 40 }} />}
-                </>
-              )}
-
-              {/* History Tab */}
-              {editingQuest && questModalTab === 'history' && (
-                <>
-                  <View style={styles.questHistoryHeader}>
-                    <Text style={styles.questHistoryTitle}>Completion History</Text>
-                    <Text style={styles.questHistorySubtitle}>
-                      {questCompletionsHistory.length} total completion{questCompletionsHistory.length !== 1 ? 's' : ''}
-                    </Text>
-                  </View>
-
-                  {questCompletionsHistory.length === 0 ? (
-                    <View style={styles.emptyState}>
-                      <Ionicons name="time-outline" size={48} color={COLORS.textTertiary} />
-                      <Text style={styles.emptyStateText}>No completions yet</Text>
-                      <Text style={styles.emptyStateSubtext}>Complete this quest to see history</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.completionHistoryList}>
-                      {questCompletionsHistory.map((completion, index) => {
-                        const completionDate = new Date(completion.completedAt || completion.$createdAt);
-                        const isToday = completionDate.toDateString() === new Date().toDateString();
-                        const isYesterday = completionDate.toDateString() === new Date(Date.now() - 86400000).toDateString();
-                        
-                        let dateLabel = '';
-                        if (isToday) {
-                          dateLabel = 'Today';
-                        } else if (isYesterday) {
-                          dateLabel = 'Yesterday';
-                        } else {
-                          dateLabel = completionDate.toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric',
-                            year: completionDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                          });
-                        }
-                        
-                        return (
-                          <View key={completion.$id || index} style={styles.completionHistoryItem}>
-                            <View style={styles.completionHistoryIndicator}>
-                              <Ionicons name="checkmark-circle" size={20} color={COLORS.accent.success} />
-                            </View>
-                            <View style={styles.completionHistoryContent}>
-                              <Text style={styles.completionHistoryDate}>{dateLabel}</Text>
-                              <Text style={styles.completionHistoryTime}>
-                                {completionDate.toLocaleTimeString('en-US', { 
-                                  hour: 'numeric', 
-                                  minute: '2-digit' 
-                                })}
-                              </Text>
-                            </View>
-                            <View style={styles.completionHistoryMeta}>
-                              {completion.streakCount > 0 && (
-                                <View style={styles.completionStreakBadge}>
-                                  <Ionicons name="flame" size={12} color={COLORS.accent.warning} />
-                                  <Text style={styles.completionStreakText}>{completion.streakCount}</Text>
-                                </View>
-                              )}
-                              <Text style={styles.completionHistoryXP}>
-                                +{completion.xpEarned || editingQuest.xpPerCompletion || 10} XP
-                              </Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  )}
-                  <View style={{ height: 40 }} />
-                </>
-              )}
-
-              {/* Stats Tab */}
-              {editingQuest && questModalTab === 'stats' && questStats && (
-                <>
-                  <View style={styles.questStatsContainer}>
-                    {/* Current Streak */}
-                    <View style={styles.questStatCard}>
-                      <View style={styles.questStatHeader}>
-                        <Ionicons name="flame" size={24} color={COLORS.accent.warning} />
-                        <Text style={styles.questStatLabel}>Current Streak</Text>
-                      </View>
-                      <Text style={styles.questStatValue}>{questStats.currentStreak}</Text>
-                      <Text style={styles.questStatUnit}>days</Text>
-                    </View>
-
-                    {/* Best Streak */}
-                    <View style={styles.questStatCard}>
-                      <View style={styles.questStatHeader}>
-                        <Ionicons name="trophy" size={24} color={COLORS.accent.primary} />
-                        <Text style={styles.questStatLabel}>Best Streak</Text>
-                      </View>
-                      <Text style={styles.questStatValue}>{questStats.bestStreak}</Text>
-                      <Text style={styles.questStatUnit}>days</Text>
-                    </View>
-
-                    {/* Total Completions */}
-                    <View style={styles.questStatCard}>
-                      <View style={styles.questStatHeader}>
-                        <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.success} />
-                        <Text style={styles.questStatLabel}>Total Completions</Text>
-                      </View>
-                      <Text style={styles.questStatValue}>{questStats.totalCompletions}</Text>
-                      <Text style={styles.questStatUnit}>times</Text>
-                    </View>
-
-                    {/* Total XP Earned */}
-                    <View style={styles.questStatCard}>
-                      <View style={styles.questStatHeader}>
-                        <Ionicons name="star" size={24} color={COLORS.accent.primary} />
-                        <Text style={styles.questStatLabel}>Total XP Earned</Text>
-                      </View>
-                      <Text style={styles.questStatValue}>{questStats.totalXP}</Text>
-                      <Text style={styles.questStatUnit}>XP</Text>
-                    </View>
-                  </View>
-
-                  {/* Additional Stats */}
-                  <View style={styles.questStatsDetails}>
-                    {questStats.firstCompletion && (
-                      <View style={styles.questStatDetailItem}>
-                        <Text style={styles.questStatDetailLabel}>First Completion</Text>
-                        <Text style={styles.questStatDetailValue}>
-                          {questStats.firstCompletion.toLocaleDateString('en-US', { 
-                            month: 'long', 
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </Text>
-                      </View>
-                    )}
-                    {questStats.lastCompletion && (
-                      <View style={styles.questStatDetailItem}>
-                        <Text style={styles.questStatDetailLabel}>Last Completion</Text>
-                        <Text style={styles.questStatDetailValue}>
-                          {questStats.lastCompletion.toLocaleDateString('en-US', { 
-                            month: 'long', 
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </Text>
-                      </View>
-                    )}
-                    {questStats.firstCompletion && questStats.lastCompletion && (
-                      <View style={styles.questStatDetailItem}>
-                        <Text style={styles.questStatDetailLabel}>Quest Duration</Text>
-                        <Text style={styles.questStatDetailValue}>
-                          {Math.floor((questStats.lastCompletion - questStats.firstCompletion) / (1000 * 60 * 60 * 24))} days
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-
-                  <View style={{ height: 40 }} />
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        editingQuest={editingQuest}
+        questForm={questForm}
+        setQuestForm={setQuestForm}
+        questModalTab={questModalTab}
+        setQuestModalTab={setQuestModalTab}
+        questCompletionsHistory={questCompletionsHistory}
+        questStats={questStats}
+        arcs={arcs}
+        onClose={closeQuestModal}
+        onSave={handleSaveQuest}
+        onDelete={handleDeleteQuest}
+      />
 
       {/* Tier Management Modal */}
       <TierModal
