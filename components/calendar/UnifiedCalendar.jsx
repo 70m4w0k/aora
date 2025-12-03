@@ -2012,7 +2012,10 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
   const renderDayCell = (dayIndex) => {
     const dayNumber = getDayNumber(dayIndex);
     const dayDate = getDateForDay(dayIndex);
-    const dayItems = getItemsForDay(dayDate);
+    // Get events and completed tasks for this day (exclude recurring tasks)
+    const dayEvents = getItemsForDay(dayDate).filter(item => item.type === "event");
+    const completedTasks = getCompletedTasksForDay(dayDate);
+    const dayItems = [...dayEvents, ...completedTasks];
     const isCurrentMonthDay = isCurrentMonth(dayIndex);
     const isTodayDay = isCurrentMonthDay && isToday(dayNumber);
     const isSelected = selectedDate && 
@@ -2053,7 +2056,7 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
                 key={item.id}
                 style={[
                   styles.eventDot,
-                  { backgroundColor: item.color },
+                  { backgroundColor: item.color || item.type === "completed_task" ? "#06B6D4" : "#71717A" },
                 ]}
               />
             ))}

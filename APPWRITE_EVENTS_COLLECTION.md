@@ -143,3 +143,4 @@ Use: `events` (or generate a unique ID and update `lib/appwrite.js`)
 - If `allDay` is true, the time portion of dates can be ignored
 - The `color` field allows custom event colors, but defaults to category colors if not set
 
+
