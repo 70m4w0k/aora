@@ -69,6 +69,8 @@ import TitleUnlockModal from './components/TitleUnlockModal';
 import LevelUpModal from './components/LevelUpModal';
 import SettingsModal from './components/SettingsModal';
 import MissedQuestsModal from './components/MissedQuestsModal';
+import XpHistoryModal from './components/XpHistoryModal';
+import StreakStatisticsModal from './components/StreakStatisticsModal';
 
 
 const HabitsTracker = () => {
@@ -1661,7 +1663,149 @@ const HabitsTracker = () => {
     }
   }, [quests, user, notificationsEnabled]);
 
-  // Calculate detailed streak statistics
+  // Optimized helper to calculate streak from completions (no API call)
+  const calculateStreakFromCompletions = (quest, completions) => {
+    if (!completions || completions.length === 0) {
+      return { current: 0, longest: 0 };
+    }
+    
+    const frequency = quest.frequency || QuestFrequencies.DAILY;
+    const sortedCompletions = completions
+      .map(c => new Date(c.completedAt || c.$createdAt))
+      .sort((a, b) => b - a);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Calculate current streak
+    let currentStreak = 0;
+    let expectedDate = new Date(today);
+    expectedDate.setHours(0, 0, 0, 0);
+    
+    if (frequency === QuestFrequencies.DAILY) {
+      // Check if today was completed
+      const todayCompleted = sortedCompletions.some(c => {
+        const completionDate = new Date(c);
+        completionDate.setHours(0, 0, 0, 0);
+        return completionDate.getTime() === expectedDate.getTime();
+      });
+      
+      if (!todayCompleted) {
+        expectedDate.setDate(expectedDate.getDate() - 1);
+      }
+      
+      for (const completion of sortedCompletions) {
+        const completionDate = new Date(completion);
+        completionDate.setHours(0, 0, 0, 0);
+        
+        if (completionDate.getTime() === expectedDate.getTime()) {
+          currentStreak++;
+          expectedDate.setDate(expectedDate.getDate() - 1);
+        } else if (completionDate < expectedDate) {
+          break;
+        }
+      }
+    } else if (frequency === QuestFrequencies.WEEKLY) {
+      const currentWeek = getWeekNumber(new Date());
+      let expectedWeek = currentWeek;
+      
+      for (const completion of sortedCompletions) {
+        const completionDate = new Date(completion);
+        const completionWeek = getWeekNumber(completionDate);
+        
+        if (completionWeek === expectedWeek) {
+          currentStreak++;
+          expectedWeek--;
+          if (expectedWeek < 1) expectedWeek = 52;
+        } else if (completionWeek < expectedWeek) {
+          break;
+        }
+      }
+    } else if (frequency === QuestFrequencies.MONTHLY) {
+      let expectedMonth = today.getMonth();
+      let expectedYear = today.getFullYear();
+      
+      for (const completion of sortedCompletions) {
+        const completionDate = new Date(completion);
+        const completionMonth = completionDate.getMonth();
+        const completionYear = completionDate.getFullYear();
+        
+        if (completionMonth === expectedMonth && completionYear === expectedYear) {
+          currentStreak++;
+          expectedMonth--;
+          if (expectedMonth < 0) {
+            expectedMonth = 11;
+            expectedYear--;
+          }
+        } else {
+          const completionMonthIndex = completionYear * 12 + completionMonth;
+          const expectedMonthIndex = expectedYear * 12 + expectedMonth;
+          if (completionMonthIndex < expectedMonthIndex) {
+            break;
+          }
+        }
+      }
+    } else {
+      // For other frequencies, use the streak from the most recent completion
+      currentStreak = sortedCompletions[0]?.streakCount || 0;
+    }
+    
+    // Calculate longest streak from all completions
+    let longestStreak = 0;
+    if (sortedCompletions.length > 0) {
+      let currentStreakCount = 1;
+      
+      for (let i = 0; i < sortedCompletions.length - 1; i++) {
+        const date1 = new Date(sortedCompletions[i]);
+        const date2 = new Date(sortedCompletions[i + 1]);
+        
+        let isConsecutive = false;
+        
+        if (frequency === QuestFrequencies.DAILY) {
+          date1.setHours(0, 0, 0, 0);
+          date2.setHours(0, 0, 0, 0);
+          const daysDiff = Math.floor((date1 - date2) / (1000 * 60 * 60 * 24));
+          isConsecutive = daysDiff === 1;
+        } else if (frequency === QuestFrequencies.WEEKLY) {
+          const week1 = getWeekNumber(date1);
+          const week2 = getWeekNumber(date2);
+          const year1 = date1.getFullYear();
+          const year2 = date2.getFullYear();
+          isConsecutive = (week1 === week2 + 1 && year1 === year2) || 
+                         (week1 === 1 && week2 === 52 && year1 === year2 + 1);
+        } else if (frequency === QuestFrequencies.MONTHLY) {
+          const month1 = date1.getMonth();
+          const month2 = date2.getMonth();
+          const year1 = date1.getFullYear();
+          const year2 = date2.getFullYear();
+          isConsecutive = (month1 === month2 + 1 && year1 === year2) ||
+                         (month1 === 0 && month2 === 11 && year1 === year2 + 1);
+        }
+        
+        if (isConsecutive) {
+          currentStreakCount++;
+        } else {
+          if (currentStreakCount > longestStreak) {
+            longestStreak = currentStreakCount;
+          }
+          currentStreakCount = 1;
+        }
+      }
+      
+      if (currentStreakCount > longestStreak) {
+        longestStreak = currentStreakCount;
+      }
+      
+      // If no streaks found but has completions, longest is 1
+      if (longestStreak === 0 && sortedCompletions.length > 0) {
+        longestStreak = 1;
+      }
+    }
+    
+    return { current: currentStreak, longest: longestStreak };
+  };
+
+  // Calculate detailed streak statistics (OPTIMIZED)
   const calculateStreakStatistics = async () => {
     if (!user || !quests.length || !arcs.length) return null;
     
@@ -1692,114 +1836,58 @@ const HabitsTracker = () => {
         };
       });
       
-      // Calculate streaks for each quest
-      for (const quest of quests) {
-        try {
-          const currentStreak = await calculateQuestStreak(quest, user.$id);
-          const completions = await getQuestCompletions(quest.$id, user.$id);
-          
-          // Calculate longest streak from all completions
-          let longestStreak = 0;
-          if (completions.length > 0) {
-            const frequency = quest.frequency || QuestFrequencies.DAILY;
-            const sortedCompletions = completions
-              .map(c => new Date(c.completedAt || c.$createdAt))
-              .sort((a, b) => b - a);
-            
-            // Calculate all streaks in history
-            const allStreaks = [];
-            let currentStreakCount = 1;
-            
-            for (let i = 0; i < sortedCompletions.length - 1; i++) {
-              const date1 = new Date(sortedCompletions[i]);
-              const date2 = new Date(sortedCompletions[i + 1]);
-              
-              let isConsecutive = false;
-              
-              if (frequency === QuestFrequencies.DAILY) {
-                date1.setHours(0, 0, 0, 0);
-                date2.setHours(0, 0, 0, 0);
-                const daysDiff = Math.floor((date1 - date2) / (1000 * 60 * 60 * 24));
-                isConsecutive = daysDiff === 1;
-              } else if (frequency === QuestFrequencies.WEEKLY) {
-                const week1 = getWeekNumber(date1);
-                const week2 = getWeekNumber(date2);
-                const year1 = date1.getFullYear();
-                const year2 = date2.getFullYear();
-                isConsecutive = (week1 === week2 + 1 && year1 === year2) || 
-                               (week1 === 1 && week2 === 52 && year1 === year2 + 1);
-              } else if (frequency === QuestFrequencies.MONTHLY) {
-                const month1 = date1.getMonth();
-                const month2 = date2.getMonth();
-                const year1 = date1.getFullYear();
-                const year2 = date2.getFullYear();
-                isConsecutive = (month1 === month2 + 1 && year1 === year2) ||
-                               (month1 === 0 && month2 === 11 && year1 === year2 + 1);
-              }
-              
-              if (isConsecutive) {
-                currentStreakCount++;
-              } else {
-                if (currentStreakCount > longestStreak) {
-                  longestStreak = currentStreakCount;
-                }
-                allStreaks.push(currentStreakCount);
-                currentStreakCount = 1;
-              }
-            }
-            
-            if (currentStreakCount > longestStreak) {
-              longestStreak = currentStreakCount;
-            }
-            if (currentStreakCount > 1) {
-              allStreaks.push(currentStreakCount);
-            }
-            
-            // If no streaks found but has completions, longest is 1
-            if (longestStreak === 0 && completions.length > 0) {
-              longestStreak = 1;
-            }
+      // OPTIMIZATION: Fetch all completions in parallel first
+      const completionPromises = quests.map(quest => 
+        getQuestCompletions(quest.$id, user.$id).catch(() => [])
+      );
+      const allCompletions = await Promise.all(completionPromises);
+      
+      // OPTIMIZATION: Calculate streaks in parallel using the fetched completions
+      const streakCalculations = quests.map((quest, index) => {
+        const completions = allCompletions[index];
+        const { current, longest } = calculateStreakFromCompletions(quest, completions);
+        
+        const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
+        const arc = arcs.find(a => a.$id === arcId);
+        
+        return {
+          questId: quest.$id,
+          questName: quest.name,
+          currentStreak: current,
+          longestStreak: longest,
+          arcId,
+          arcName: arc?.name || 'Unassigned',
+          arcColor: arc?.color || COLORS.accent.primary,
+          frequency: quest.frequency,
+          totalCompletions: completions.length,
+        };
+      });
+      
+      // Process all calculated streaks
+      for (const questData of streakCalculations) {
+        stats.longestStreaksPerQuest.push(questData);
+        
+        // Update arc statistics
+        if (questData.arcId && arcStreaks[questData.arcId]) {
+          arcStreaks[questData.arcId].total += questData.currentStreak;
+          arcStreaks[questData.arcId].count++;
+          if (questData.currentStreak > arcStreaks[questData.arcId].longest) {
+            arcStreaks[questData.arcId].longest = questData.currentStreak;
           }
-          
-          const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
-          const arc = arcs.find(a => a.$id === arcId);
-          
-          stats.longestStreaksPerQuest.push({
-            questId: quest.$id,
-            questName: quest.name,
-            currentStreak,
-            longestStreak,
-            arcId,
-            arcName: arc?.name || 'Unassigned',
-            arcColor: arc?.color || COLORS.accent.primary,
-            frequency: quest.frequency,
-            totalCompletions: completions.length,
+          arcStreaks[questData.arcId].quests.push({
+            questName: questData.questName,
+            currentStreak: questData.currentStreak,
+            longestStreak: questData.longestStreak,
           });
-          
-          // Update arc statistics
-          if (arcId && arcStreaks[arcId]) {
-            arcStreaks[arcId].total += currentStreak;
-            arcStreaks[arcId].count++;
-            if (currentStreak > arcStreaks[arcId].longest) {
-              arcStreaks[arcId].longest = currentStreak;
-            }
-            arcStreaks[arcId].quests.push({
-              questName: quest.name,
-              currentStreak,
-              longestStreak,
-            });
-          }
-          
-          if (currentStreak > 0) {
-            activeStreakCount++;
-            totalStreak += currentStreak;
-          }
-          
-          if (currentStreak > stats.bestStreakOverall) {
-            stats.bestStreakOverall = currentStreak;
-          }
-        } catch (error) {
-          console.error(`Error calculating streak for quest ${quest.$id}:`, error);
+        }
+        
+        if (questData.currentStreak > 0) {
+          activeStreakCount++;
+          totalStreak += questData.currentStreak;
+        }
+        
+        if (questData.currentStreak > stats.bestStreakOverall) {
+          stats.bestStreakOverall = questData.currentStreak;
         }
       }
       
@@ -2461,643 +2549,32 @@ const HabitsTracker = () => {
       />
 
       {/* XP History Modal */}
-      <Modal
+      <XpHistoryModal
         visible={xpHistoryModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setXpHistoryModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setXpHistoryModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <View style={styles.modalHeaderCenter}>
-                <Text style={styles.modalTitle}>XP History</Text>
-              </View>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Filters */}
-              <View style={styles.xpHistoryFilters}>
-                <Text style={styles.inputLabel}>Filters</Text>
-                
-                {/* Arc Filter */}
-                <View style={styles.filterRow}>
-                  <Text style={styles.filterLabel}>Arc</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterChip,
-                        xpHistoryFilters.arcId === null && styles.filterChipActive,
-                      ]}
-                      onPress={() => {
-                        setXpHistoryFilters(prev => ({ ...prev, arcId: null }));
-                      }}
-                    >
-                      <Text style={[
-                        styles.filterChipText,
-                        xpHistoryFilters.arcId === null && styles.filterChipTextActive,
-                      ]}>
-                        All
-                      </Text>
-                    </TouchableOpacity>
-                    {arcs.map((arc) => (
-                      <TouchableOpacity
-                        key={arc.$id}
-                        style={[
-                          styles.filterChip,
-                          xpHistoryFilters.arcId === arc.$id && styles.filterChipActive,
-                          xpHistoryFilters.arcId === arc.$id && { borderColor: arc.color },
-                        ]}
-                        onPress={() => {
-                          setXpHistoryFilters(prev => ({ ...prev, arcId: arc.$id }));
-                        }}
-                      >
-                        <View style={[styles.filterChipIndicator, { backgroundColor: arc.color }]} />
-                        <Text style={[
-                          styles.filterChipText,
-                          xpHistoryFilters.arcId === arc.$id && styles.filterChipTextActive,
-                        ]}>
-                          {arc.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Source Type Filter */}
-                <View style={styles.filterRow}>
-                  <Text style={styles.filterLabel}>Source</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterChip,
-                        xpHistoryFilters.sourceType === null && styles.filterChipActive,
-                      ]}
-                      onPress={() => {
-                        setXpHistoryFilters(prev => ({ ...prev, sourceType: null }));
-                      }}
-                    >
-                      <Text style={[
-                        styles.filterChipText,
-                        xpHistoryFilters.sourceType === null && styles.filterChipTextActive,
-                      ]}>
-                        All
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterChip,
-                        xpHistoryFilters.sourceType === 'quest' && styles.filterChipActive,
-                      ]}
-                      onPress={() => {
-                        setXpHistoryFilters(prev => ({ ...prev, sourceType: 'quest' }));
-                      }}
-                    >
-                      <Text style={[
-                        styles.filterChipText,
-                        xpHistoryFilters.sourceType === 'quest' && styles.filterChipTextActive,
-                      ]}>
-                        Quests
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterChip,
-                        xpHistoryFilters.sourceType === 'tier' && styles.filterChipActive,
-                      ]}
-                      onPress={() => {
-                        setXpHistoryFilters(prev => ({ ...prev, sourceType: 'tier' }));
-                      }}
-                    >
-                      <Text style={[
-                        styles.filterChipText,
-                        xpHistoryFilters.sourceType === 'tier' && styles.filterChipTextActive,
-                      ]}>
-                        Tiers
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Apply Filters Button */}
-                <TouchableOpacity
-                  style={styles.applyFiltersButton}
-                  onPress={loadXpHistory}
-                >
-                  <Text style={styles.applyFiltersButtonText}>Apply Filters</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* XP History Timeline */}
-              {xpHistoryLoading ? (
-                <View style={styles.xpHistoryLoading}>
-                  <ActivityIndicator size="small" color={COLORS.accent.primary} />
-                  <Text style={styles.xpHistoryLoadingText}>Loading history...</Text>
-                </View>
-              ) : xpHistory.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Ionicons name="time-outline" size={48} color={COLORS.textTertiary} />
-                  <Text style={styles.emptyStateText}>No XP history yet</Text>
-                  <Text style={styles.emptyStateSubtext}>Complete quests and tiers to see your XP gains</Text>
-                </View>
-              ) : (
-                <View style={styles.xpHistoryTimeline}>
-                  {xpHistory.map((entry, index) => {
-                    const arc = arcs.find(a => {
-                      const aId = typeof entry.arcId === 'object' ? entry.arcId?.$id : entry.arcId;
-                      return a.$id === aId;
-                    });
-                    const date = new Date(entry.earnedAt || entry.$createdAt);
-                    const isToday = date.toDateString() === new Date().toDateString();
-                    const isYesterday = date.toDateString() === new Date(Date.now() - 86400000).toDateString();
-                    
-                    let dateLabel = '';
-                    if (isToday) {
-                      dateLabel = 'Today';
-                    } else if (isYesterday) {
-                      dateLabel = 'Yesterday';
-                    } else {
-                      dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined });
-                    }
-                    
-                    const timeLabel = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                    
-                    return (
-                      <View key={entry.$id} style={styles.xpHistoryEntry}>
-                        <View style={styles.xpHistoryTimelineLine}>
-                          <View style={[
-                            styles.xpHistoryTimelineDot,
-                            { backgroundColor: arc?.color || COLORS.accent.primary },
-                          ]} />
-                          {index < xpHistory.length - 1 && <View style={styles.xpHistoryTimelineLineConnector} />}
-                        </View>
-                        <View style={styles.xpHistoryEntryContent}>
-                          <View style={styles.xpHistoryEntryHeader}>
-                            <View style={styles.xpHistoryEntryInfo}>
-                              <Text style={styles.xpHistoryEntrySource}>
-                                {entry.questName || entry.tierName || 'Unknown'}
-                              </Text>
-                              {entry.arcName && (
-                                <Text style={styles.xpHistoryEntryArc}>
-                                  {entry.arcName}
-                                </Text>
-                              )}
-                            </View>
-                            <View style={styles.xpHistoryEntryXP}>
-                              <Text style={[
-                                styles.xpHistoryEntryXPAmount,
-                                entry.penaltyXP > 0 && { color: COLORS.accent.danger },
-                              ]}>
-                                {entry.penaltyXP > 0 ? '-' : '+'}{entry.xpAmount}
-                              </Text>
-                              <Text style={styles.xpHistoryEntryXPLabel}>XP</Text>
-                            </View>
-                          </View>
-                          <View style={styles.xpHistoryEntryMeta}>
-                            <View style={[
-                              styles.xpHistoryEntrySourceType,
-                              { backgroundColor: entry.sourceType === 'quest' ? COLORS.accent.primary + '20' : COLORS.accent.success + '20' },
-                            ]}>
-                              <Ionicons 
-                                name={entry.sourceType === 'quest' ? 'checkmark-circle' : 'trophy'} 
-                                size={12} 
-                                color={entry.sourceType === 'quest' ? COLORS.accent.primary : COLORS.accent.success} 
-                              />
-                              <Text style={[
-                                styles.xpHistoryEntrySourceTypeText,
-                                { color: entry.sourceType === 'quest' ? COLORS.accent.primary : COLORS.accent.success },
-                              ]}>
-                                {entry.sourceType === 'quest' ? 'Quest' : 'Tier'}
-                              </Text>
-                            </View>
-                            <Text style={styles.xpHistoryEntryDate}>
-                              {dateLabel} • {timeLabel}
-                            </Text>
-                            {entry.penaltyXP > 0 && (
-                              <Text style={styles.xpHistoryEntryPenalty}>
-                                Penalty: -{entry.penaltyXP} XP
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        xpHistory={xpHistory}
+        xpHistoryLoading={xpHistoryLoading}
+        xpHistoryFilters={xpHistoryFilters}
+        arcs={arcs}
+        onClose={() => setXpHistoryModalVisible(false)}
+        onFilterChange={setXpHistoryFilters}
+        onLoadHistory={loadXpHistory}
+      />
 
       {/* Streak Statistics Modal */}
-      <Modal
+      <StreakStatisticsModal
         visible={streakStatsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setStreakStatsModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setStreakStatsModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <View style={styles.modalHeaderCenter}>
-                <Text style={styles.modalTitle}>Streak Statistics</Text>
-              </View>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {streakStatsLoading ? (
-                <View style={styles.streakStatsLoading}>
-                  <ActivityIndicator size="large" color={COLORS.accent.primary} />
-                  <Text style={styles.streakStatsLoadingText}>Calculating streaks...</Text>
-                </View>
-              ) : streakStatistics ? (
-                <>
-                  {/* Overall Stats */}
-                  <View style={styles.streakStatsSection}>
-                    <Text style={styles.streakStatsSectionTitle}>Overall Performance</Text>
-                    <View style={styles.streakStatsGrid}>
-                      <View style={styles.streakStatCard}>
-                        <Ionicons name="flame" size={32} color={COLORS.accent.warning} />
-                        <Text style={styles.streakStatValue}>{streakStatistics.bestStreakOverall}</Text>
-                        <Text style={styles.streakStatLabel}>Best Streak</Text>
-                      </View>
-                      <View style={styles.streakStatCard}>
-                        <Ionicons name="trophy-outline" size={32} color={COLORS.accent.primary} />
-                        <Text style={styles.streakStatValue}>{streakStatistics.totalActiveStreaks}</Text>
-                        <Text style={styles.streakStatLabel}>Active Streaks</Text>
-                      </View>
-                      <View style={styles.streakStatCard}>
-                        <Ionicons name="stats-chart-outline" size={32} color={COLORS.accent.success} />
-                        <Text style={styles.streakStatValue}>{streakStatistics.averageStreak}</Text>
-                        <Text style={styles.streakStatLabel}>Average Streak</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Longest Streaks Per Quest */}
-                  {streakStatistics.longestStreaksPerQuest.length > 0 && (
-                    <View style={styles.streakStatsSection}>
-                      <Text style={styles.streakStatsSectionTitle}>Longest Streaks by Quest</Text>
-                      <View style={styles.streakQuestList}>
-                        {streakStatistics.longestStreaksPerQuest.slice(0, 10).map((quest, index) => (
-                          <View key={quest.questId} style={styles.streakQuestItem}>
-                            <View style={styles.streakQuestRank}>
-                              <Text style={styles.streakQuestRankText}>#{index + 1}</Text>
-                            </View>
-                            <View style={[styles.streakQuestIndicator, { backgroundColor: `${quest.arcColor}20` }]}>
-                              <View style={[styles.streakQuestIndicatorDot, { backgroundColor: quest.arcColor }]} />
-                            </View>
-                            <View style={styles.streakQuestContent}>
-                              <Text style={styles.streakQuestName}>{quest.questName}</Text>
-                              <View style={styles.streakQuestMeta}>
-                                <Text style={styles.streakQuestArc}>{quest.arcName}</Text>
-                                <Text style={styles.streakQuestFrequency}>
-                                  {quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
-                                   quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
-                                   quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
-                                   quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.streakQuestStreaks}>
-                              <View style={styles.streakQuestStreakItem}>
-                                <Ionicons name="flame" size={16} color={COLORS.accent.warning} />
-                                <Text style={styles.streakQuestStreakValue}>{quest.currentStreak}</Text>
-                                <Text style={styles.streakQuestStreakLabel}>Current</Text>
-                              </View>
-                              <View style={styles.streakQuestStreakItem}>
-                                <Ionicons name="trophy" size={16} color={quest.arcColor} />
-                                <Text style={[styles.streakQuestStreakValue, { color: quest.arcColor }]}>
-                                  {quest.longestStreak}
-                                </Text>
-                                <Text style={styles.streakQuestStreakLabel}>Best</Text>
-                              </View>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Streak Breakdown by Arc */}
-                  {streakStatistics.streakBreakdownByArc.length > 0 && (
-                    <View style={styles.streakStatsSection}>
-                      <Text style={styles.streakStatsSectionTitle}>Streak Breakdown by Arc</Text>
-                      <View style={styles.streakArcList}>
-                        {streakStatistics.streakBreakdownByArc.map((arc) => (
-                          <View key={arc.arcName} style={styles.streakArcItem}>
-                            <View style={[styles.streakArcHeader, { borderLeftColor: arc.arcColor }]}>
-                              <View style={styles.streakArcHeaderLeft}>
-                                <View style={[styles.streakArcIndicator, { backgroundColor: arc.arcColor }]} />
-                                <Text style={styles.streakArcName}>{arc.arcName}</Text>
-                              </View>
-                              <View style={styles.streakArcStats}>
-                                <View style={styles.streakArcStatItem}>
-                                  <Ionicons name="flame" size={16} color={COLORS.accent.warning} />
-                                  <Text style={styles.streakArcStatValue}>{arc.longest}</Text>
-                                  <Text style={styles.streakArcStatLabel}>Best</Text>
-                                </View>
-                                <View style={styles.streakArcStatItem}>
-                                  <Ionicons name="list-outline" size={16} color={COLORS.textSecondary} />
-                                  <Text style={styles.streakArcStatValue}>{arc.count}</Text>
-                                  <Text style={styles.streakArcStatLabel}>Quests</Text>
-                                </View>
-                              </View>
-                            </View>
-                            {arc.quests.length > 0 && (
-                              <View style={styles.streakArcQuests}>
-                                {arc.quests.map((quest, idx) => (
-                                  <View key={idx} style={styles.streakArcQuestItem}>
-                                    <Text style={styles.streakArcQuestName}>{quest.questName}</Text>
-                                    <View style={styles.streakArcQuestStreaks}>
-                                      <View style={styles.streakArcQuestStreak}>
-                                        <Text style={styles.streakArcQuestStreakValue}>{quest.currentStreak}</Text>
-                                        <Text style={styles.streakArcQuestStreakLabel}>Current</Text>
-                                      </View>
-                                      <View style={styles.streakArcQuestStreak}>
-                                        <Text style={[styles.streakArcQuestStreakValue, { color: arc.arcColor }]}>
-                                          {quest.longestStreak}
-                                        </Text>
-                                        <Text style={styles.streakArcQuestStreakLabel}>Best</Text>
-                                      </View>
-                                    </View>
-                                  </View>
-                                ))}
-                              </View>
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Streak Milestones */}
-                  {streakStatistics.streakMilestones.length > 0 && (
-                    <View style={styles.streakStatsSection}>
-                      <Text style={styles.streakStatsSectionTitle}>Streak Milestones</Text>
-                      <Text style={styles.streakStatsSectionSubtitle}>
-                        Quests that have reached these streak thresholds
-                      </Text>
-                      <View style={styles.streakMilestonesList}>
-                        {streakStatistics.streakMilestones
-                          .filter(m => m.questsReached > 0)
-                          .reverse()
-                          .map((milestone) => (
-                            <View key={milestone.threshold} style={styles.streakMilestoneItem}>
-                              <View style={styles.streakMilestoneHeader}>
-                                <View style={styles.streakMilestoneBadge}>
-                                  <Ionicons name="trophy" size={20} color={COLORS.accent.warning} />
-                                  <Text style={styles.streakMilestoneThreshold}>{milestone.threshold} days</Text>
-                                </View>
-                                <Text style={styles.streakMilestoneCount}>
-                                  {milestone.questsReached} quest{milestone.questsReached > 1 ? 's' : ''}
-                                </Text>
-                              </View>
-                              {milestone.quests.length > 0 && milestone.quests.length <= 5 && (
-                                <View style={styles.streakMilestoneQuests}>
-                                  {milestone.quests.map((questName, idx) => (
-                                    <View key={idx} style={styles.streakMilestoneQuestChip}>
-                                      <Text style={styles.streakMilestoneQuestText}>{questName}</Text>
-                                    </View>
-                                  ))}
-                                </View>
-                              )}
-                            </View>
-                          ))}
-                      </View>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Ionicons name="flame-outline" size={48} color={COLORS.textTertiary} />
-                  <Text style={styles.emptyStateText}>No streak data available</Text>
-                  <Text style={styles.emptyStateSubtext}>Complete quests to build streaks</Text>
-                </View>
-              )}
-
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        streakStatistics={streakStatistics}
+        streakStatsLoading={streakStatsLoading}
+        onClose={() => setStreakStatsModalVisible(false)}
+      />
 
       {/* Streak Statistics Modal */}
-      <Modal
+      <StreakStatisticsModal
         visible={streakStatsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setStreakStatsModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setStreakStatsModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <View style={styles.modalHeaderCenter}>
-                <Text style={styles.modalTitle}>Streak Statistics</Text>
-              </View>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {streakStatsLoading ? (
-                <View style={styles.streakStatsLoading}>
-                  <ActivityIndicator size="large" color={COLORS.accent.primary} />
-                  <Text style={styles.streakStatsLoadingText}>Calculating streaks...</Text>
-                </View>
-              ) : streakStatistics ? (
-                <>
-                  {/* Overall Stats */}
-                  <View style={styles.streakStatsSection}>
-                    <Text style={styles.streakStatsSectionTitle}>Overall Performance</Text>
-                    <View style={styles.streakStatsGrid}>
-                      <View style={styles.streakStatCard}>
-                        <Ionicons name="flame" size={32} color={COLORS.accent.warning} />
-                        <Text style={styles.streakStatValue}>{streakStatistics.bestStreakOverall}</Text>
-                        <Text style={styles.streakStatLabel}>Best Streak</Text>
-                      </View>
-                      <View style={styles.streakStatCard}>
-                        <Ionicons name="trophy-outline" size={32} color={COLORS.accent.primary} />
-                        <Text style={styles.streakStatValue}>{streakStatistics.totalActiveStreaks}</Text>
-                        <Text style={styles.streakStatLabel}>Active Streaks</Text>
-                      </View>
-                      <View style={styles.streakStatCard}>
-                        <Ionicons name="stats-chart-outline" size={32} color={COLORS.accent.success} />
-                        <Text style={styles.streakStatValue}>{streakStatistics.averageStreak}</Text>
-                        <Text style={styles.streakStatLabel}>Average Streak</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Longest Streaks Per Quest */}
-                  {streakStatistics.longestStreaksPerQuest.length > 0 && (
-                    <View style={styles.streakStatsSection}>
-                      <Text style={styles.streakStatsSectionTitle}>Longest Streaks by Quest</Text>
-                      <View style={styles.streakQuestList}>
-                        {streakStatistics.longestStreaksPerQuest.slice(0, 10).map((quest, index) => (
-                          <View key={quest.questId} style={styles.streakQuestItem}>
-                            <View style={styles.streakQuestRank}>
-                              <Text style={styles.streakQuestRankText}>#{index + 1}</Text>
-                            </View>
-                            <View style={[styles.streakQuestIndicator, { backgroundColor: `${quest.arcColor}20` }]}>
-                              <View style={[styles.streakQuestIndicatorDot, { backgroundColor: quest.arcColor }]} />
-                            </View>
-                            <View style={styles.streakQuestContent}>
-                              <Text style={styles.streakQuestName}>{quest.questName}</Text>
-                              <View style={styles.streakQuestMeta}>
-                                <Text style={styles.streakQuestArc}>{quest.arcName}</Text>
-                                <Text style={styles.streakQuestFrequency}>
-                                  {quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
-                                   quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
-                                   quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
-                                   quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.streakQuestStreaks}>
-                              <View style={styles.streakQuestStreakItem}>
-                                <Ionicons name="flame" size={16} color={COLORS.accent.warning} />
-                                <Text style={styles.streakQuestStreakValue}>{quest.currentStreak}</Text>
-                                <Text style={styles.streakQuestStreakLabel}>Current</Text>
-                              </View>
-                              <View style={styles.streakQuestStreakItem}>
-                                <Ionicons name="trophy" size={16} color={quest.arcColor} />
-                                <Text style={[styles.streakQuestStreakValue, { color: quest.arcColor }]}>
-                                  {quest.longestStreak}
-                                </Text>
-                                <Text style={styles.streakQuestStreakLabel}>Best</Text>
-                              </View>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Streak Breakdown by Arc */}
-                  {streakStatistics.streakBreakdownByArc.length > 0 && (
-                    <View style={styles.streakStatsSection}>
-                      <Text style={styles.streakStatsSectionTitle}>Streak Breakdown by Arc</Text>
-                      <View style={styles.streakArcList}>
-                        {streakStatistics.streakBreakdownByArc.map((arc) => (
-                          <View key={arc.arcName} style={styles.streakArcItem}>
-                            <View style={[styles.streakArcHeader, { borderLeftColor: arc.arcColor }]}>
-                              <View style={styles.streakArcHeaderLeft}>
-                                <View style={[styles.streakArcIndicator, { backgroundColor: arc.arcColor }]} />
-                                <Text style={styles.streakArcName}>{arc.arcName}</Text>
-                              </View>
-                              <View style={styles.streakArcStats}>
-                                <View style={styles.streakArcStatItem}>
-                                  <Ionicons name="flame" size={16} color={COLORS.accent.warning} />
-                                  <Text style={styles.streakArcStatValue}>{arc.longest}</Text>
-                                  <Text style={styles.streakArcStatLabel}>Best</Text>
-                                </View>
-                                <View style={styles.streakArcStatItem}>
-                                  <Ionicons name="list-outline" size={16} color={COLORS.textSecondary} />
-                                  <Text style={styles.streakArcStatValue}>{arc.count}</Text>
-                                  <Text style={styles.streakArcStatLabel}>Quests</Text>
-                                </View>
-                              </View>
-                            </View>
-                            {arc.quests.length > 0 && (
-                              <View style={styles.streakArcQuests}>
-                                {arc.quests.map((quest, idx) => (
-                                  <View key={idx} style={styles.streakArcQuestItem}>
-                                    <Text style={styles.streakArcQuestName}>{quest.questName}</Text>
-                                    <View style={styles.streakArcQuestStreaks}>
-                                      <View style={styles.streakArcQuestStreak}>
-                                        <Text style={styles.streakArcQuestStreakValue}>{quest.currentStreak}</Text>
-                                        <Text style={styles.streakArcQuestStreakLabel}>Current</Text>
-                                      </View>
-                                      <View style={styles.streakArcQuestStreak}>
-                                        <Text style={[styles.streakArcQuestStreakValue, { color: arc.arcColor }]}>
-                                          {quest.longestStreak}
-                                        </Text>
-                                        <Text style={styles.streakArcQuestStreakLabel}>Best</Text>
-                                      </View>
-                                    </View>
-                                  </View>
-                                ))}
-                              </View>
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Streak Milestones */}
-                  {streakStatistics.streakMilestones.length > 0 && (
-                    <View style={styles.streakStatsSection}>
-                      <Text style={styles.streakStatsSectionTitle}>Streak Milestones</Text>
-                      <Text style={styles.streakStatsSectionSubtitle}>
-                        Quests that have reached these streak thresholds
-                      </Text>
-                      <View style={styles.streakMilestonesList}>
-                        {streakStatistics.streakMilestones
-                          .filter(m => m.questsReached > 0)
-                          .reverse()
-                          .map((milestone) => (
-                            <View key={milestone.threshold} style={styles.streakMilestoneItem}>
-                              <View style={styles.streakMilestoneHeader}>
-                                <View style={styles.streakMilestoneBadge}>
-                                  <Ionicons name="trophy" size={20} color={COLORS.accent.warning} />
-                                  <Text style={styles.streakMilestoneThreshold}>{milestone.threshold} days</Text>
-                                </View>
-                                <Text style={styles.streakMilestoneCount}>
-                                  {milestone.questsReached} quest{milestone.questsReached > 1 ? 's' : ''}
-                                </Text>
-                              </View>
-                              {milestone.quests.length > 0 && milestone.quests.length <= 5 && (
-                                <View style={styles.streakMilestoneQuests}>
-                                  {milestone.quests.map((questName, idx) => (
-                                    <View key={idx} style={styles.streakMilestoneQuestChip}>
-                                      <Text style={styles.streakMilestoneQuestText}>{questName}</Text>
-                                    </View>
-                                  ))}
-                                </View>
-                              )}
-                            </View>
-                          ))}
-                      </View>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Ionicons name="flame-outline" size={48} color={COLORS.textTertiary} />
-                  <Text style={styles.emptyStateText}>No streak data available</Text>
-                  <Text style={styles.emptyStateSubtext}>Complete quests to build streaks</Text>
-                </View>
-              )}
-
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        streakStatistics={streakStatistics}
+        streakStatsLoading={streakStatsLoading}
+        onClose={() => setStreakStatsModalVisible(false)}
+      />
 
       {/* Streak Calendar Modal */}
       <Modal
