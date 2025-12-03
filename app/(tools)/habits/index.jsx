@@ -90,6 +90,14 @@ const HabitsTracker = () => {
     icon: '',
     description: '',
   });
+  
+  // Arc Detail Modal
+  const [arcDetailModalVisible, setArcDetailModalVisible] = useState(false);
+  const [selectedArc, setSelectedArc] = useState(null);
+  const [arcDetailTab, setArcDetailTab] = useState('overview'); // 'overview', 'quests', 'tiers'
+  const [arcQuests, setArcQuests] = useState([]);
+  const [arcTiers, setArcTiers] = useState([]);
+  const [arcProgress, setArcProgress] = useState(null);
 
   // Quest Modal
   const [questModalVisible, setQuestModalVisible] = useState(false);
@@ -461,6 +469,58 @@ const HabitsTracker = () => {
       });
     }
     setArcModalVisible(true);
+  };
+
+  const openArcDetailModal = async (arc) => {
+    setSelectedArc(arc);
+    setArcDetailTab('overview');
+    
+    // Filter quests and tiers for this arc
+    const arcId = arc.$id;
+    const filteredQuests = quests.filter(q => {
+      const qArcId = typeof q.arcId === 'object' ? q.arcId.$id : q.arcId;
+      return qArcId === arcId;
+    });
+    const filteredTiers = tiers.filter(t => {
+      const tArcId = typeof t.arcId === 'object' ? t.arcId.$id : t.arcId;
+      return tArcId === arcId;
+    });
+    
+    setArcQuests(filteredQuests);
+    setArcTiers(filteredTiers);
+    
+    // Get arc progress from user progress
+    if (userProgress) {
+      let arcProgressData = {};
+      try {
+        arcProgressData = userProgress.arcProgress ? 
+          (typeof userProgress.arcProgress === 'string' ? JSON.parse(userProgress.arcProgress) : userProgress.arcProgress) : {};
+      } catch (e) {
+        arcProgressData = {};
+      }
+      
+      const progress = arcProgressData[arcId] || {
+        totalXP: 0,
+        level: 1,
+        questsCompleted: 0,
+        tiersCompleted: 0,
+        missedRecurrences: 0,
+        penaltyXP: 0,
+      };
+      
+      setArcProgress(progress);
+    }
+    
+    setArcDetailModalVisible(true);
+  };
+
+  const closeArcDetailModal = () => {
+    setArcDetailModalVisible(false);
+    setSelectedArc(null);
+    setArcDetailTab('overview');
+    setArcQuests([]);
+    setArcTiers([]);
+    setArcProgress(null);
   };
 
   const closeArcModal = () => {
@@ -1575,7 +1635,7 @@ const HabitsTracker = () => {
                     key={arc.$id}
                     style={[styles.arcCard, { borderLeftColor: arc.color || COLORS.accent.primary }]}
                     activeOpacity={0.8}
-                    onPress={() => openArcModal(arc)}
+                    onPress={() => openArcDetailModal(arc)}
                     onLongPress={() => handleDeleteArc(arc)}
                   >
                     <View style={styles.arcCardHeader}>
@@ -2591,6 +2651,338 @@ const HabitsTracker = () => {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Arc Detail Modal */}
+      <Modal
+        visible={arcDetailModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeArcDetailModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closeArcDetailModal}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.modalHeaderCenter}>
+                {selectedArc && (
+                  <View style={styles.arcDetailHeader}>
+                    <View style={[styles.arcDetailIndicator, { backgroundColor: selectedArc.color || COLORS.accent.primary }]} />
+                    <Text style={styles.modalTitle}>{selectedArc.name || 'Arc Details'}</Text>
+                  </View>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => {
+                closeArcDetailModal();
+                if (selectedArc) {
+                  setTimeout(() => openArcModal(selectedArc), 300);
+                }
+              }}>
+                <Ionicons name="create-outline" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Tabs */}
+            <View style={styles.modalTabs}>
+              <TouchableOpacity
+                style={[styles.modalTab, arcDetailTab === 'overview' && styles.modalTabActive]}
+                onPress={() => setArcDetailTab('overview')}
+              >
+                <Ionicons 
+                  name="grid-outline" 
+                  size={18} 
+                  color={arcDetailTab === 'overview' ? COLORS.accent.primary : COLORS.textSecondary} 
+                />
+                <Text style={[
+                  styles.modalTabText,
+                  arcDetailTab === 'overview' && styles.modalTabTextActive
+                ]}>
+                  Overview
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalTab, arcDetailTab === 'quests' && styles.modalTabActive]}
+                onPress={() => setArcDetailTab('quests')}
+              >
+                <Ionicons 
+                  name="checkmark-circle-outline" 
+                  size={18} 
+                  color={arcDetailTab === 'quests' ? COLORS.accent.primary : COLORS.textSecondary} 
+                />
+                <Text style={[
+                  styles.modalTabText,
+                  arcDetailTab === 'quests' && styles.modalTabTextActive
+                ]}>
+                  Quests ({arcQuests.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalTab, arcDetailTab === 'tiers' && styles.modalTabActive]}
+                onPress={() => setArcDetailTab('tiers')}
+              >
+                <Ionicons 
+                  name="trophy-outline" 
+                  size={18} 
+                  color={arcDetailTab === 'tiers' ? COLORS.accent.primary : COLORS.textSecondary} 
+                />
+                <Text style={[
+                  styles.modalTabText,
+                  arcDetailTab === 'tiers' && styles.modalTabTextActive
+                ]}>
+                  Tiers ({arcTiers.length})
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Overview Tab */}
+              {arcDetailTab === 'overview' && selectedArc && (
+                <>
+                  {/* Arc Info */}
+                  <View style={styles.arcDetailInfo}>
+                    {selectedArc.description && (
+                      <View style={styles.arcDetailDescription}>
+                        <Text style={styles.arcDetailDescriptionText}>{selectedArc.description}</Text>
+                      </View>
+                    )}
+                    
+                    {/* Arc Progress */}
+                    {arcProgress && (
+                      <View style={styles.arcDetailProgress}>
+                        <View style={styles.arcDetailProgressHeader}>
+                          <Text style={styles.arcDetailProgressTitle}>Arc Progress</Text>
+                          <Text style={styles.arcDetailProgressLevel}>Level {arcProgress.level || 1}</Text>
+                        </View>
+                        <View style={styles.arcDetailProgressBar}>
+                          {(() => {
+                            const progressionType = userProgress?.progressionType || 'progressive';
+                            const arcLevel = arcProgress.level || 1;
+                            const arcXP = arcProgress.totalXP || 0;
+                            const xpForNextLevel = getXPForNextLevel(arcLevel, progressionType);
+                            const xpForCurrentLevel = getTotalXPForLevel(arcLevel, progressionType);
+                            const xpInCurrentLevel = Math.max(0, arcXP - xpForCurrentLevel);
+                            const progressPercent = Math.min((xpInCurrentLevel / xpForNextLevel) * 100, 100);
+                            
+                            return (
+                              <View 
+                                style={[
+                                  styles.arcDetailProgressFill, 
+                                  { 
+                                    width: `${progressPercent}%`,
+                                    backgroundColor: selectedArc.color || COLORS.accent.primary,
+                                  }
+                                ]} 
+                              />
+                            );
+                          })()}
+                        </View>
+                        <Text style={styles.arcDetailProgressXP}>
+                          {arcProgress.totalXP || 0} XP • {arcProgress.questsCompleted || 0} quests • {arcProgress.tiersCompleted || 0} tiers
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {/* Arc Statistics */}
+                    <View style={styles.arcDetailStats}>
+                      <View style={styles.arcDetailStatCard}>
+                        <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.success} />
+                        <Text style={styles.arcDetailStatValue}>{arcQuests.length}</Text>
+                        <Text style={styles.arcDetailStatLabel}>Quests</Text>
+                      </View>
+                      <View style={styles.arcDetailStatCard}>
+                        <Ionicons name="trophy" size={24} color={COLORS.accent.primary} />
+                        <Text style={styles.arcDetailStatValue}>{arcTiers.length}</Text>
+                        <Text style={styles.arcDetailStatLabel}>Tiers</Text>
+                      </View>
+                      {arcProgress && (
+                        <>
+                          <View style={styles.arcDetailStatCard}>
+                            <Ionicons name="star" size={24} color={COLORS.accent.warning} />
+                            <Text style={styles.arcDetailStatValue}>{arcProgress.totalXP || 0}</Text>
+                            <Text style={styles.arcDetailStatLabel}>Total XP</Text>
+                          </View>
+                          <View style={styles.arcDetailStatCard}>
+                            <Ionicons name="flame" size={24} color={COLORS.accent.danger} />
+                            <Text style={styles.arcDetailStatValue}>{arcProgress.level || 1}</Text>
+                            <Text style={styles.arcDetailStatLabel}>Level</Text>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                  
+                  <View style={{ height: 40 }} />
+                </>
+              )}
+
+              {/* Quests Tab */}
+              {arcDetailTab === 'quests' && (
+                <>
+                  <View style={styles.arcDetailSectionHeader}>
+                    <Text style={styles.arcDetailSectionTitle}>Quests in {selectedArc?.name || 'Arc'}</Text>
+                    <TouchableOpacity 
+                      style={styles.arcDetailAddButton}
+                      onPress={() => {
+                        closeArcDetailModal();
+                        if (selectedArc) {
+                          setTimeout(() => {
+                            setQuestForm({
+                              ...questForm,
+                              arcId: selectedArc.$id,
+                            });
+                            openQuestModal();
+                          }, 300);
+                        }
+                      }}
+                    >
+                      <Ionicons name="add" size={20} color={COLORS.accent.primary} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {arcQuests.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="checkmark-circle-outline" size={48} color={COLORS.textTertiary} />
+                      <Text style={styles.emptyStateText}>No quests in this arc</Text>
+                      <Text style={styles.emptyStateSubtext}>Create quests to start tracking</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.arcDetailList}>
+                      {arcQuests.map((quest) => {
+                        const isCompleted = questCompletions[quest.$id];
+                        return (
+                          <TouchableOpacity
+                            key={quest.$id}
+                            style={styles.arcDetailQuestItem}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              closeArcDetailModal();
+                              setTimeout(() => openQuestModal(quest), 300);
+                            }}
+                          >
+                            <View style={styles.arcDetailQuestContent}>
+                              <Text style={styles.arcDetailQuestName}>{quest.name}</Text>
+                              <View style={styles.arcDetailQuestMeta}>
+                                <Text style={styles.arcDetailQuestFrequency}>
+                                  {quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
+                                   quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
+                                   quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
+                                   quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
+                                </Text>
+                                {questStreaks[quest.$id] > 0 && (
+                                  <View style={styles.streakBadge}>
+                                    <Ionicons name="flame" size={12} color={COLORS.accent.warning} />
+                                    <Text style={styles.streakText}>{questStreaks[quest.$id]}</Text>
+                                  </View>
+                                )}
+                                <Text style={styles.arcDetailQuestXP}>+{quest.xpPerCompletion || 10} XP</Text>
+                              </View>
+                            </View>
+                            <Ionicons 
+                              name={isCompleted ? "checkmark-circle" : "checkmark-circle-outline"} 
+                              size={24} 
+                              color={isCompleted ? COLORS.accent.success : COLORS.textTertiary} 
+                            />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                  
+                  <View style={{ height: 40 }} />
+                </>
+              )}
+
+              {/* Tiers Tab */}
+              {arcDetailTab === 'tiers' && (
+                <>
+                  <View style={styles.arcDetailSectionHeader}>
+                    <Text style={styles.arcDetailSectionTitle}>Tiers in {selectedArc?.name || 'Arc'}</Text>
+                    <TouchableOpacity 
+                      style={styles.arcDetailAddButton}
+                      onPress={() => {
+                        closeArcDetailModal();
+                        if (selectedArc) {
+                          setTimeout(() => {
+                            setTierForm({
+                              ...tierForm,
+                              arcId: selectedArc.$id,
+                            });
+                            openTierModal();
+                          }, 300);
+                        }
+                      }}
+                    >
+                      <Ionicons name="add" size={20} color={COLORS.accent.primary} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {arcTiers.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="trophy-outline" size={48} color={COLORS.textTertiary} />
+                      <Text style={styles.emptyStateText}>No tiers in this arc</Text>
+                      <Text style={styles.emptyStateSubtext}>Create milestones to track major achievements</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.arcDetailList}>
+                      {arcTiers.map((tier) => {
+                        const progress = tierProgress[tier.$id] || { current: 0, target: tier.targetValue || 100, percentage: 0 };
+                        const isCompleted = tierCompletions[tier.$id] !== null && tierCompletions[tier.$id] !== undefined;
+                        
+                        return (
+                          <TouchableOpacity
+                            key={tier.$id}
+                            style={styles.arcDetailTierItem}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              closeArcDetailModal();
+                              setTimeout(() => openTierModal(tier), 300);
+                            }}
+                          >
+                            <View style={styles.arcDetailTierContent}>
+                              <View style={styles.arcDetailTierHeader}>
+                                <Text style={styles.arcDetailTierName}>{tier.name}</Text>
+                                {isCompleted && (
+                                  <Ionicons name="checkmark-circle" size={20} color={COLORS.accent.success} />
+                                )}
+                              </View>
+                              <View style={styles.arcDetailTierProgress}>
+                                <View style={styles.arcDetailTierProgressBar}>
+                                  <View 
+                                    style={[
+                                      styles.arcDetailTierProgressFill,
+                                      {
+                                        width: `${isCompleted ? 100 : progress.percentage}%`,
+                                        backgroundColor: selectedArc?.color || COLORS.accent.primary,
+                                      }
+                                    ]}
+                                  />
+                                </View>
+                                <Text style={styles.arcDetailTierProgressText}>
+                                  {isCompleted 
+                                    ? 'Completed!' 
+                                    : `${Math.floor(progress.current)} / ${progress.target} ${tier.targetType === TargetTypes.DAYS ? 'days' : tier.targetType === TargetTypes.COUNT ? 'completions' : 'items'}`
+                                  }
+                                </Text>
+                              </View>
+                              <Text style={styles.arcDetailTierXP}>+{tier.xpReward || 100} XP</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                  
+                  <View style={{ height: 40 }} />
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Settings Modal */}
       <Modal
         visible={settingsModalVisible}
@@ -3555,6 +3947,201 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textPrimary,
+  },
+  // Arc Detail Styles
+  modalHeaderCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  arcDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  arcDetailIndicator: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  arcDetailInfo: {
+    gap: 16,
+  },
+  arcDetailDescription: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  arcDetailDescriptionText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  arcDetailProgress: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  arcDetailProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  arcDetailProgressTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  arcDetailProgressLevel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+  },
+  arcDetailProgressBar: {
+    height: 8,
+    backgroundColor: COLORS.elevated,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  arcDetailProgressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  arcDetailProgressXP: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  arcDetailStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  arcDetailStatCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  arcDetailStatValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginTop: 8,
+  },
+  arcDetailStatLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  arcDetailSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  arcDetailSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  arcDetailAddButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.accent.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arcDetailList: {
+    gap: 12,
+  },
+  arcDetailQuestItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+  },
+  arcDetailQuestContent: {
+    flex: 1,
+  },
+  arcDetailQuestName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  arcDetailQuestMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  arcDetailQuestFrequency: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  arcDetailQuestXP: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.accent.primary,
+  },
+  arcDetailTierItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  arcDetailTierContent: {
+    gap: 8,
+  },
+  arcDetailTierHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  arcDetailTierName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  arcDetailTierProgress: {
+    gap: 6,
+  },
+  arcDetailTierProgressBar: {
+    height: 6,
+    backgroundColor: COLORS.elevated,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  arcDetailTierProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  arcDetailTierProgressText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  arcDetailTierXP: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.accent.primary,
   },
   // Quest Modal Styles
   arcChipsScroll: {
