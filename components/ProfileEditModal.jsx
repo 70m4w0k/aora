@@ -237,10 +237,10 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
   };
 
   const renderProfileTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <View style={styles.tabContent}>
       {/* Profile Picture */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>PROFILE PICTURE</Text>
+        <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>PROFILE PICTURE</Text>
         <View style={styles.avatarSection}>
           <TouchableOpacity onPress={handlePickImage} style={styles.avatarContainer}>
             {profileForm.avatarUrl ? (
@@ -268,7 +268,7 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
           value={profileForm.username}
           onChangeText={(text) => setProfileForm(prev => ({ ...prev, username: text }))}
           placeholder="Enter username"
-          placeholderTextColor={COLORS.textTertiary}
+          placeholderTextColor="#71717A"
         />
       </View>
 
@@ -294,23 +294,11 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
         </View>
       </View>
 
-      {/* Save Button */}
-      <TouchableOpacity
-        style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-        onPress={handleSaveProfile}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#FFF" />
-        ) : (
-          <Text style={styles.saveButtonText}>Save Changes</Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 
   const renderAccountTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <View style={styles.tabContent}>
       {/* Email */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>EMAIL</Text>
@@ -319,27 +307,16 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
           value={accountForm.email}
           onChangeText={(text) => setAccountForm(prev => ({ ...prev, email: text }))}
           placeholder="Enter email"
-          placeholderTextColor={COLORS.textTertiary}
+          placeholderTextColor="#71717A"
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <TouchableOpacity
-          style={[styles.saveButton, styles.saveButtonSecondary, loading && styles.saveButtonDisabled]}
-          onPress={handleSaveEmail}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={COLORS.accent} />
-          ) : (
-            <Text style={[styles.saveButtonText, styles.saveButtonTextSecondary]}>Update Email</Text>
-          )}
-        </TouchableOpacity>
       </View>
-    </ScrollView>
+    </View>
   );
 
   const renderPasswordTab = () => (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <View style={styles.tabContent}>
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>CURRENT PASSWORD</Text>
         <TextInput
@@ -347,7 +324,7 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
           value={passwordForm.oldPassword}
           onChangeText={(text) => setPasswordForm(prev => ({ ...prev, oldPassword: text }))}
           placeholder="Enter current password"
-          placeholderTextColor={COLORS.textTertiary}
+          placeholderTextColor="#71717A"
           secureTextEntry
         />
       </View>
@@ -359,7 +336,7 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
           value={passwordForm.newPassword}
           onChangeText={(text) => setPasswordForm(prev => ({ ...prev, newPassword: text }))}
           placeholder="Enter new password (min 8 characters)"
-          placeholderTextColor={COLORS.textTertiary}
+          placeholderTextColor="#71717A"
           secureTextEntry
         />
       </View>
@@ -371,24 +348,41 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
           value={passwordForm.confirmPassword}
           onChangeText={(text) => setPasswordForm(prev => ({ ...prev, confirmPassword: text }))}
           placeholder="Confirm new password"
-          placeholderTextColor={COLORS.textTertiary}
+          placeholderTextColor="#71717A"
           secureTextEntry
         />
       </View>
 
-      <TouchableOpacity
-        style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-        onPress={handleSavePassword}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#FFF" />
-        ) : (
-          <Text style={styles.saveButtonText}>Update Password</Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
+
+  const getSaveButtonText = () => {
+    if (loading) return null;
+    switch (activeTab) {
+      case 'profile':
+        return 'Save';
+      case 'account':
+        return 'Update';
+      case 'password':
+        return 'Update';
+      default:
+        return 'Save';
+    }
+  };
+
+  const handleSave = () => {
+    switch (activeTab) {
+      case 'profile':
+        handleSaveProfile();
+        break;
+      case 'account':
+        handleSaveEmail();
+        break;
+      case 'password':
+        handleSavePassword();
+        break;
+    }
+  };
 
   return (
     <Modal
@@ -403,10 +397,17 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
       >
         <View style={styles.modalContent}>
           {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color="#A1A1AA" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <TouchableOpacity onPress={handleSave} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#F43F5E" />
+              ) : (
+                <Text style={styles.modalSaveText}>{getSaveButtonText()}</Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -439,9 +440,11 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
           </View>
 
           {/* Tab Content */}
-          {activeTab === 'profile' && renderProfileTab()}
-          {activeTab === 'account' && renderAccountTab()}
-          {activeTab === 'password' && renderPasswordTab()}
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {activeTab === 'profile' && renderProfileTab()}
+            {activeTab === 'account' && renderAccountTab()}
+            {activeTab === 'password' && renderPasswordTab()}
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -451,38 +454,42 @@ const ProfileEditModal = ({ visible, user, onClose, onUpdate }) => {
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: COLORS.bg,
+    backgroundColor: '#1A1A1F',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '100%',
-    minHeight: '100%',
+    maxHeight: '92%',
   },
-  header: {
+  modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'space-between',
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFF',
   },
-  closeButton: {
-    padding: 4,
+  modalSaveText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F43F5E',
+  },
+  modalBody: {
+    padding: 20,
   },
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     paddingTop: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   tab: {
     flex: 1,
@@ -492,31 +499,32 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: COLORS.accent,
+    borderBottomColor: '#F43F5E',
   },
   tabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: COLORS.textSecondary,
+    color: '#71717A',
   },
   tabTextActive: {
-    color: COLORS.accent,
+    color: '#F43F5E',
     fontWeight: '600',
   },
   tabContent: {
-    flex: 1,
-    padding: 20,
-    maxHeight: 700,
+    paddingTop: 0,
   },
   section: {
     marginBottom: 24,
   },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    color: '#71717A',
     marginBottom: 8,
+    marginTop: 16,
+  },
+  sectionLabelFirst: {
+    marginTop: 0,
   },
   avatarSection: {
     alignItems: 'center',
@@ -541,33 +549,33 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: COLORS.accent,
+    backgroundColor: '#F43F5E',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: COLORS.bg,
+    borderColor: '#1A1A1F',
   },
   changePhotoButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
   },
   changePhotoText: {
-    color: COLORS.accent,
+    color: '#F43F5E',
     fontSize: 14,
     fontWeight: '500',
   },
   input: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: '#111114',
     borderRadius: 12,
-    padding: 16,
-    color: COLORS.textPrimary,
+    padding: 14,
+    color: '#FFF',
     fontSize: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   helperText: {
     fontSize: 12,
-    color: COLORS.textTertiary,
+    color: '#71717A',
     marginTop: 4,
   },
   colorGrid: {
@@ -583,13 +591,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
+    backgroundColor: 'transparent',
   },
   colorOptionActive: {
     borderColor: '#FFF',
     borderWidth: 3,
   },
   saveButton: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: '#F43F5E',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
@@ -598,7 +607,7 @@ const styles = StyleSheet.create({
   saveButtonSecondary: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: COLORS.accent,
+    borderColor: '#F43F5E',
   },
   saveButtonDisabled: {
     opacity: 0.5,
@@ -609,7 +618,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   saveButtonTextSecondary: {
-    color: COLORS.accent,
+    color: '#F43F5E',
   },
 });
 

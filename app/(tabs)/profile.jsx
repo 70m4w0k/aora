@@ -19,6 +19,7 @@ import { Avatar, Badge } from "../../components/ui";
 import { getAllTasksDone, signOut, leaveHousehold, regenerateInviteCode } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
 import ProfileEditModal from "../../components/ProfileEditModal";
+import HouseholdManageModal from "../../components/HouseholdManageModal";
 
 // Dark theme colors - consistent across app
 const COLORS = {
@@ -101,6 +102,7 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [appearanceModalVisible, setAppearanceModalVisible] = useState(false);
   const [profileEditModalVisible, setProfileEditModalVisible] = useState(false);
+  const [householdManageModalVisible, setHouseholdManageModalVisible] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState('dark');
   const [selectedAccent, setSelectedAccent] = useState('#8B5CF6');
 
@@ -374,7 +376,11 @@ const Profile = () => {
         {household && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>HOUSEHOLD</Text>
-            <View style={styles.householdCard}>
+            <TouchableOpacity 
+              style={styles.householdCard}
+              onPress={() => setHouseholdManageModalVisible(true)}
+              activeOpacity={0.8}
+            >
               <View style={styles.householdHeader}>
                 <View style={styles.householdInfo}>
                   <View style={styles.householdNameRow}>
@@ -413,12 +419,6 @@ const Profile = () => {
               {/* Household Actions */}
               <View style={styles.householdActions}>
                 {isAdmin && (
-                  <Pressable style={[styles.actionChip, styles.actionChipPrimary]} onPress={() => router.push("/(household)/manage")}>
-                    <Ionicons name="settings-outline" size={16} color={COLORS.accent.primary} />
-                    <Text style={[styles.actionChipText, styles.actionChipTextPrimary]}>Manage</Text>
-                  </Pressable>
-                )}
-                {isAdmin && (
                   <Pressable style={styles.actionChip} onPress={handleRegenerateCode}>
                     <Ionicons name="refresh" size={16} color={COLORS.textSecondary} />
                     <Text style={styles.actionChipText}>New Code</Text>
@@ -429,7 +429,7 @@ const Profile = () => {
                   <Text style={[styles.actionChipText, styles.actionChipTextDanger]}>Leave</Text>
                 </Pressable>
               </View>
-            </View>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -462,6 +462,16 @@ const Profile = () => {
           if (updatedUser) {
             setUser(updatedUser);
           }
+        }}
+      />
+      
+      {/* Household Manage Modal */}
+      <HouseholdManageModal
+        visible={householdManageModalVisible}
+        household={household}
+        onClose={() => setHouseholdManageModalVisible(false)}
+        onUpdate={async () => {
+          await refreshHousehold();
         }}
       />
     </SafeAreaView>
