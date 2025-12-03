@@ -63,6 +63,12 @@ import StreakCalendarSection from './components/StreakCalendarSection';
 import ArcModal from './components/ArcModal';
 import TierModal from './components/TierModal';
 import QuestModal from './components/QuestModal';
+import ArcDetailModal from './components/ArcDetailModal';
+import CustomAlertModal from './components/CustomAlertModal';
+import TitleUnlockModal from './components/TitleUnlockModal';
+import LevelUpModal from './components/LevelUpModal';
+import SettingsModal from './components/SettingsModal';
+import MissedQuestsModal from './components/MissedQuestsModal';
 
 
 const HabitsTracker = () => {
@@ -2353,857 +2359,106 @@ const HabitsTracker = () => {
       />
 
       {/* Arc Detail Modal */}
-      <Modal
+      <ArcDetailModal
         visible={arcDetailModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeArcDetailModal}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={closeArcDetailModal}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <View style={styles.modalHeaderCenter}>
-                {selectedArc && (
-                  <View style={styles.arcDetailHeader}>
-                    <View style={[styles.arcDetailIndicator, { backgroundColor: selectedArc.color || COLORS.accent.primary }]} />
-                    <Text style={styles.modalTitle}>{selectedArc.name || 'Arc Details'}</Text>
-                  </View>
-                )}
-              </View>
-              <TouchableOpacity onPress={() => {
-                closeArcDetailModal();
-                if (selectedArc) {
-                  setTimeout(() => openArcModal(selectedArc), 300);
-                }
-              }}>
-                <Ionicons name="create-outline" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Tabs */}
-            <View style={styles.modalTabs}>
-              <TouchableOpacity
-                style={[styles.modalTab, arcDetailTab === 'overview' && styles.modalTabActive]}
-                onPress={() => setArcDetailTab('overview')}
-              >
-                <Ionicons 
-                  name="grid-outline" 
-                  size={18} 
-                  color={arcDetailTab === 'overview' ? COLORS.accent.primary : COLORS.textSecondary} 
-                />
-                <Text style={[
-                  styles.modalTabText,
-                  arcDetailTab === 'overview' && styles.modalTabTextActive
-                ]}>
-                  Overview
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalTab, arcDetailTab === 'quests' && styles.modalTabActive]}
-                onPress={() => setArcDetailTab('quests')}
-              >
-                <Ionicons 
-                  name="checkmark-circle-outline" 
-                  size={18} 
-                  color={arcDetailTab === 'quests' ? COLORS.accent.primary : COLORS.textSecondary} 
-                />
-                <Text style={[
-                  styles.modalTabText,
-                  arcDetailTab === 'quests' && styles.modalTabTextActive
-                ]}>
-                  Quests ({arcQuests.length})
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalTab, arcDetailTab === 'tiers' && styles.modalTabActive]}
-                onPress={() => setArcDetailTab('tiers')}
-              >
-                <Ionicons 
-                  name="trophy-outline" 
-                  size={18} 
-                  color={arcDetailTab === 'tiers' ? COLORS.accent.primary : COLORS.textSecondary} 
-                />
-                <Text style={[
-                  styles.modalTabText,
-                  arcDetailTab === 'tiers' && styles.modalTabTextActive
-                ]}>
-                  Tiers ({arcTiers.length})
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Overview Tab */}
-              {arcDetailTab === 'overview' && selectedArc && (
-                <>
-                  {/* Arc Info */}
-                  <View style={styles.arcDetailInfo}>
-                    {selectedArc.description && (
-                      <View style={styles.arcDetailDescription}>
-                        <Text style={styles.arcDetailDescriptionText}>{selectedArc.description}</Text>
-                      </View>
-                    )}
-                    
-                    {/* Arc Progress */}
-                    {arcProgress && (
-                      <View style={styles.arcDetailProgress}>
-                        <View style={styles.arcDetailProgressHeader}>
-                          <Text style={styles.arcDetailProgressTitle}>Arc Progress</Text>
-                          <Text style={styles.arcDetailProgressLevel}>Level {arcProgress.level || 1}</Text>
-                        </View>
-                        <View style={styles.arcDetailProgressBar}>
-                          {(() => {
-                            const progressionType = userProgress?.progressionType || 'progressive';
-                            const arcLevel = arcProgress.level || 1;
-                            const arcXP = arcProgress.totalXP || 0;
-                            const xpForNextLevel = getXPForNextLevel(arcLevel, progressionType);
-                            const xpForCurrentLevel = getTotalXPForLevel(arcLevel, progressionType);
-                            const xpInCurrentLevel = Math.max(0, arcXP - xpForCurrentLevel);
-                            const progressPercent = Math.min((xpInCurrentLevel / xpForNextLevel) * 100, 100);
-                            
-                            return (
-                              <View 
-                                style={[
-                                  styles.arcDetailProgressFill, 
-                                  { 
-                                    width: `${progressPercent}%`,
-                                    backgroundColor: selectedArc.color || COLORS.accent.primary,
-                                  }
-                                ]} 
-                              />
-                            );
-                          })()}
-                        </View>
-                        <Text style={styles.arcDetailProgressXP}>
-                          {arcProgress.totalXP || 0} XP • {arcProgress.questsCompleted || 0} quests • {arcProgress.tiersCompleted || 0} tiers
-                        </Text>
-                      </View>
-                    )}
-                    
-                    {/* Arc Statistics */}
-                    <View style={styles.arcDetailStats}>
-                      <View style={styles.arcDetailStatCard}>
-                        <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.success} />
-                        <Text style={styles.arcDetailStatValue}>{arcQuests.length}</Text>
-                        <Text style={styles.arcDetailStatLabel}>Quests</Text>
-                      </View>
-                      <View style={styles.arcDetailStatCard}>
-                        <Ionicons name="trophy" size={24} color={COLORS.accent.primary} />
-                        <Text style={styles.arcDetailStatValue}>{arcTiers.length}</Text>
-                        <Text style={styles.arcDetailStatLabel}>Tiers</Text>
-                      </View>
-                      {arcProgress && (
-                        <>
-                          <View style={styles.arcDetailStatCard}>
-                            <Ionicons name="star" size={24} color={COLORS.accent.warning} />
-                            <Text style={styles.arcDetailStatValue}>{arcProgress.totalXP || 0}</Text>
-                            <Text style={styles.arcDetailStatLabel}>Total XP</Text>
-                          </View>
-                          <View style={styles.arcDetailStatCard}>
-                            <Ionicons name="flame" size={24} color={COLORS.accent.danger} />
-                            <Text style={styles.arcDetailStatValue}>{arcProgress.level || 1}</Text>
-                            <Text style={styles.arcDetailStatLabel}>Level</Text>
-                          </View>
-                        </>
-                      )}
-                    </View>
-                  </View>
-                  
-                  <View style={{ height: 40 }} />
-                </>
-              )}
-
-              {/* Quests Tab */}
-              {arcDetailTab === 'quests' && (
-                <>
-                  <View style={styles.arcDetailSectionHeader}>
-                    <Text style={styles.arcDetailSectionTitle}>Quests in {selectedArc?.name || 'Arc'}</Text>
-                    <TouchableOpacity 
-                      style={styles.arcDetailAddButton}
-                      onPress={() => {
-                        closeArcDetailModal();
-                        if (selectedArc) {
-                          setTimeout(() => {
-                            setQuestForm({
-                              ...questForm,
-                              arcId: selectedArc.$id,
-                            });
-                            openQuestModal();
-                          }, 300);
-                        }
-                      }}
-                    >
-                      <Ionicons name="add" size={20} color={COLORS.accent.primary} />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  {arcQuests.length === 0 ? (
-                    <View style={styles.emptyState}>
-                      <Ionicons name="checkmark-circle-outline" size={48} color={COLORS.textTertiary} />
-                      <Text style={styles.emptyStateText}>No quests in this arc</Text>
-                      <Text style={styles.emptyStateSubtext}>Create quests to start tracking</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.arcDetailList}>
-                      {arcQuests.map((quest) => {
-                        const isCompleted = questCompletions[quest.$id];
-                        return (
-                          <TouchableOpacity
-                            key={quest.$id}
-                            style={styles.arcDetailQuestItem}
-                            activeOpacity={0.7}
-                            onPress={() => {
-                              closeArcDetailModal();
-                              setTimeout(() => openQuestModal(quest), 300);
-                            }}
-                          >
-                            <View style={styles.arcDetailQuestContent}>
-                              <Text style={styles.arcDetailQuestName}>{quest.name}</Text>
-                              <View style={styles.arcDetailQuestMeta}>
-                                <Text style={styles.arcDetailQuestFrequency}>
-                                  {quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
-                                   quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
-                                   quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
-                                   quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
-                                </Text>
-                                {questStreaks[quest.$id] > 0 && (
-                                  <View style={styles.streakBadge}>
-                                    <Ionicons name="flame" size={12} color={COLORS.accent.warning} />
-                                    <Text style={styles.streakText}>{questStreaks[quest.$id]}</Text>
-                                  </View>
-                                )}
-                                <Text style={styles.arcDetailQuestXP}>+{quest.xpPerCompletion || 10} XP</Text>
-                              </View>
-                            </View>
-                            <Ionicons 
-                              name={isCompleted ? "checkmark-circle" : "checkmark-circle-outline"} 
-                              size={24} 
-                              color={isCompleted ? COLORS.accent.success : COLORS.textTertiary} 
-                            />
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  )}
-                  
-                  <View style={{ height: 40 }} />
-                </>
-              )}
-
-              {/* Tiers Tab */}
-              {arcDetailTab === 'tiers' && (
-                <>
-                  <View style={styles.arcDetailSectionHeader}>
-                    <Text style={styles.arcDetailSectionTitle}>Tiers in {selectedArc?.name || 'Arc'}</Text>
-                    <TouchableOpacity 
-                      style={styles.arcDetailAddButton}
-                      onPress={() => {
-                        closeArcDetailModal();
-                        if (selectedArc) {
-                          setTimeout(() => {
-                            setTierForm({
-                              ...tierForm,
-                              arcId: selectedArc.$id,
-                            });
-                            openTierModal();
-                          }, 300);
-                        }
-                      }}
-                    >
-                      <Ionicons name="add" size={20} color={COLORS.accent.primary} />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  {arcTiers.length === 0 ? (
-                    <View style={styles.emptyState}>
-                      <Ionicons name="trophy-outline" size={48} color={COLORS.textTertiary} />
-                      <Text style={styles.emptyStateText}>No tiers in this arc</Text>
-                      <Text style={styles.emptyStateSubtext}>Create milestones to track major achievements</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.arcDetailList}>
-                      {arcTiers.map((tier) => {
-                        const progress = tierProgress[tier.$id] || { current: 0, target: tier.targetValue || 100, percentage: 0 };
-                        const isCompleted = tierCompletions[tier.$id] !== null && tierCompletions[tier.$id] !== undefined;
-                        
-                        return (
-                          <TouchableOpacity
-                            key={tier.$id}
-                            style={styles.arcDetailTierItem}
-                            activeOpacity={0.7}
-                            onPress={() => {
-                              closeArcDetailModal();
-                              setTimeout(() => openTierModal(tier), 300);
-                            }}
-                          >
-                            <View style={styles.arcDetailTierContent}>
-                              <View style={styles.arcDetailTierHeader}>
-                                <Text style={styles.arcDetailTierName}>{tier.name}</Text>
-                                {isCompleted && (
-                                  <Ionicons name="checkmark-circle" size={20} color={COLORS.accent.success} />
-                                )}
-                              </View>
-                              <View style={styles.arcDetailTierProgress}>
-                                <View style={styles.arcDetailTierProgressBar}>
-                                  <View 
-                                    style={[
-                                      styles.arcDetailTierProgressFill,
-                                      {
-                                        width: `${isCompleted ? 100 : progress.percentage}%`,
-                                        backgroundColor: selectedArc?.color || COLORS.accent.primary,
-                                      }
-                                    ]}
-                                  />
-                                </View>
-                                <Text style={styles.arcDetailTierProgressText}>
-                                  {isCompleted 
-                                    ? 'Completed!' 
-                                    : `${Math.floor(progress.current)} / ${progress.target} ${tier.targetType === TargetTypes.DAYS ? 'days' : tier.targetType === TargetTypes.COUNT ? 'completions' : 'items'}`
-                                  }
-                                </Text>
-                              </View>
-                              <Text style={styles.arcDetailTierXP}>+{tier.xpReward || 100} XP</Text>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  )}
-                  
-                  <View style={{ height: 40 }} />
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        selectedArc={selectedArc}
+        arcDetailTab={arcDetailTab}
+        setArcDetailTab={setArcDetailTab}
+        arcQuests={arcQuests}
+        arcTiers={arcTiers}
+        arcProgress={arcProgress}
+        questCompletions={questCompletions}
+        questStreaks={questStreaks}
+        tierProgress={tierProgress}
+        tierCompletions={tierCompletions}
+        userProgress={userProgress}
+        onClose={closeArcDetailModal}
+        onEdit={() => {
+          closeArcDetailModal();
+          if (selectedArc) {
+            setTimeout(() => openArcModal(selectedArc), 300);
+          }
+        }}
+        onAddQuest={() => {
+          closeArcDetailModal();
+          if (selectedArc) {
+            setTimeout(() => {
+              setQuestForm({
+                ...questForm,
+                arcId: selectedArc.$id,
+              });
+              openQuestModal();
+            }, 300);
+          }
+        }}
+        onAddTier={() => {
+          closeArcDetailModal();
+          if (selectedArc) {
+            setTimeout(() => {
+              setTierForm({
+                ...tierForm,
+                arcId: selectedArc.$id,
+              });
+              openTierModal();
+            }, 300);
+          }
+        }}
+        onQuestPress={(quest) => {
+          closeArcDetailModal();
+          setTimeout(() => openQuestModal(quest), 300);
+        }}
+        onTierPress={(tier) => {
+          closeArcDetailModal();
+          setTimeout(() => openTierModal(tier), 300);
+        }}
+      />
 
       {/* Settings Modal */}
-      <Modal
+      <SettingsModal
         visible={settingsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setSettingsModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setSettingsModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <Text style={styles.modalTitle}>Settings</Text>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Progression Type */}
-              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Progression Type</Text>
-              <Text style={styles.inputHint}>
-                Choose how XP requirements scale as you level up
-              </Text>
-              
-              <View style={styles.progressionTypeContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.progressionTypeCard,
-                    userProgress?.progressionType === ProgressionTypes.LINEAR && styles.progressionTypeCardSelected,
-                  ]}
-                  onPress={async () => {
-                    try {
-                      await updateProgressionType(user.$id, household.$id, ProgressionTypes.LINEAR);
-                      await fetchData();
-                      showAlert('Success', 'Progression type updated to Linear', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
-                    } catch (error) {
-                      console.error('Error updating progression type:', error);
-                      showAlert('Error', 'Could not update progression type', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
-                    }
-                  }}
-                >
-                  <Text style={styles.progressionTypeTitle}>Linear</Text>
-                  <Text style={styles.progressionTypeDescription}>
-                    100 XP per level{'\n'}
-                    Consistent progression
-                  </Text>
-                  {userProgress?.progressionType === ProgressionTypes.LINEAR && (
-                    <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.primary} style={styles.progressionTypeCheck} />
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.progressionTypeCard,
-                    (!userProgress?.progressionType || userProgress?.progressionType === ProgressionTypes.PROGRESSIVE) && styles.progressionTypeCardSelected,
-                  ]}
-                  onPress={async () => {
-                    try {
-                      await updateProgressionType(user.$id, household.$id, ProgressionTypes.PROGRESSIVE);
-                      await fetchData();
-                      showAlert('Success', 'Progression type updated to Progressive', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
-                    } catch (error) {
-                      console.error('Error updating progression type:', error);
-                      showAlert('Error', 'Could not update progression type', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
-                    }
-                  }}
-                >
-                  <Text style={styles.progressionTypeTitle}>Progressive</Text>
-                  <Text style={styles.progressionTypeDescription}>
-                    Exponential growth{'\n'}
-                    Level 1: 50 XP, Level 2: 75 XP, etc.
-                  </Text>
-                  {(!userProgress?.progressionType || userProgress?.progressionType === ProgressionTypes.PROGRESSIVE) && (
-                    <Ionicons name="checkmark-circle" size={24} color={COLORS.accent.primary} style={styles.progressionTypeCheck} />
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {/* Notifications Toggle */}
-              <View style={styles.settingsSection}>
-                <Text style={[styles.inputLabel, { marginTop: 24 }]}>Quest Notifications</Text>
-                <Text style={styles.inputHint}>
-                  Get notified about missed quest recurrences
-                </Text>
-                
-                <TouchableOpacity
-                  style={styles.toggleContainer}
-                  onPress={() => {
-                    setNotificationsEnabled(!notificationsEnabled);
-                    if (!notificationsEnabled) {
-                      // Re-detect missed quests when enabling
-                      setTimeout(() => detectMissedQuests(), 500);
-                    }
-                  }}
-                >
-                  <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleLabel}>Enable Missed Quest Notifications</Text>
-                    <Text style={styles.toggleDescription}>
-                      Show warnings and badges for missed quests
-                    </Text>
-                  </View>
-                  <View style={[
-                    styles.toggleSwitch,
-                    notificationsEnabled && styles.toggleSwitchActive
-                  ]}>
-                    <View style={[
-                      styles.toggleThumb,
-                      notificationsEnabled && styles.toggleThumbActive
-                    ]} />
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              {/* Penalty System Toggle */}
-              <View style={styles.settingsSection}>
-                <Text style={[styles.inputLabel, { marginTop: 24 }]}>Penalty System</Text>
-                <Text style={styles.inputHint}>
-                  When active, missing quest recurrences will deduct XP (50% of quest XP per miss)
-                </Text>
-                
-                <TouchableOpacity
-                  style={styles.toggleContainer}
-                  onPress={async () => {
-                    try {
-                      const newState = !userProgress?.penaltySystemActive;
-                      await togglePenaltySystem(user.$id, household.$id, newState);
-                      await fetchData();
-                    } catch (error) {
-                      console.error('Error toggling penalty system:', error);
-                    }
-                  }}
-                >
-                  <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleLabel}>Enable Penalty System</Text>
-                    <Text style={styles.toggleDescription}>
-                      Track missed recurrences and apply XP penalties
-                    </Text>
-                  </View>
-                  <View style={[
-                    styles.toggleSwitch,
-                    userProgress?.penaltySystemActive && styles.toggleSwitchActive
-                  ]}>
-                    <View style={[
-                      styles.toggleThumb,
-                      userProgress?.penaltySystemActive && styles.toggleThumbActive
-                    ]} />
-                  </View>
-                </TouchableOpacity>
-                
-                {userProgress?.penaltySystemActive && (
-                  <View style={styles.penaltyStats}>
-                    <Text style={styles.penaltyStatsLabel}>Penalty Statistics</Text>
-                    <View style={styles.penaltyStatsRow}>
-                      <Text style={styles.penaltyStatsValue}>
-                        Total Penalties: {userProgress?.totalPenalties || 0}
-                      </Text>
-                      <Text style={styles.penaltyStatsValue}>
-                        Total XP Lost: -{userProgress?.totalPenaltyXP || 0}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        userProgress={userProgress}
+        notificationsEnabled={notificationsEnabled}
+        user={user}
+        household={household}
+        onClose={() => setSettingsModalVisible(false)}
+        onUpdateProgressionType={updateProgressionType}
+        onToggleNotifications={() => {
+          setNotificationsEnabled(!notificationsEnabled);
+          if (!notificationsEnabled) {
+            setTimeout(() => detectMissedQuests(), 500);
+          }
+        }}
+        onTogglePenaltySystem={togglePenaltySystem}
+        showAlert={showAlert}
+        setAlertModalVisible={setAlertModalVisible}
+        fetchData={fetchData}
+      />
 
       {/* Missed Quests Modal */}
-      <Modal
+      <MissedQuestsModal
         visible={missedQuestsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setMissedQuestsModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setMissedQuestsModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <View style={styles.modalHeaderCenter}>
-                <Text style={styles.modalTitle}>Missed Quests</Text>
-              </View>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {missedQuests.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Ionicons name="checkmark-circle" size={48} color={COLORS.accent.success} />
-                  <Text style={styles.emptyStateText}>All caught up!</Text>
-                  <Text style={styles.emptyStateSubtext}>No missed quests</Text>
-                </View>
-              ) : (
-                <View style={styles.missedQuestsList}>
-                  {missedQuests.map((missed) => {
-                    const arc = arcs.find(a => {
-                      const aId = typeof missed.quest.arcId === 'object' ? missed.quest.arcId.$id : missed.quest.arcId;
-                      return a.$id === aId;
-                    });
-                    
-                    return (
-                      <TouchableOpacity
-                        key={missed.quest.$id}
-                        style={styles.missedQuestCard}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setMissedQuestsModalVisible(false);
-                          setTimeout(() => openQuestModal(missed.quest), 300);
-                        }}
-                      >
-                        <View style={[styles.missedQuestIndicator, styles.missedQuestIndicatorLarge, { backgroundColor: `${COLORS.accent.danger}20` }]}>
-                          <Ionicons name="warning" size={20} color={COLORS.accent.danger} />
-                        </View>
-                        <View style={styles.missedQuestContent}>
-                          <View style={styles.missedQuestHeader}>
-                            <Text style={styles.missedQuestName}>{missed.quest.name}</Text>
-                            <View style={[styles.missedQuestCountBadge, { backgroundColor: COLORS.accent.danger }]}>
-                              <Text style={styles.missedQuestCountText}>{missed.missedCount}x</Text>
-                            </View>
-                          </View>
-                          <View style={styles.missedQuestMeta}>
-                            <View style={styles.missedQuestMetaItem}>
-                              <View style={[styles.missedQuestMetaIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
-                              <Text style={styles.missedQuestMetaText}>{arc?.name || 'Unassigned'}</Text>
-                            </View>
-                            {missed.lastCompleted && (
-                              <View style={styles.missedQuestMetaItem}>
-                                <Ionicons name="time-outline" size={14} color={COLORS.textTertiary} />
-                                <Text style={styles.missedQuestMetaText}>
-                                  {missed.daysSinceLastCompletion === 0 
-                                    ? 'Today' 
-                                    : missed.daysSinceLastCompletion === 1 
-                                    ? 'Yesterday' 
-                                    : `${missed.daysSinceLastCompletion} days ago`}
-                                </Text>
-                              </View>
-                            )}
-                            {!missed.lastCompleted && (
-                              <View style={styles.missedQuestMetaItem}>
-                                <Ionicons name="alert-circle-outline" size={14} color={COLORS.accent.danger} />
-                                <Text style={[styles.missedQuestMetaText, { color: COLORS.accent.danger }]}>
-                                  Never completed
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          <View style={styles.missedQuestFrequency}>
-                            <Ionicons name="repeat" size={12} color={COLORS.textTertiary} />
-                            <Text style={styles.missedQuestFrequencyText}>
-                              {missed.quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
-                               missed.quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
-                               missed.quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
-                               missed.quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
-                              {missed.quest.repetitionPerPeriod > 1 && ` • ${missed.quest.repetitionPerPeriod}x`}
-                            </Text>
-                          </View>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.missedQuestCompleteButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleCompleteQuest(missed.quest);
-                            setMissedQuestsModalVisible(false);
-                          }}
-                        >
-                          <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.accent.success} />
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
-
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        missedQuests={missedQuests}
+        arcs={arcs}
+        onClose={() => setMissedQuestsModalVisible(false)}
+        onQuestPress={(quest) => {
+          setMissedQuestsModalVisible(false);
+          setTimeout(() => openQuestModal(quest), 300);
+        }}
+        onCompleteQuest={handleCompleteQuest}
+      />
 
       {/* Missed Quests Modal */}
-      <Modal
+      <MissedQuestsModal
         visible={missedQuestsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setMissedQuestsModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setMissedQuestsModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <View style={styles.modalHeaderCenter}>
-                <Text style={styles.modalTitle}>Missed Quests</Text>
-              </View>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {missedQuests.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Ionicons name="checkmark-circle" size={48} color={COLORS.accent.success} />
-                  <Text style={styles.emptyStateText}>All caught up!</Text>
-                  <Text style={styles.emptyStateSubtext}>No missed quests</Text>
-                </View>
-              ) : (
-                <View style={styles.missedQuestsList}>
-                  {missedQuests.map((missed) => {
-                    const arc = arcs.find(a => {
-                      const aId = typeof missed.quest.arcId === 'object' ? missed.quest.arcId.$id : missed.quest.arcId;
-                      return a.$id === aId;
-                    });
-                    
-                    return (
-                      <TouchableOpacity
-                        key={missed.quest.$id}
-                        style={styles.missedQuestCard}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setMissedQuestsModalVisible(false);
-                          setTimeout(() => openQuestModal(missed.quest), 300);
-                        }}
-                      >
-                        <View style={[styles.missedQuestIndicator, styles.missedQuestIndicatorLarge, { backgroundColor: `${COLORS.accent.danger}20` }]}>
-                          <Ionicons name="warning" size={20} color={COLORS.accent.danger} />
-                        </View>
-                        <View style={styles.missedQuestContent}>
-                          <View style={styles.missedQuestHeader}>
-                            <Text style={styles.missedQuestName}>{missed.quest.name}</Text>
-                            <View style={[styles.missedQuestCountBadge, { backgroundColor: COLORS.accent.danger }]}>
-                              <Text style={styles.missedQuestCountText}>{missed.missedCount}x</Text>
-                            </View>
-                          </View>
-                          <View style={styles.missedQuestMeta}>
-                            <View style={styles.missedQuestMetaItem}>
-                              <View style={[styles.missedQuestMetaIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
-                              <Text style={styles.missedQuestMetaText}>{arc?.name || 'Unassigned'}</Text>
-                            </View>
-                            {missed.lastCompleted && (
-                              <View style={styles.missedQuestMetaItem}>
-                                <Ionicons name="time-outline" size={14} color={COLORS.textTertiary} />
-                                <Text style={styles.missedQuestMetaText}>
-                                  {missed.daysSinceLastCompletion === 0 
-                                    ? 'Today' 
-                                    : missed.daysSinceLastCompletion === 1 
-                                    ? 'Yesterday' 
-                                    : `${missed.daysSinceLastCompletion} days ago`}
-                                </Text>
-                              </View>
-                            )}
-                            {!missed.lastCompleted && (
-                              <View style={styles.missedQuestMetaItem}>
-                                <Ionicons name="alert-circle-outline" size={14} color={COLORS.accent.danger} />
-                                <Text style={[styles.missedQuestMetaText, { color: COLORS.accent.danger }]}>
-                                  Never completed
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          <View style={styles.missedQuestFrequency}>
-                            <Ionicons name="repeat" size={12} color={COLORS.textTertiary} />
-                            <Text style={styles.missedQuestFrequencyText}>
-                              {missed.quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
-                               missed.quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
-                               missed.quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
-                               missed.quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
-                              {missed.quest.repetitionPerPeriod > 1 && ` • ${missed.quest.repetitionPerPeriod}x`}
-                            </Text>
-                          </View>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.missedQuestCompleteButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleCompleteQuest(missed.quest);
-                            setMissedQuestsModalVisible(false);
-                          }}
-                        >
-                          <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.accent.success} />
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
-
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Missed Quests Modal */}
-      <Modal
-        visible={missedQuestsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setMissedQuestsModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setMissedQuestsModalVisible(false)}>
-                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-              <View style={styles.modalHeaderCenter}>
-                <Text style={styles.modalTitle}>Missed Quests</Text>
-              </View>
-              <View style={{ width: 40 }} />
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {missedQuests.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Ionicons name="checkmark-circle" size={48} color={COLORS.accent.success} />
-                  <Text style={styles.emptyStateText}>All caught up!</Text>
-                  <Text style={styles.emptyStateSubtext}>No missed quests</Text>
-                </View>
-              ) : (
-                <View style={styles.missedQuestsList}>
-                  {missedQuests.map((missed) => {
-                    const arc = arcs.find(a => {
-                      const aId = typeof missed.quest.arcId === 'object' ? missed.quest.arcId.$id : missed.quest.arcId;
-                      return a.$id === aId;
-                    });
-                    
-                    return (
-                      <TouchableOpacity
-                        key={missed.quest.$id}
-                        style={styles.missedQuestCard}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setMissedQuestsModalVisible(false);
-                          setTimeout(() => openQuestModal(missed.quest), 300);
-                        }}
-                      >
-                        <View style={[styles.missedQuestIndicator, styles.missedQuestIndicatorLarge, { backgroundColor: `${COLORS.accent.danger}20` }]}>
-                          <Ionicons name="warning" size={20} color={COLORS.accent.danger} />
-                        </View>
-                        <View style={styles.missedQuestContent}>
-                          <View style={styles.missedQuestHeader}>
-                            <Text style={styles.missedQuestName}>{missed.quest.name}</Text>
-                            <View style={[styles.missedQuestCountBadge, { backgroundColor: COLORS.accent.danger }]}>
-                              <Text style={styles.missedQuestCountText}>{missed.missedCount}x</Text>
-                            </View>
-                          </View>
-                          <View style={styles.missedQuestMeta}>
-                            <View style={styles.missedQuestMetaItem}>
-                              <View style={[styles.missedQuestMetaIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
-                              <Text style={styles.missedQuestMetaText}>{arc?.name || 'Unassigned'}</Text>
-                            </View>
-                            {missed.lastCompleted && (
-                              <View style={styles.missedQuestMetaItem}>
-                                <Ionicons name="time-outline" size={14} color={COLORS.textTertiary} />
-                                <Text style={styles.missedQuestMetaText}>
-                                  {missed.daysSinceLastCompletion === 0 
-                                    ? 'Today' 
-                                    : missed.daysSinceLastCompletion === 1 
-                                    ? 'Yesterday' 
-                                    : `${missed.daysSinceLastCompletion} days ago`}
-                                </Text>
-                              </View>
-                            )}
-                            {!missed.lastCompleted && (
-                              <View style={styles.missedQuestMetaItem}>
-                                <Ionicons name="alert-circle-outline" size={14} color={COLORS.accent.danger} />
-                                <Text style={[styles.missedQuestMetaText, { color: COLORS.accent.danger }]}>
-                                  Never completed
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          <View style={styles.missedQuestFrequency}>
-                            <Ionicons name="repeat" size={12} color={COLORS.textTertiary} />
-                            <Text style={styles.missedQuestFrequencyText}>
-                              {missed.quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
-                               missed.quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
-                               missed.quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
-                               missed.quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
-                              {missed.quest.repetitionPerPeriod > 1 && ` • ${missed.quest.repetitionPerPeriod}x`}
-                            </Text>
-                          </View>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.missedQuestCompleteButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleCompleteQuest(missed.quest);
-                            setMissedQuestsModalVisible(false);
-                          }}
-                        >
-                          <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.accent.success} />
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
-
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        missedQuests={missedQuests}
+        arcs={arcs}
+        onClose={() => setMissedQuestsModalVisible(false)}
+        onQuestPress={(quest) => {
+          setMissedQuestsModalVisible(false);
+          setTimeout(() => openQuestModal(quest), 300);
+        }}
+        onCompleteQuest={handleCompleteQuest}
+      />
 
       {/* XP History Modal */}
       <Modal
@@ -3930,46 +3185,14 @@ const HabitsTracker = () => {
       </Modal>
 
       {/* Title Unlock Modal */}
-      <Modal
+      <TitleUnlockModal
         visible={titleUnlockModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setTitleUnlockModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Animated.View
-            style={[
-              styles.titleUnlockModal,
-              {
-                transform: [{ scale: xpScale }],
-                opacity: xpAnim,
-              },
-            ]}
-          >
-            <View style={styles.titleUnlockContent}>
-              <Text style={styles.titleUnlockIcon}>
-                {newlyUnlockedTitle?.icon || '🎉'}
-              </Text>
-              <Text style={styles.titleUnlockTitle}>Title Unlocked!</Text>
-              <Text style={styles.titleUnlockName}>
-                {newlyUnlockedTitle?.name || 'New Title'}
-              </Text>
-              <Text style={styles.titleUnlockDescription}>
-                {newlyUnlockedTitle?.description || ''}
-              </Text>
-              <TouchableOpacity
-                style={styles.titleUnlockButton}
-                onPress={() => {
-                  setTitleUnlockModalVisible(false);
-                  setNewlyUnlockedTitle(null);
-                }}
-              >
-                <Text style={styles.titleUnlockButtonText}>Awesome!</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </View>
-      </Modal>
+        title={newlyUnlockedTitle}
+        onClose={() => {
+          setTitleUnlockModalVisible(false);
+          setNewlyUnlockedTitle(null);
+        }}
+      />
 
       {/* Titles & Achievements Modal */}
       <Modal
@@ -4065,153 +3288,18 @@ const HabitsTracker = () => {
       </Modal>
 
       {/* Custom Alert Modal */}
-      <Modal
+      <CustomAlertModal
         visible={alertModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setAlertModalVisible(false)}
-      >
-        <View style={styles.alertOverlay}>
-          <View style={styles.alertContent}>
-            <Text style={styles.alertTitle}>{alertData.title}</Text>
-            <Text style={styles.alertMessage}>{alertData.message}</Text>
-            <View style={styles.alertButtons}>
-              {alertData.buttons.map((button, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.alertButton,
-                    index === alertData.buttons.length - 1 && alertData.buttons.length > 1 && styles.alertButtonPrimary,
-                    button.text === 'Delete' && styles.alertButtonDanger,
-                  ]}
-                  onPress={() => {
-                    if (button.onPress) button.onPress();
-                    setAlertModalVisible(false);
-                  }}
-                >
-                  <Text style={[
-                    styles.alertButtonText,
-                    index === alertData.buttons.length - 1 && alertData.buttons.length > 1 && styles.alertButtonTextPrimary,
-                    button.text === 'Delete' && styles.alertButtonTextDanger,
-                  ]}>
-                    {button.text}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Title Unlock Modal */}
-      <Modal
-        visible={titleUnlockModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setTitleUnlockModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Animated.View
-            style={[
-              styles.titleUnlockModal,
-              {
-                transform: [{ scale: xpScale }],
-                opacity: xpAnim,
-              },
-            ]}
-          >
-            <View style={styles.titleUnlockContent}>
-              <Text style={styles.titleUnlockIcon}>
-                {newlyUnlockedTitle?.icon || '🎉'}
-              </Text>
-              <Text style={styles.titleUnlockTitle}>Title Unlocked!</Text>
-              <Text style={styles.titleUnlockName}>
-                {newlyUnlockedTitle?.name || 'New Title'}
-              </Text>
-              <Text style={styles.titleUnlockDescription}>
-                {newlyUnlockedTitle?.description || ''}
-              </Text>
-              <TouchableOpacity
-                style={styles.titleUnlockButton}
-                onPress={() => {
-                  setTitleUnlockModalVisible(false);
-                  setNewlyUnlockedTitle(null);
-                }}
-              >
-                <Text style={styles.titleUnlockButtonText}>Awesome!</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </View>
-      </Modal>
+        alertData={alertData}
+        onClose={() => setAlertModalVisible(false)}
+      />
 
       {/* Level Up Modal */}
-      <Modal
+      <LevelUpModal
         visible={levelUpModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setLevelUpModalVisible(false)}
-      >
-        <View style={styles.levelUpOverlay}>
-          <View style={[
-            styles.levelUpContent,
-            levelUpData.arc && { borderColor: levelUpData.arc.color || COLORS.accent.primary },
-          ]}>
-            {/* Icon/Emoji */}
-            <View style={[
-              styles.levelUpIconContainer,
-              levelUpData.arc && { backgroundColor: `${levelUpData.arc.color || COLORS.accent.primary}20` },
-            ]}>
-              {levelUpData.arc?.icon ? (
-                <Ionicons 
-                  name={levelUpData.arc.icon} 
-                  size={40} 
-                  color={levelUpData.arc.color || COLORS.accent.primary} 
-                />
-              ) : (
-                <Text style={styles.levelUpEmoji}>
-                  {levelUpData.type === 'global' ? '🎉' : '⭐'}
-                </Text>
-              )}
-            </View>
-
-            {/* Title */}
-            <Text style={[
-              styles.levelUpTitle,
-              levelUpData.arc && { color: levelUpData.arc.color || COLORS.accent.primary },
-            ]}>
-              {levelUpData.type === 'global' ? 'Level Up!' : `${levelUpData.arc?.name || 'Arc'} Level Up!`}
-            </Text>
-
-            {/* Level Display */}
-            <View style={styles.levelUpLevelContainer}>
-              <Text style={styles.levelUpLevelLabel}>Level</Text>
-              <Text style={[
-                styles.levelUpLevelValue,
-                levelUpData.arc && { color: levelUpData.arc.color || COLORS.accent.primary },
-              ]}>
-                {levelUpData.level}
-              </Text>
-            </View>
-
-            {/* XP Earned */}
-            <Text style={styles.levelUpXP}>
-              +{levelUpData.xpEarned} XP earned
-            </Text>
-
-            {/* Close Button */}
-            <TouchableOpacity
-              style={[
-                styles.levelUpButton,
-                levelUpData.arc && { backgroundColor: levelUpData.arc.color || COLORS.accent.primary },
-              ]}
-              onPress={() => setLevelUpModalVisible(false)}
-            >
-              <Text style={styles.levelUpButtonText}>Awesome!</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        levelUpData={levelUpData}
+        onClose={() => setLevelUpModalVisible(false)}
+      />
     </SafeAreaView>
   );
 };
