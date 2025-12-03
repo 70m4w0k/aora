@@ -74,6 +74,7 @@ const HabitsTracker = () => {
   const [tierProgress, setTierProgress] = useState({}); // { tierId: { current, target, percentage } }
   const [userProgress, setUserProgress] = useState(null);
   const [todayQuests, setTodayQuests] = useState([]);
+  const [statistics, setStatistics] = useState(null); // { arcStats, weeklySummary, monthlySummary, trends }
   
   // Arc Modal
   const [arcModalVisible, setArcModalVisible] = useState(false);
@@ -152,60 +153,100 @@ const HabitsTracker = () => {
       setTiers(tiersData);
       setUserProgress(progressData);
       
-      // Fetch tier completions for current user
+      // Initialize with default values for immediate UI render
       const completionsMap = {};
-      for (const tier of tiersData) {
-        try {
-          // Check if user has completed this tier
-          // We'll need to add a function to check tier completions
-          // For now, we'll calculate progress based on quest completions
-          completionsMap[tier.$id] = null; // Will be calculated later
-        } catch (error) {
-          completionsMap[tier.$id] = null;
-        }
-      }
-      setTierCompletions(completionsMap);
-      
-      // Calculate tier progress for all tiers
       const progressMap = {};
-      for (const tier of tiersData) {
-        try {
-          const progress = await getTierProgress(tier);
-          progressMap[tier.$id] = progress;
-        } catch (error) {
-          progressMap[tier.$id] = { current: 0, target: tier.targetValue || 100, percentage: 0 };
-        }
-      }
-      setTierProgress(progressMap);
-      
-      // Filter today's quests based on frequency
-      const todayQuestsFiltered = await filterQuestsForToday(questsData, user.$id);
-      setTodayQuests(todayQuestsFiltered);
-      
-      // Calculate streaks for all quests
       const streaksMap = {};
-      for (const quest of questsData) {
-        try {
-          const streak = await calculateQuestStreak(quest, user.$id);
-          streaksMap[quest.$id] = streak;
-        } catch (error) {
-          streaksMap[quest.$id] = 0;
-        }
+      
+      for (const tier of tiersData) {
+        completionsMap[tier.$id] = null;
+        progressMap[tier.$id] = { current: 0, target: tier.targetValue || 100, percentage: 0 };
       }
+      
+      for (const quest of questsData) {
+        streaksMap[quest.$id] = 0;
+      }
+      
+      setTierCompletions(completionsMap);
+      setTierProgress(progressMap);
       setQuestStreaks(streaksMap);
       
-      // Debug: Log quests to see what we're getting
-      if (questsData.length > 0) {
-        console.log('Total quests fetched:', questsData.length);
-        console.log('Today quests filtered:', todayQuestsFiltered.length);
-        questsData.forEach(q => {
-          console.log(`Quest: "${q.name}", Frequency: "${q.frequency}", ArcId: ${typeof q.arcId === 'object' ? q.arcId.$id : q.arcId}`);
-        });
-      }
+      // Filter today's quests (simplified - show all for now, filter async)
+      setTodayQuests(questsData);
+      
+      // Set loading to false to show UI immediately
+      setLoading(false);
+      
+      // Load detailed data in background (non-blocking)
+      loadDetailedData(arcsData, questsData, tiersData, user.$id);
+      
     } catch (error) {
       console.error('Error fetching habits data:', error);
-    } finally {
       setLoading(false);
+    }
+  };
+
+  // Load detailed data in background (non-blocking)
+  const loadDetailedData = async (arcsData, questsData, tiersData, userId) => {
+    try {
+      // Parallelize all calculations
+      const [
+        tierProgressResults,
+        todayQuestsFiltered,
+        questStreaksResults,
+      ] = await Promise.all([
+        // Calculate tier progress in parallel
+        Promise.all(
+          tiersData.map(async (tier) => {
+            try {
+              const progress = await getTierProgress(tier, questsData, userId);
+              return { tierId: tier.$id, progress };
+            } catch (error) {
+              return { tierId: tier.$id, progress: { current: 0, target: tier.targetValue || 100, percentage: 0 } };
+            }
+          })
+        ),
+        // Filter today's quests
+        filterQuestsForToday(questsData, userId),
+        // Calculate streaks in parallel (limit concurrent requests)
+        Promise.all(
+          questsData.map(async (quest) => {
+            try {
+              const streak = await calculateQuestStreak(quest, userId);
+              return { questId: quest.$id, streak };
+            } catch (error) {
+              return { questId: quest.$id, streak: 0 };
+            }
+          })
+        ),
+      ]);
+      
+      // Update state with calculated values
+      const progressMap = {};
+      tierProgressResults.forEach(({ tierId, progress }) => {
+        progressMap[tierId] = progress;
+      });
+      setTierProgress(progressMap);
+      
+      setTodayQuests(todayQuestsFiltered);
+      
+      const streaksMap = {};
+      questStreaksResults.forEach(({ questId, streak }) => {
+        streaksMap[questId] = streak;
+      });
+      setQuestStreaks(streaksMap);
+      
+      // Calculate statistics in background (can be slow)
+      setTimeout(async () => {
+        try {
+          const stats = await calculateStatistics(arcsData, questsData, userId);
+          setStatistics(stats);
+        } catch (error) {
+          console.error('Error calculating statistics:', error);
+        }
+      }, 100);
+    } catch (error) {
+      console.error('Error loading detailed data:', error);
     }
   };
 
@@ -751,24 +792,30 @@ const HabitsTracker = () => {
         startDate.setDate(startDate.getDate() - (tier.targetValue || 100));
         startDate.setHours(0, 0, 0, 0);
         
+        // Fetch all quest completions in parallel
+        const questCompletionsData = await Promise.all(
+          arcQuests.map(async (quest) => {
+            try {
+              return await getQuestCompletions(
+                quest.$id, 
+                user.$id, 
+                startDate.toISOString(), 
+                today.toISOString()
+              );
+            } catch (error) {
+              return [];
+            }
+          })
+        );
+        
         const completionDates = new Set();
-        for (const quest of arcQuests) {
-          try {
-            const completions = await getQuestCompletions(
-              quest.$id, 
-              user.$id, 
-              startDate.toISOString(), 
-              today.toISOString()
-            );
-            completions.forEach(c => {
-              const completionDate = new Date(c.completedAt || c.$createdAt);
-              completionDate.setHours(0, 0, 0, 0);
-              completionDates.add(completionDate.toISOString());
-            });
-          } catch (error) {
-            // Skip if error
-          }
-        }
+        questCompletionsData.forEach(completions => {
+          completions.forEach(c => {
+            const completionDate = new Date(c.completedAt || c.$createdAt);
+            completionDate.setHours(0, 0, 0, 0);
+            completionDates.add(completionDate.toISOString());
+          });
+        });
         
         const current = completionDates.size;
         const target = tier.targetValue || 100;
@@ -778,17 +825,18 @@ const HabitsTracker = () => {
           percentage: Math.min((current / target) * 100, 100),
         };
       } else if (tier.targetType === TargetTypes.COUNT) {
-        // Count total quest completions for all quests in the arc
-        let totalCompletions = 0;
-        for (const quest of arcQuests) {
-          try {
-            const completions = await getQuestCompletions(quest.$id, user.$id);
-            totalCompletions += completions.length;
-          } catch (error) {
-            // Skip if error
-          }
-        }
+        // Count total quest completions for all quests in the arc - fetch in parallel
+        const questCompletionsData = await Promise.all(
+          arcQuests.map(async (quest) => {
+            try {
+              return await getQuestCompletions(quest.$id, user.$id);
+            } catch (error) {
+              return [];
+            }
+          })
+        );
         
+        const totalCompletions = questCompletionsData.reduce((sum, completions) => sum + completions.length, 0);
         const current = totalCompletions;
         const target = tier.targetValue || 100;
         return {
@@ -797,18 +845,18 @@ const HabitsTracker = () => {
           percentage: Math.min((current / target) * 100, 100),
         };
       } else if (tier.targetType === TargetTypes.AMOUNT) {
-        // For amount type, we'll use count as a placeholder
-        // TODO: Implement actual amount calculation if needed
-        let totalCompletions = 0;
-        for (const quest of arcQuests) {
-          try {
-            const completions = await getQuestCompletions(quest.$id, user.$id);
-            totalCompletions += completions.length;
-          } catch (error) {
-            // Skip if error
-          }
-        }
+        // For amount type, we'll use count as a placeholder - fetch in parallel
+        const questCompletionsData = await Promise.all(
+          arcQuests.map(async (quest) => {
+            try {
+              return await getQuestCompletions(quest.$id, user.$id);
+            } catch (error) {
+              return [];
+            }
+          })
+        );
         
+        const totalCompletions = questCompletionsData.reduce((sum, completions) => sum + completions.length, 0);
         const current = totalCompletions;
         const target = tier.targetValue || 100;
         return {
@@ -1109,6 +1157,142 @@ const HabitsTracker = () => {
 
   const [questCompletions, setQuestCompletions] = useState({});
   const [questStreaks, setQuestStreaks] = useState({}); // { questId: streakCount }
+
+  // Calculate statistics (optimized with parallel calls)
+  const calculateStatistics = async (arcsData, questsData, userId) => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    
+    const startOfLastWeek = new Date(startOfWeek);
+    startOfLastWeek.setDate(startOfWeek.getDate() - 7);
+    
+    const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    startOfLastMonth.setHours(0, 0, 0, 0);
+    
+    // Pre-fetch all quest completions in parallel for all time periods
+    const allQuestCompletions = await Promise.all(
+      questsData.map(async (quest) => {
+        try {
+          const [all, week, month, lastWeek, lastMonth] = await Promise.all([
+            getQuestCompletions(quest.$id, userId).catch(() => []),
+            getQuestCompletions(quest.$id, userId, startOfWeek.toISOString(), today.toISOString()).catch(() => []),
+            getQuestCompletions(quest.$id, userId, startOfMonth.toISOString(), today.toISOString()).catch(() => []),
+            getQuestCompletions(quest.$id, userId, startOfLastWeek.toISOString(), startOfWeek.toISOString()).catch(() => []),
+            getQuestCompletions(quest.$id, userId, startOfLastMonth.toISOString(), startOfMonth.toISOString()).catch(() => []),
+          ]);
+          return { questId: quest.$id, arcId: typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId, all, week, month, lastWeek, lastMonth };
+        } catch (error) {
+          return { questId: quest.$id, arcId: typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId, all: [], week: [], month: [], lastWeek: [], lastMonth: [] };
+        }
+      })
+    );
+    
+    // Calculate arc statistics from pre-fetched data
+    const arcStats = arcsData.map(arc => {
+      const arcQuests = allQuestCompletions.filter(q => q.arcId === arc.$id);
+      
+      const totalCompletions = arcQuests.reduce((sum, q) => sum + q.all.length, 0);
+      const weeklyCompletions = arcQuests.reduce((sum, q) => sum + q.week.length, 0);
+      const monthlyCompletions = arcQuests.reduce((sum, q) => sum + q.month.length, 0);
+      const lastWeekCompletions = arcQuests.reduce((sum, q) => sum + q.lastWeek.length, 0);
+      const lastMonthCompletions = arcQuests.reduce((sum, q) => sum + q.lastMonth.length, 0);
+      
+      // Calculate completion rate
+      const arcQuestsData = questsData.filter(q => {
+        const qArcId = typeof q.arcId === 'object' ? q.arcId.$id : q.arcId;
+        return qArcId === arc.$id;
+      });
+      
+      let expectedCompletions = 0;
+      for (const quest of arcQuestsData) {
+        const frequency = quest.frequency || QuestFrequencies.DAILY;
+        const repetitions = quest.repetitionPerPeriod || 1;
+        
+        if (frequency === QuestFrequencies.DAILY) {
+          expectedCompletions += 7 * repetitions;
+        } else if (frequency === QuestFrequencies.WEEKLY) {
+          expectedCompletions += repetitions;
+        } else if (frequency === QuestFrequencies.MONTHLY) {
+          expectedCompletions += repetitions;
+        }
+      }
+      
+      const completionRate = expectedCompletions > 0 
+        ? Math.min((weeklyCompletions / expectedCompletions) * 100, 100) 
+        : 0;
+      
+      return {
+        arcId: arc.$id,
+        arcName: arc.name,
+        arcColor: arc.color,
+        totalCompletions,
+        weeklyCompletions,
+        monthlyCompletions,
+        lastWeekCompletions,
+        lastMonthCompletions,
+        completionRate,
+        questCount: arcQuestsData.length,
+      };
+    });
+    
+    // Weekly summary
+    const weeklySummary = {
+      completions: arcStats.reduce((sum, arc) => sum + arc.weeklyCompletions, 0),
+      lastWeekCompletions: arcStats.reduce((sum, arc) => sum + arc.lastWeekCompletions, 0),
+      change: 0,
+    };
+    weeklySummary.change = weeklySummary.lastWeekCompletions > 0
+      ? ((weeklySummary.completions - weeklySummary.lastWeekCompletions) / weeklySummary.lastWeekCompletions) * 100
+      : weeklySummary.completions > 0 ? 100 : 0;
+    
+    // Monthly summary
+    const monthlySummary = {
+      completions: arcStats.reduce((sum, arc) => sum + arc.monthlyCompletions, 0),
+      lastMonthCompletions: arcStats.reduce((sum, arc) => sum + arc.lastMonthCompletions, 0),
+      change: 0,
+    };
+    monthlySummary.change = monthlySummary.lastMonthCompletions > 0
+      ? ((monthlySummary.completions - monthlySummary.lastMonthCompletions) / monthlySummary.lastMonthCompletions) * 100
+      : monthlySummary.completions > 0 ? 100 : 0;
+    
+    // Progress trends (last 4 weeks) - use pre-fetched data
+    const trends = [];
+    for (let i = 3; i >= 0; i--) {
+      const weekStart = new Date(startOfWeek);
+      weekStart.setDate(startOfWeek.getDate() - (i * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      
+      // Calculate from pre-fetched data
+      let weekCompletions = 0;
+      for (const questCompletion of allQuestCompletions) {
+        const completionsInWeek = questCompletion.all.filter(c => {
+          const completionDate = new Date(c.completedAt || c.$createdAt);
+          return completionDate >= weekStart && completionDate <= weekEnd;
+        });
+        weekCompletions += completionsInWeek.length;
+      }
+      
+      trends.push({
+        week: i === 0 ? 'This Week' : i === 1 ? 'Last Week' : `${i} weeks ago`,
+        completions: weekCompletions,
+        date: weekStart,
+      });
+    }
+    
+    return {
+      arcStats,
+      weeklySummary,
+      monthlySummary,
+      trends,
+    };
+  };
 
   useEffect(() => {
     if (todayQuests.length > 0 && user?.$id) {
@@ -1519,6 +1703,114 @@ const HabitsTracker = () => {
             </View>
           )}
         </View>
+
+        {/* Statistics Section */}
+        {statistics && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>STATISTICS</Text>
+            </View>
+            
+            {/* Weekly Summary */}
+            <View style={styles.statCard}>
+              <Text style={styles.statCardTitle}>This Week</Text>
+              <View style={styles.statRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{statistics.weeklySummary.completions}</Text>
+                  <Text style={styles.statLabel}>Completions</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={[
+                    styles.statValue,
+                    statistics.weeklySummary.change >= 0 ? { color: COLORS.accent.success } : { color: COLORS.accent.danger }
+                  ]}>
+                    {statistics.weeklySummary.change >= 0 ? '+' : ''}{statistics.weeklySummary.change.toFixed(0)}%
+                  </Text>
+                  <Text style={styles.statLabel}>vs Last Week</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Monthly Summary */}
+            <View style={styles.statCard}>
+              <Text style={styles.statCardTitle}>This Month</Text>
+              <View style={styles.statRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{statistics.monthlySummary.completions}</Text>
+                  <Text style={styles.statLabel}>Completions</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={[
+                    styles.statValue,
+                    statistics.monthlySummary.change >= 0 ? { color: COLORS.accent.success } : { color: COLORS.accent.danger }
+                  ]}>
+                    {statistics.monthlySummary.change >= 0 ? '+' : ''}{statistics.monthlySummary.change.toFixed(0)}%
+                  </Text>
+                  <Text style={styles.statLabel}>vs Last Month</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Progress Trends */}
+            <View style={styles.statCard}>
+              <Text style={styles.statCardTitle}>4-Week Trend</Text>
+              <View style={styles.trendsContainer}>
+                {statistics.trends.map((trend, index) => {
+                  const maxCompletions = Math.max(...statistics.trends.map(t => t.completions), 1);
+                  return (
+                    <View key={index} style={styles.trendItem}>
+                      <Text style={styles.trendLabel}>{trend.week}</Text>
+                      <View style={styles.trendBarContainer}>
+                        <View 
+                          style={[
+                            styles.trendBar,
+                            {
+                              width: `${Math.min((trend.completions / maxCompletions) * 100, 100)}%`,
+                              backgroundColor: COLORS.accent.primary,
+                            }
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.trendValue}>{trend.completions}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Arc Completion Rates */}
+            <View style={styles.statCard}>
+              <Text style={styles.statCardTitle}>Completion Rates by Arc</Text>
+              <View style={styles.arcStatsList}>
+                {statistics.arcStats.map((arcStat) => (
+                  <View key={arcStat.arcId} style={styles.arcStatItem}>
+                    <View style={styles.arcStatHeader}>
+                      <View style={[styles.arcStatIndicator, { backgroundColor: arcStat.arcColor || COLORS.accent.primary }]} />
+                      <Text style={styles.arcStatName}>{arcStat.arcName}</Text>
+                      <Text style={styles.arcStatRate}>{arcStat.completionRate.toFixed(0)}%</Text>
+                    </View>
+                    <View style={styles.arcStatProgressBar}>
+                      <View 
+                        style={[
+                          styles.arcStatProgressFill,
+                          {
+                            width: `${Math.min(arcStat.completionRate, 100)}%`,
+                            backgroundColor: arcStat.arcColor || COLORS.accent.primary,
+                          }
+                        ]}
+                      />
+                    </View>
+                    <View style={styles.arcStatDetails}>
+                      <Text style={styles.arcStatDetailText}>
+                        {arcStat.weeklyCompletions} this week • {arcStat.monthlyCompletions} this month
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -2482,6 +2774,116 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+  },
+  // Statistics Styles
+  statCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  statCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+  },
+  trendsContainer: {
+    gap: 12,
+  },
+  trendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  trendLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    width: 80,
+  },
+  trendBarContainer: {
+    flex: 1,
+    height: 8,
+    backgroundColor: COLORS.elevated,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  trendBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  trendValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    width: 40,
+    textAlign: 'right',
+  },
+  arcStatsList: {
+    gap: 12,
+  },
+  arcStatItem: {
+    marginBottom: 12,
+  },
+  arcStatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  arcStatIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  arcStatName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  arcStatRate: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+  },
+  arcStatProgressBar: {
+    height: 6,
+    backgroundColor: COLORS.elevated,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  arcStatProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  arcStatDetails: {
+    marginTop: 4,
+  },
+  arcStatDetailText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
   },
   // Quest Modal Styles
   arcChipsScroll: {
