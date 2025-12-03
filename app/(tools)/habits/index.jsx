@@ -185,6 +185,9 @@ const HabitsTracker = () => {
   const [missedQuests, setMissedQuests] = useState([]); // Array of { quest, missedCount, lastCompleted }
   const [missedQuestsModalVisible, setMissedQuestsModalVisible] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true); // Default enabled
+  const [streakStatsModalVisible, setStreakStatsModalVisible] = useState(false);
+  const [streakStatistics, setStreakStatistics] = useState(null); // Detailed streak statistics
+  const [streakStatsLoading, setStreakStatsLoading] = useState(false);
   
   // Arc Modal
   const [arcModalVisible, setArcModalVisible] = useState(false);
@@ -1617,6 +1620,188 @@ const HabitsTracker = () => {
     }
   }, [quests, user, notificationsEnabled]);
 
+  // Calculate detailed streak statistics
+  const calculateStreakStatistics = async () => {
+    if (!user || !quests.length || !arcs.length) return null;
+    
+    setStreakStatsLoading(true);
+    try {
+      const stats = {
+        longestStreaksPerQuest: [],
+        streakBreakdownByArc: {},
+        bestStreakOverall: 0,
+        totalActiveStreaks: 0,
+        streakMilestones: [],
+        averageStreak: 0,
+      };
+      
+      let totalStreak = 0;
+      let activeStreakCount = 0;
+      const arcStreaks = {}; // { arcId: { total: 0, count: 0, longest: 0, quests: [] } }
+      
+      // Initialize arc streaks
+      arcs.forEach(arc => {
+        arcStreaks[arc.$id] = {
+          arcName: arc.name,
+          arcColor: arc.color || COLORS.accent.primary,
+          total: 0,
+          count: 0,
+          longest: 0,
+          quests: [],
+        };
+      });
+      
+      // Calculate streaks for each quest
+      for (const quest of quests) {
+        try {
+          const currentStreak = await calculateQuestStreak(quest, user.$id);
+          const completions = await getQuestCompletions(quest.$id, user.$id);
+          
+          // Calculate longest streak from all completions
+          let longestStreak = 0;
+          if (completions.length > 0) {
+            const frequency = quest.frequency || QuestFrequencies.DAILY;
+            const sortedCompletions = completions
+              .map(c => new Date(c.completedAt || c.$createdAt))
+              .sort((a, b) => b - a);
+            
+            // Calculate all streaks in history
+            const allStreaks = [];
+            let currentStreakCount = 1;
+            
+            for (let i = 0; i < sortedCompletions.length - 1; i++) {
+              const date1 = new Date(sortedCompletions[i]);
+              const date2 = new Date(sortedCompletions[i + 1]);
+              
+              let isConsecutive = false;
+              
+              if (frequency === QuestFrequencies.DAILY) {
+                date1.setHours(0, 0, 0, 0);
+                date2.setHours(0, 0, 0, 0);
+                const daysDiff = Math.floor((date1 - date2) / (1000 * 60 * 60 * 24));
+                isConsecutive = daysDiff === 1;
+              } else if (frequency === QuestFrequencies.WEEKLY) {
+                const week1 = getWeekNumber(date1);
+                const week2 = getWeekNumber(date2);
+                const year1 = date1.getFullYear();
+                const year2 = date2.getFullYear();
+                isConsecutive = (week1 === week2 + 1 && year1 === year2) || 
+                               (week1 === 1 && week2 === 52 && year1 === year2 + 1);
+              } else if (frequency === QuestFrequencies.MONTHLY) {
+                const month1 = date1.getMonth();
+                const month2 = date2.getMonth();
+                const year1 = date1.getFullYear();
+                const year2 = date2.getFullYear();
+                isConsecutive = (month1 === month2 + 1 && year1 === year2) ||
+                               (month1 === 0 && month2 === 11 && year1 === year2 + 1);
+              }
+              
+              if (isConsecutive) {
+                currentStreakCount++;
+              } else {
+                if (currentStreakCount > longestStreak) {
+                  longestStreak = currentStreakCount;
+                }
+                allStreaks.push(currentStreakCount);
+                currentStreakCount = 1;
+              }
+            }
+            
+            if (currentStreakCount > longestStreak) {
+              longestStreak = currentStreakCount;
+            }
+            if (currentStreakCount > 1) {
+              allStreaks.push(currentStreakCount);
+            }
+            
+            // If no streaks found but has completions, longest is 1
+            if (longestStreak === 0 && completions.length > 0) {
+              longestStreak = 1;
+            }
+          }
+          
+          const arcId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
+          const arc = arcs.find(a => a.$id === arcId);
+          
+          stats.longestStreaksPerQuest.push({
+            questId: quest.$id,
+            questName: quest.name,
+            currentStreak,
+            longestStreak,
+            arcId,
+            arcName: arc?.name || 'Unassigned',
+            arcColor: arc?.color || COLORS.accent.primary,
+            frequency: quest.frequency,
+            totalCompletions: completions.length,
+          });
+          
+          // Update arc statistics
+          if (arcId && arcStreaks[arcId]) {
+            arcStreaks[arcId].total += currentStreak;
+            arcStreaks[arcId].count++;
+            if (currentStreak > arcStreaks[arcId].longest) {
+              arcStreaks[arcId].longest = currentStreak;
+            }
+            arcStreaks[arcId].quests.push({
+              questName: quest.name,
+              currentStreak,
+              longestStreak,
+            });
+          }
+          
+          if (currentStreak > 0) {
+            activeStreakCount++;
+            totalStreak += currentStreak;
+          }
+          
+          if (currentStreak > stats.bestStreakOverall) {
+            stats.bestStreakOverall = currentStreak;
+          }
+        } catch (error) {
+          console.error(`Error calculating streak for quest ${quest.$id}:`, error);
+        }
+      }
+      
+      // Sort longest streaks per quest
+      stats.longestStreaksPerQuest.sort((a, b) => b.longestStreak - a.longestStreak);
+      
+      // Convert arc streaks to array
+      stats.streakBreakdownByArc = Object.values(arcStreaks)
+        .filter(arc => arc.count > 0)
+        .sort((a, b) => b.longest - a.longest);
+      
+      // Calculate average streak
+      stats.averageStreak = activeStreakCount > 0 ? Math.round((totalStreak / activeStreakCount) * 10) / 10 : 0;
+      stats.totalActiveStreaks = activeStreakCount;
+      
+      // Calculate streak milestones
+      const milestoneThresholds = [1, 3, 7, 14, 30, 60, 90, 100, 180, 365];
+      stats.streakMilestones = milestoneThresholds.map(threshold => {
+        const questsReached = stats.longestStreaksPerQuest.filter(q => q.longestStreak >= threshold);
+        return {
+          threshold,
+          questsReached: questsReached.length,
+          quests: questsReached.map(q => q.questName),
+        };
+      });
+      
+      setStreakStatistics(stats);
+      return stats;
+    } catch (error) {
+      console.error('Error calculating streak statistics:', error);
+      return null;
+    } finally {
+      setStreakStatsLoading(false);
+    }
+  };
+  
+  // Load streak statistics when modal opens
+  useEffect(() => {
+    if (streakStatsModalVisible && user && quests.length > 0) {
+      calculateStreakStatistics();
+    }
+  }, [streakStatsModalVisible]);
+
   // Filter quests for today based on frequency
   const filterQuestsForToday = async (quests, userId) => {
     const today = new Date();
@@ -2302,6 +2487,49 @@ const HabitsTracker = () => {
                   </TouchableOpacity>
                 );
               })}
+            </View>
+          )}
+        </View>
+
+        {/* Streak Statistics Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>STREAK STATISTICS</Text>
+            <TouchableOpacity
+              style={styles.viewAllButton}
+              onPress={() => setStreakStatsModalVisible(true)}
+            >
+              <Text style={styles.viewAllButtonText}>View Details</Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.accent.primary} />
+            </TouchableOpacity>
+          </View>
+          
+          {questStreaks && Object.keys(questStreaks).length > 0 ? (
+            <View style={styles.streakStatsPreview}>
+              <View style={styles.streakStatsCard}>
+                <Ionicons name="flame" size={24} color={COLORS.accent.warning} />
+                <View style={styles.streakStatsCardContent}>
+                  <Text style={styles.streakStatsCardValue}>
+                    {Math.max(...Object.values(questStreaks), 0)}
+                  </Text>
+                  <Text style={styles.streakStatsCardLabel}>Best Current Streak</Text>
+                </View>
+              </View>
+              <View style={styles.streakStatsCard}>
+                <Ionicons name="trophy-outline" size={24} color={COLORS.accent.primary} />
+                <View style={styles.streakStatsCardContent}>
+                  <Text style={styles.streakStatsCardValue}>
+                    {Object.values(questStreaks).filter(s => s > 0).length}
+                  </Text>
+                  <Text style={styles.streakStatsCardLabel}>Active Streaks</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="flame-outline" size={48} color={COLORS.textTertiary} />
+              <Text style={styles.emptyStateText}>No streaks yet</Text>
+              <Text style={styles.emptyStateSubtext}>Complete quests to build streaks</Text>
             </View>
           )}
         </View>
@@ -4332,6 +4560,406 @@ const HabitsTracker = () => {
                       </View>
                     );
                   })}
+                </View>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Streak Statistics Modal */}
+      <Modal
+        visible={streakStatsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setStreakStatsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setStreakStatsModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalTitle}>Streak Statistics</Text>
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {streakStatsLoading ? (
+                <View style={styles.streakStatsLoading}>
+                  <ActivityIndicator size="large" color={COLORS.accent.primary} />
+                  <Text style={styles.streakStatsLoadingText}>Calculating streaks...</Text>
+                </View>
+              ) : streakStatistics ? (
+                <>
+                  {/* Overall Stats */}
+                  <View style={styles.streakStatsSection}>
+                    <Text style={styles.streakStatsSectionTitle}>Overall Performance</Text>
+                    <View style={styles.streakStatsGrid}>
+                      <View style={styles.streakStatCard}>
+                        <Ionicons name="flame" size={32} color={COLORS.accent.warning} />
+                        <Text style={styles.streakStatValue}>{streakStatistics.bestStreakOverall}</Text>
+                        <Text style={styles.streakStatLabel}>Best Streak</Text>
+                      </View>
+                      <View style={styles.streakStatCard}>
+                        <Ionicons name="trophy-outline" size={32} color={COLORS.accent.primary} />
+                        <Text style={styles.streakStatValue}>{streakStatistics.totalActiveStreaks}</Text>
+                        <Text style={styles.streakStatLabel}>Active Streaks</Text>
+                      </View>
+                      <View style={styles.streakStatCard}>
+                        <Ionicons name="stats-chart-outline" size={32} color={COLORS.accent.success} />
+                        <Text style={styles.streakStatValue}>{streakStatistics.averageStreak}</Text>
+                        <Text style={styles.streakStatLabel}>Average Streak</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Longest Streaks Per Quest */}
+                  {streakStatistics.longestStreaksPerQuest.length > 0 && (
+                    <View style={styles.streakStatsSection}>
+                      <Text style={styles.streakStatsSectionTitle}>Longest Streaks by Quest</Text>
+                      <View style={styles.streakQuestList}>
+                        {streakStatistics.longestStreaksPerQuest.slice(0, 10).map((quest, index) => (
+                          <View key={quest.questId} style={styles.streakQuestItem}>
+                            <View style={styles.streakQuestRank}>
+                              <Text style={styles.streakQuestRankText}>#{index + 1}</Text>
+                            </View>
+                            <View style={[styles.streakQuestIndicator, { backgroundColor: `${quest.arcColor}20` }]}>
+                              <View style={[styles.streakQuestIndicatorDot, { backgroundColor: quest.arcColor }]} />
+                            </View>
+                            <View style={styles.streakQuestContent}>
+                              <Text style={styles.streakQuestName}>{quest.questName}</Text>
+                              <View style={styles.streakQuestMeta}>
+                                <Text style={styles.streakQuestArc}>{quest.arcName}</Text>
+                                <Text style={styles.streakQuestFrequency}>
+                                  {quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
+                                   quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
+                                   quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
+                                   quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.streakQuestStreaks}>
+                              <View style={styles.streakQuestStreakItem}>
+                                <Ionicons name="flame" size={16} color={COLORS.accent.warning} />
+                                <Text style={styles.streakQuestStreakValue}>{quest.currentStreak}</Text>
+                                <Text style={styles.streakQuestStreakLabel}>Current</Text>
+                              </View>
+                              <View style={styles.streakQuestStreakItem}>
+                                <Ionicons name="trophy" size={16} color={quest.arcColor} />
+                                <Text style={[styles.streakQuestStreakValue, { color: quest.arcColor }]}>
+                                  {quest.longestStreak}
+                                </Text>
+                                <Text style={styles.streakQuestStreakLabel}>Best</Text>
+                              </View>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Streak Breakdown by Arc */}
+                  {streakStatistics.streakBreakdownByArc.length > 0 && (
+                    <View style={styles.streakStatsSection}>
+                      <Text style={styles.streakStatsSectionTitle}>Streak Breakdown by Arc</Text>
+                      <View style={styles.streakArcList}>
+                        {streakStatistics.streakBreakdownByArc.map((arc) => (
+                          <View key={arc.arcName} style={styles.streakArcItem}>
+                            <View style={[styles.streakArcHeader, { borderLeftColor: arc.arcColor }]}>
+                              <View style={styles.streakArcHeaderLeft}>
+                                <View style={[styles.streakArcIndicator, { backgroundColor: arc.arcColor }]} />
+                                <Text style={styles.streakArcName}>{arc.arcName}</Text>
+                              </View>
+                              <View style={styles.streakArcStats}>
+                                <View style={styles.streakArcStatItem}>
+                                  <Ionicons name="flame" size={16} color={COLORS.accent.warning} />
+                                  <Text style={styles.streakArcStatValue}>{arc.longest}</Text>
+                                  <Text style={styles.streakArcStatLabel}>Best</Text>
+                                </View>
+                                <View style={styles.streakArcStatItem}>
+                                  <Ionicons name="list-outline" size={16} color={COLORS.textSecondary} />
+                                  <Text style={styles.streakArcStatValue}>{arc.count}</Text>
+                                  <Text style={styles.streakArcStatLabel}>Quests</Text>
+                                </View>
+                              </View>
+                            </View>
+                            {arc.quests.length > 0 && (
+                              <View style={styles.streakArcQuests}>
+                                {arc.quests.map((quest, idx) => (
+                                  <View key={idx} style={styles.streakArcQuestItem}>
+                                    <Text style={styles.streakArcQuestName}>{quest.questName}</Text>
+                                    <View style={styles.streakArcQuestStreaks}>
+                                      <View style={styles.streakArcQuestStreak}>
+                                        <Text style={styles.streakArcQuestStreakValue}>{quest.currentStreak}</Text>
+                                        <Text style={styles.streakArcQuestStreakLabel}>Current</Text>
+                                      </View>
+                                      <View style={styles.streakArcQuestStreak}>
+                                        <Text style={[styles.streakArcQuestStreakValue, { color: arc.arcColor }]}>
+                                          {quest.longestStreak}
+                                        </Text>
+                                        <Text style={styles.streakArcQuestStreakLabel}>Best</Text>
+                                      </View>
+                                    </View>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Streak Milestones */}
+                  {streakStatistics.streakMilestones.length > 0 && (
+                    <View style={styles.streakStatsSection}>
+                      <Text style={styles.streakStatsSectionTitle}>Streak Milestones</Text>
+                      <Text style={styles.streakStatsSectionSubtitle}>
+                        Quests that have reached these streak thresholds
+                      </Text>
+                      <View style={styles.streakMilestonesList}>
+                        {streakStatistics.streakMilestones
+                          .filter(m => m.questsReached > 0)
+                          .reverse()
+                          .map((milestone) => (
+                            <View key={milestone.threshold} style={styles.streakMilestoneItem}>
+                              <View style={styles.streakMilestoneHeader}>
+                                <View style={styles.streakMilestoneBadge}>
+                                  <Ionicons name="trophy" size={20} color={COLORS.accent.warning} />
+                                  <Text style={styles.streakMilestoneThreshold}>{milestone.threshold} days</Text>
+                                </View>
+                                <Text style={styles.streakMilestoneCount}>
+                                  {milestone.questsReached} quest{milestone.questsReached > 1 ? 's' : ''}
+                                </Text>
+                              </View>
+                              {milestone.quests.length > 0 && milestone.quests.length <= 5 && (
+                                <View style={styles.streakMilestoneQuests}>
+                                  {milestone.quests.map((questName, idx) => (
+                                    <View key={idx} style={styles.streakMilestoneQuestChip}>
+                                      <Text style={styles.streakMilestoneQuestText}>{questName}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          ))}
+                      </View>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="flame-outline" size={48} color={COLORS.textTertiary} />
+                  <Text style={styles.emptyStateText}>No streak data available</Text>
+                  <Text style={styles.emptyStateSubtext}>Complete quests to build streaks</Text>
+                </View>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Streak Statistics Modal */}
+      <Modal
+        visible={streakStatsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setStreakStatsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setStreakStatsModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalTitle}>Streak Statistics</Text>
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {streakStatsLoading ? (
+                <View style={styles.streakStatsLoading}>
+                  <ActivityIndicator size="large" color={COLORS.accent.primary} />
+                  <Text style={styles.streakStatsLoadingText}>Calculating streaks...</Text>
+                </View>
+              ) : streakStatistics ? (
+                <>
+                  {/* Overall Stats */}
+                  <View style={styles.streakStatsSection}>
+                    <Text style={styles.streakStatsSectionTitle}>Overall Performance</Text>
+                    <View style={styles.streakStatsGrid}>
+                      <View style={styles.streakStatCard}>
+                        <Ionicons name="flame" size={32} color={COLORS.accent.warning} />
+                        <Text style={styles.streakStatValue}>{streakStatistics.bestStreakOverall}</Text>
+                        <Text style={styles.streakStatLabel}>Best Streak</Text>
+                      </View>
+                      <View style={styles.streakStatCard}>
+                        <Ionicons name="trophy-outline" size={32} color={COLORS.accent.primary} />
+                        <Text style={styles.streakStatValue}>{streakStatistics.totalActiveStreaks}</Text>
+                        <Text style={styles.streakStatLabel}>Active Streaks</Text>
+                      </View>
+                      <View style={styles.streakStatCard}>
+                        <Ionicons name="stats-chart-outline" size={32} color={COLORS.accent.success} />
+                        <Text style={styles.streakStatValue}>{streakStatistics.averageStreak}</Text>
+                        <Text style={styles.streakStatLabel}>Average Streak</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Longest Streaks Per Quest */}
+                  {streakStatistics.longestStreaksPerQuest.length > 0 && (
+                    <View style={styles.streakStatsSection}>
+                      <Text style={styles.streakStatsSectionTitle}>Longest Streaks by Quest</Text>
+                      <View style={styles.streakQuestList}>
+                        {streakStatistics.longestStreaksPerQuest.slice(0, 10).map((quest, index) => (
+                          <View key={quest.questId} style={styles.streakQuestItem}>
+                            <View style={styles.streakQuestRank}>
+                              <Text style={styles.streakQuestRankText}>#{index + 1}</Text>
+                            </View>
+                            <View style={[styles.streakQuestIndicator, { backgroundColor: `${quest.arcColor}20` }]}>
+                              <View style={[styles.streakQuestIndicatorDot, { backgroundColor: quest.arcColor }]} />
+                            </View>
+                            <View style={styles.streakQuestContent}>
+                              <Text style={styles.streakQuestName}>{quest.questName}</Text>
+                              <View style={styles.streakQuestMeta}>
+                                <Text style={styles.streakQuestArc}>{quest.arcName}</Text>
+                                <Text style={styles.streakQuestFrequency}>
+                                  {quest.frequency === QuestFrequencies.DAILY ? 'Daily' :
+                                   quest.frequency === QuestFrequencies.WEEKLY ? 'Weekly' :
+                                   quest.frequency === QuestFrequencies.MONTHLY ? 'Monthly' :
+                                   quest.frequency === QuestFrequencies.ANNUAL ? 'Annual' : 'Unique'}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.streakQuestStreaks}>
+                              <View style={styles.streakQuestStreakItem}>
+                                <Ionicons name="flame" size={16} color={COLORS.accent.warning} />
+                                <Text style={styles.streakQuestStreakValue}>{quest.currentStreak}</Text>
+                                <Text style={styles.streakQuestStreakLabel}>Current</Text>
+                              </View>
+                              <View style={styles.streakQuestStreakItem}>
+                                <Ionicons name="trophy" size={16} color={quest.arcColor} />
+                                <Text style={[styles.streakQuestStreakValue, { color: quest.arcColor }]}>
+                                  {quest.longestStreak}
+                                </Text>
+                                <Text style={styles.streakQuestStreakLabel}>Best</Text>
+                              </View>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Streak Breakdown by Arc */}
+                  {streakStatistics.streakBreakdownByArc.length > 0 && (
+                    <View style={styles.streakStatsSection}>
+                      <Text style={styles.streakStatsSectionTitle}>Streak Breakdown by Arc</Text>
+                      <View style={styles.streakArcList}>
+                        {streakStatistics.streakBreakdownByArc.map((arc) => (
+                          <View key={arc.arcName} style={styles.streakArcItem}>
+                            <View style={[styles.streakArcHeader, { borderLeftColor: arc.arcColor }]}>
+                              <View style={styles.streakArcHeaderLeft}>
+                                <View style={[styles.streakArcIndicator, { backgroundColor: arc.arcColor }]} />
+                                <Text style={styles.streakArcName}>{arc.arcName}</Text>
+                              </View>
+                              <View style={styles.streakArcStats}>
+                                <View style={styles.streakArcStatItem}>
+                                  <Ionicons name="flame" size={16} color={COLORS.accent.warning} />
+                                  <Text style={styles.streakArcStatValue}>{arc.longest}</Text>
+                                  <Text style={styles.streakArcStatLabel}>Best</Text>
+                                </View>
+                                <View style={styles.streakArcStatItem}>
+                                  <Ionicons name="list-outline" size={16} color={COLORS.textSecondary} />
+                                  <Text style={styles.streakArcStatValue}>{arc.count}</Text>
+                                  <Text style={styles.streakArcStatLabel}>Quests</Text>
+                                </View>
+                              </View>
+                            </View>
+                            {arc.quests.length > 0 && (
+                              <View style={styles.streakArcQuests}>
+                                {arc.quests.map((quest, idx) => (
+                                  <View key={idx} style={styles.streakArcQuestItem}>
+                                    <Text style={styles.streakArcQuestName}>{quest.questName}</Text>
+                                    <View style={styles.streakArcQuestStreaks}>
+                                      <View style={styles.streakArcQuestStreak}>
+                                        <Text style={styles.streakArcQuestStreakValue}>{quest.currentStreak}</Text>
+                                        <Text style={styles.streakArcQuestStreakLabel}>Current</Text>
+                                      </View>
+                                      <View style={styles.streakArcQuestStreak}>
+                                        <Text style={[styles.streakArcQuestStreakValue, { color: arc.arcColor }]}>
+                                          {quest.longestStreak}
+                                        </Text>
+                                        <Text style={styles.streakArcQuestStreakLabel}>Best</Text>
+                                      </View>
+                                    </View>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Streak Milestones */}
+                  {streakStatistics.streakMilestones.length > 0 && (
+                    <View style={styles.streakStatsSection}>
+                      <Text style={styles.streakStatsSectionTitle}>Streak Milestones</Text>
+                      <Text style={styles.streakStatsSectionSubtitle}>
+                        Quests that have reached these streak thresholds
+                      </Text>
+                      <View style={styles.streakMilestonesList}>
+                        {streakStatistics.streakMilestones
+                          .filter(m => m.questsReached > 0)
+                          .reverse()
+                          .map((milestone) => (
+                            <View key={milestone.threshold} style={styles.streakMilestoneItem}>
+                              <View style={styles.streakMilestoneHeader}>
+                                <View style={styles.streakMilestoneBadge}>
+                                  <Ionicons name="trophy" size={20} color={COLORS.accent.warning} />
+                                  <Text style={styles.streakMilestoneThreshold}>{milestone.threshold} days</Text>
+                                </View>
+                                <Text style={styles.streakMilestoneCount}>
+                                  {milestone.questsReached} quest{milestone.questsReached > 1 ? 's' : ''}
+                                </Text>
+                              </View>
+                              {milestone.quests.length > 0 && milestone.quests.length <= 5 && (
+                                <View style={styles.streakMilestoneQuests}>
+                                  {milestone.quests.map((questName, idx) => (
+                                    <View key={idx} style={styles.streakMilestoneQuestChip}>
+                                      <Text style={styles.streakMilestoneQuestText}>{questName}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              )}
+                            </View>
+                          ))}
+                      </View>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Ionicons name="flame-outline" size={48} color={COLORS.textTertiary} />
+                  <Text style={styles.emptyStateText}>No streak data available</Text>
+                  <Text style={styles.emptyStateSubtext}>Complete quests to build streaks</Text>
                 </View>
               )}
 
@@ -6849,6 +7477,302 @@ const styles = StyleSheet.create({
   },
   missedQuestCompleteButton: {
     padding: 8,
+  },
+  // Streak Statistics Styles
+  streakStatsPreview: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  streakStatsCard: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  streakStatsCardContent: {
+    flex: 1,
+  },
+  streakStatsCardValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  streakStatsCardLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  streakStatsLoading: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakStatsLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  streakStatsSection: {
+    marginBottom: 32,
+  },
+  streakStatsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  streakStatsSectionSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+  },
+  streakStatsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  streakStatCard: {
+    flex: 1,
+    minWidth: '30%',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  streakStatValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  streakStatLabel: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  streakQuestList: {
+    gap: 12,
+  },
+  streakQuestItem: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  streakQuestRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  streakQuestRankText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  streakQuestIndicator: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  streakQuestIndicatorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  streakQuestContent: {
+    flex: 1,
+  },
+  streakQuestName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  streakQuestMeta: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  streakQuestArc: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  streakQuestFrequency: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  streakQuestStreaks: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  streakQuestStreakItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  streakQuestStreakValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  streakQuestStreakLabel: {
+    fontSize: 10,
+    color: COLORS.textTertiary,
+  },
+  streakArcList: {
+    gap: 16,
+  },
+  streakArcItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  streakArcHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderLeftWidth: 4,
+  },
+  streakArcHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  streakArcIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  streakArcName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  streakArcStats: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  streakArcStatItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  streakArcStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  streakArcStatLabel: {
+    fontSize: 10,
+    color: COLORS.textTertiary,
+  },
+  streakArcQuests: {
+    padding: 12,
+    paddingTop: 0,
+    gap: 8,
+  },
+  streakArcQuestItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  streakArcQuestName: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  streakArcQuestStreaks: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  streakArcQuestStreak: {
+    alignItems: 'center',
+    gap: 2,
+    minWidth: 50,
+  },
+  streakArcQuestStreakValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  streakArcQuestStreakLabel: {
+    fontSize: 9,
+    color: COLORS.textTertiary,
+  },
+  streakMilestonesList: {
+    gap: 12,
+  },
+  streakMilestoneItem: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  streakMilestoneHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  streakMilestoneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: `${COLORS.accent.warning}20`,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  streakMilestoneThreshold: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.accent.warning,
+  },
+  streakMilestoneCount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  streakMilestoneQuests: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  streakMilestoneQuestChip: {
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  streakMilestoneQuestText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
   },
 });
 
