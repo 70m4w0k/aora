@@ -65,6 +65,89 @@ const COLORS = {
   },
 };
 
+// Titles & Achievements System
+const TITLES = {
+  // Tier-based titles (unlocked by completing tiers)
+  NOVICE: { id: 'novice', name: 'Novice', description: 'Completed your first tier', icon: '🌱', tierRequirement: 1 },
+  APPRENTICE: { id: 'apprentice', name: 'Apprentice', description: 'Completed 3 tiers', icon: '📚', tierRequirement: 3 },
+  JOURNEYMAN: { id: 'journeyman', name: 'Journeyman', description: 'Completed 5 tiers', icon: '⚒️', tierRequirement: 5 },
+  EXPERT: { id: 'expert', name: 'Expert', description: 'Completed 10 tiers', icon: '🎓', tierRequirement: 10 },
+  MASTER: { id: 'master', name: 'Master', description: 'Completed 20 tiers', icon: '👑', tierRequirement: 20 },
+  GRANDMASTER: { id: 'grandmaster', name: 'Grandmaster', description: 'Completed 50 tiers', icon: '🌟', tierRequirement: 50 },
+  
+  // Quest-based achievements
+  QUEST_STARTER: { id: 'quest_starter', name: 'Quest Starter', description: 'Completed 10 quests', icon: '⭐', questRequirement: 10 },
+  QUEST_MASTER: { id: 'quest_master', name: 'Quest Master', description: 'Completed 100 quests', icon: '🏆', questRequirement: 100 },
+  STREAK_KEEPER: { id: 'streak_keeper', name: 'Streak Keeper', description: 'Maintained a 7-day streak', icon: '🔥', streakRequirement: 7 },
+  STREAK_LEGEND: { id: 'streak_legend', name: 'Streak Legend', description: 'Maintained a 30-day streak', icon: '💫', streakRequirement: 30 },
+  
+  // XP-based achievements
+  XP_COLLECTOR: { id: 'xp_collector', name: 'XP Collector', description: 'Earned 1000 XP', icon: '💎', xpRequirement: 1000 },
+  XP_HUNTER: { id: 'xp_hunter', name: 'XP Hunter', description: 'Earned 5000 XP', icon: '🎯', xpRequirement: 5000 },
+  XP_LEGEND: { id: 'xp_legend', name: 'XP Legend', description: 'Earned 10000 XP', icon: '✨', xpRequirement: 10000 },
+};
+
+const ACHIEVEMENTS = {
+  FIRST_QUEST: { id: 'first_quest', name: 'First Steps', description: 'Completed your first quest', icon: '🎯', type: 'quest' },
+  FIRST_TIER: { id: 'first_tier', name: 'Milestone', description: 'Completed your first tier', icon: '🏅', type: 'tier' },
+  LEVEL_10: { id: 'level_10', name: 'Rising Star', description: 'Reached level 10', icon: '⭐', type: 'level', requirement: 10 },
+  LEVEL_25: { id: 'level_25', name: 'Veteran', description: 'Reached level 25', icon: '🌟', type: 'level', requirement: 25 },
+  LEVEL_50: { id: 'level_50', name: 'Elite', description: 'Reached level 50', icon: '💫', type: 'level', requirement: 50 },
+  PERFECT_WEEK: { id: 'perfect_week', name: 'Perfect Week', description: 'Completed all daily quests for a week', icon: '📅', type: 'streak' },
+};
+
+// Helper function to check and unlock titles/achievements
+const checkTitleUnlocks = (userProgress, tiersCompleted, questsCompleted, totalXP, bestStreak) => {
+  const unlocked = [];
+  const currentUnlocked = userProgress?.unlockedTitles || [];
+  
+  // Check tier-based titles
+  Object.values(TITLES).forEach(title => {
+    if (title.tierRequirement && tiersCompleted >= title.tierRequirement) {
+      if (!currentUnlocked.includes(title.id)) {
+        unlocked.push(title);
+      }
+    }
+    if (title.questRequirement && questsCompleted >= title.questRequirement) {
+      if (!currentUnlocked.includes(title.id)) {
+        unlocked.push(title);
+      }
+    }
+    if (title.xpRequirement && totalXP >= title.xpRequirement) {
+      if (!currentUnlocked.includes(title.id)) {
+        unlocked.push(title);
+      }
+    }
+    if (title.streakRequirement && bestStreak >= title.streakRequirement) {
+      if (!currentUnlocked.includes(title.id)) {
+        unlocked.push(title);
+      }
+    }
+  });
+  
+  // Check achievements
+  const achievements = [];
+  const currentAchievements = userProgress?.unlockedAchievements || [];
+  
+  if (questsCompleted >= 1 && !currentAchievements.includes(ACHIEVEMENTS.FIRST_QUEST.id)) {
+    achievements.push(ACHIEVEMENTS.FIRST_QUEST);
+  }
+  if (tiersCompleted >= 1 && !currentAchievements.includes(ACHIEVEMENTS.FIRST_TIER.id)) {
+    achievements.push(ACHIEVEMENTS.FIRST_TIER);
+  }
+  if (userProgress?.globalLevel >= 10 && !currentAchievements.includes(ACHIEVEMENTS.LEVEL_10.id)) {
+    achievements.push(ACHIEVEMENTS.LEVEL_10);
+  }
+  if (userProgress?.globalLevel >= 25 && !currentAchievements.includes(ACHIEVEMENTS.LEVEL_25.id)) {
+    achievements.push(ACHIEVEMENTS.LEVEL_25);
+  }
+  if (userProgress?.globalLevel >= 50 && !currentAchievements.includes(ACHIEVEMENTS.LEVEL_50.id)) {
+    achievements.push(ACHIEVEMENTS.LEVEL_50);
+  }
+  
+  return { titles: unlocked, achievements };
+};
+
 const HabitsTracker = () => {
   const { user, household } = useGlobalContext();
   const [loading, setLoading] = useState(true);
@@ -80,6 +163,11 @@ const HabitsTracker = () => {
   const [todayQuests, setTodayQuests] = useState([]);
   const [statistics, setStatistics] = useState(null); // { arcStats, weeklySummary, monthlySummary, trends }
   const [questPenalties, setQuestPenalties] = useState({}); // { questId: { missedRecurrences, penaltyXP } }
+  const [unlockedTitles, setUnlockedTitles] = useState([]);
+  const [unlockedAchievements, setUnlockedAchievements] = useState([]);
+  const [titleUnlockModalVisible, setTitleUnlockModalVisible] = useState(false);
+  const [newlyUnlockedTitle, setNewlyUnlockedTitle] = useState(null);
+  const [titlesAchievementsModalVisible, setTitlesAchievementsModalVisible] = useState(false);
   
   // Arc Modal
   const [arcModalVisible, setArcModalVisible] = useState(false);
@@ -168,6 +256,39 @@ const HabitsTracker = () => {
       setQuests(questsData);
       setTiers(tiersData);
       setUserProgress(progressData);
+      
+      // Load unlocked titles and achievements
+      // Handle both array and string formats from Appwrite
+      let titlesArray = progressData?.unlockedTitles || [];
+      if (typeof titlesArray === 'string') {
+        try {
+          titlesArray = JSON.parse(titlesArray);
+        } catch (e) {
+          titlesArray = [];
+        }
+      }
+      const unlockedTitlesList = (Array.isArray(titlesArray) ? titlesArray : []).map(titleId => 
+        Object.values(TITLES).find(t => t.id === titleId)
+      ).filter(Boolean);
+      
+      let achievementsArray = progressData?.unlockedAchievements || [];
+      if (typeof achievementsArray === 'string') {
+        try {
+          achievementsArray = JSON.parse(achievementsArray);
+        } catch (e) {
+          achievementsArray = [];
+        }
+      }
+      const unlockedAchievementsList = (Array.isArray(achievementsArray) ? achievementsArray : []).map(achId => 
+        Object.values(ACHIEVEMENTS).find(a => a.id === achId)
+      ).filter(Boolean);
+      
+      setUnlockedTitles(unlockedTitlesList);
+      setUnlockedAchievements(unlockedAchievementsList);
+      
+      // Debug logging
+      console.log('Unlocked Titles:', unlockedTitlesList);
+      console.log('Unlocked Achievements:', unlockedAchievementsList);
       
       // Initialize with default values for immediate UI render
       const completionsMap = {};
@@ -282,6 +403,47 @@ const HabitsTracker = () => {
   const showLevelUp = (type, level, xpEarned, arc = null) => {
     setLevelUpData({ type, level, xpEarned, arc });
     setLevelUpModalVisible(true);
+    
+    // Animate modal entry
+    xpAnim.setValue(0);
+    xpScale.setValue(0);
+    Animated.parallel([
+      Animated.spring(xpAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.spring(xpScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const showTitleUnlock = (titleOrAchievement) => {
+    setNewlyUnlockedTitle(titleOrAchievement);
+    setTitleUnlockModalVisible(true);
+    
+    // Animate modal entry
+    xpAnim.setValue(0);
+    xpScale.setValue(0);
+    Animated.parallel([
+      Animated.spring(xpAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.spring(xpScale, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   // Show XP Notification
@@ -381,6 +543,44 @@ const HabitsTracker = () => {
         (typeof currentProgress.arcProgress === 'string' ? JSON.parse(currentProgress.arcProgress) : currentProgress.arcProgress) : {};
       const oldArcLevel = arcId && oldArcProgress[arcId] ? oldArcProgress[arcId].level : 1;
       
+      // Calculate total quests and tiers completed for achievement checks
+      let totalQuestsCompleted = 0;
+      let totalTiersCompleted = 0;
+      Object.values(oldArcProgress).forEach(arc => {
+        totalQuestsCompleted += arc.questsCompleted || 0;
+        totalTiersCompleted += arc.tiersCompleted || 0;
+      });
+      totalQuestsCompleted += 1; // This quest being completed
+      
+      // Calculate best streak from all quests
+      let bestStreak = 0;
+      try {
+        const allQuestCompletions = await Promise.all(
+          quests.map(q => getQuestCompletions(q.$id, user.$id).catch(() => []))
+        );
+        allQuestCompletions.forEach(completions => {
+          if (completions.length > 0) {
+            const streak = calculateQuestStreak({ frequency: quest.frequency }, user.$id, completions);
+            bestStreak = Math.max(bestStreak, streak);
+          }
+        });
+      } catch (error) {
+        // If error, use current streak
+        bestStreak = newStreak;
+      }
+      
+      // Check for title/achievement unlocks
+      const titleUnlocks = checkTitleUnlocks(
+        currentProgress,
+        totalTiersCompleted,
+        totalQuestsCompleted,
+        (currentProgress?.totalXP || 0) + xpEarned,
+        bestStreak
+      );
+      
+      const newTitles = titleUnlocks.titles.map(t => t.id);
+      const newAchievements = titleUnlocks.achievements.map(a => a.id);
+      
       // Calculate missed recurrences and penalty if penalty system is active
       let penaltyXP = 0;
       if (currentProgress?.penaltySystemActive) {
@@ -401,18 +601,44 @@ const HabitsTracker = () => {
         arcId: arcId,
         streakCount: newStreak,
         penaltyXP: penaltyXP,
+        newTitles: newTitles,
+        newAchievements: newAchievements,
       });
       
-      // Fetch updated progress
+      // Fetch updated progress (optimized - only fetch progress, not all data)
       const updatedProgress = await getUserProgress(user.$id, household.$id);
       const newLevel = updatedProgress?.globalLevel || 1;
       const newArcProgress = updatedProgress?.arcProgress ? 
         (typeof updatedProgress.arcProgress === 'string' ? JSON.parse(updatedProgress.arcProgress) : updatedProgress.arcProgress) : {};
       const newArcLevel = arcId && newArcProgress[arcId] ? newArcProgress[arcId].level : 1;
       
+      // Update local state immediately (optimistic update - no full reload!)
+      setQuestCompletions(prev => ({ ...prev, [quest.$id]: true }));
+      setUserProgress(updatedProgress);
+      
+      // Update quest streaks
+      setQuestStreaks(prev => ({ ...prev, [quest.$id]: newStreak }));
+      
+      // Update today's quests list (remove completed quest if it's daily)
+      if (quest.frequency === QuestFrequencies.DAILY) {
+        setTodayQuests(prev => prev.filter(q => q.$id !== quest.$id));
+      }
+      
       // Show XP notification
       const arc = arcs.find(a => a.$id === arcId);
       showXPNotification(xpEarned, arc?.color);
+      
+      // Check for title/achievement unlocks and show celebration
+      if (titleUnlocks.titles.length > 0) {
+        setTimeout(() => {
+          showTitleUnlock(titleUnlocks.titles[0]);
+        }, 800);
+      }
+      if (titleUnlocks.achievements.length > 0) {
+        setTimeout(() => {
+          showTitleUnlock(titleUnlocks.achievements[0]);
+        }, titleUnlocks.titles.length > 0 ? 2000 : 800);
+      }
       
       // Check for level-ups
       if (newLevel > oldLevel) {
@@ -425,24 +651,51 @@ const HabitsTracker = () => {
         }, 500);
       }
       
-      await fetchData();
+      // Update unlocked titles/achievements in state
+      if (newTitles.length > 0 || newAchievements.length > 0) {
+        let titlesArray = updatedProgress?.unlockedTitles || [];
+        if (typeof titlesArray === 'string') {
+          try {
+            titlesArray = JSON.parse(titlesArray);
+          } catch (e) {
+            titlesArray = [];
+          }
+        }
+        let achievementsArray = updatedProgress?.unlockedAchievements || [];
+        if (typeof achievementsArray === 'string') {
+          try {
+            achievementsArray = JSON.parse(achievementsArray);
+          } catch (e) {
+            achievementsArray = [];
+          }
+        }
+        const unlockedTitlesList = (Array.isArray(titlesArray) ? titlesArray : []).map(titleId => 
+          Object.values(TITLES).find(t => t.id === titleId)
+        ).filter(Boolean);
+        const unlockedAchievementsList = (Array.isArray(achievementsArray) ? achievementsArray : []).map(achId => 
+          Object.values(ACHIEVEMENTS).find(a => a.id === achId)
+        ).filter(Boolean);
+        setUnlockedTitles(unlockedTitlesList);
+        setUnlockedAchievements(unlockedAchievementsList);
+      }
       
-      // Update tier progress for affected tiers
+      // Only refresh tier progress for affected tiers (background, non-blocking)
       const affectedTiers = tiers.filter(t => {
         const tArcId = typeof t.arcId === 'object' ? t.arcId.$id : t.arcId;
         return tArcId === arcId;
       });
       
-      const updatedProgressMap = { ...tierProgress };
-      for (const tier of affectedTiers) {
-        try {
-          const progress = await getTierProgress(tier);
-          updatedProgressMap[tier.$id] = progress;
-        } catch (error) {
-          // Keep existing progress on error
-        }
-      }
-      setTierProgress(updatedProgressMap);
+      // Update tier progress in background (non-blocking)
+      Promise.all(
+        affectedTiers.map(async (tier) => {
+          try {
+            const progress = await getTierProgress(tier, quests, user.$id);
+            setTierProgress(prev => ({ ...prev, [tier.$id]: progress }));
+          } catch (error) {
+            // Silent fail for background updates
+          }
+        })
+      ).catch(() => {}); // Ignore errors in background updates
     } catch (error) {
       console.error('Error completing quest:', error);
       showAlert('Error', 'Could not complete quest', [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]);
@@ -874,12 +1127,39 @@ const HabitsTracker = () => {
         (typeof currentProgress.arcProgress === 'string' ? JSON.parse(currentProgress.arcProgress) : currentProgress.arcProgress) : {};
       const oldArcLevel = arcId && oldArcProgress[arcId] ? oldArcProgress[arcId].level : 1;
       
+      // Calculate total tiers and quests completed
+      let totalTiersCompleted = 0;
+      let totalQuestsCompleted = 0;
+      Object.values(oldArcProgress).forEach(arc => {
+        totalTiersCompleted += arc.tiersCompleted || 0;
+        totalQuestsCompleted += arc.questsCompleted || 0;
+      });
+      totalTiersCompleted += 1; // This tier being completed
+      
+      // Check for title/achievement unlocks
+      const titleUnlocks = checkTitleUnlocks(
+        currentProgress,
+        totalTiersCompleted,
+        totalQuestsCompleted,
+        (currentProgress?.totalXP || 0) + xpEarned,
+        0 // bestStreak - would need to calculate from quest completions
+      );
+      
+      // Unlock tier-specific title if provided
+      const newTitles = [...titleUnlocks.titles.map(t => t.id)];
+      if (tier.titleReward && !currentProgress?.unlockedTitles?.includes(tier.titleReward)) {
+        newTitles.push(tier.titleReward);
+      }
+      const newAchievements = titleUnlocks.achievements.map(a => a.id);
+      
       await completeTier({
         tierId: tier.$id,
         userId: user.$id,
         householdId: household.$id,
         xpEarned: xpEarned,
         arcId: arcId,
+        newTitles: newTitles,
+        newAchievements: newAchievements,
       });
       
       // Fetch updated progress
@@ -892,6 +1172,13 @@ const HabitsTracker = () => {
       // Show XP notification
       const arc = arcs.find(a => a.$id === arcId);
       showXPNotification(xpEarned, arc?.color);
+      
+      // Check for title unlocks and show celebration
+      if (titleUnlocks.titles.length > 0) {
+        setTimeout(() => {
+          showTitleUnlock(titleUnlocks.titles[0]);
+        }, 800);
+      }
       
       // Check for level-ups
       if (newLevel > oldLevel) {
@@ -1033,6 +1320,9 @@ const HabitsTracker = () => {
   // Calculate streak for a quest based on completion history
   const calculateQuestStreak = async (quest, userId) => {
     try {
+      if (!quest || !quest.$id || !userId) {
+        return 0;
+      }
       const frequency = quest.frequency || QuestFrequencies.DAILY;
       const completions = await getQuestCompletions(quest.$id, userId);
       
@@ -1558,7 +1848,11 @@ const HabitsTracker = () => {
       >
         {/* Global Progress Card */}
         {userProgress && (
-          <View style={styles.globalProgressCard}>
+          <TouchableOpacity 
+            style={styles.globalProgressCard}
+            activeOpacity={0.8}
+            onPress={() => setTitlesAchievementsModalVisible(true)}
+          >
             <View style={styles.globalProgressHeader}>
               <View>
                 <Text style={styles.globalProgressLabel}>Level</Text>
@@ -1603,7 +1897,14 @@ const HabitsTracker = () => {
                 );
               })()}
             </Animated.View>
-          </View>
+            <View style={styles.globalProgressFooter}>
+              <Ionicons name="trophy-outline" size={16} color={COLORS.textSecondary} />
+              <Text style={styles.globalProgressFooterText}>
+                {unlockedTitles.length + unlockedAchievements.length} unlocked
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
+            </View>
+          </TouchableOpacity>
         )}
 
         {/* Arcs Section */}
@@ -3121,6 +3422,141 @@ const HabitsTracker = () => {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Title Unlock Modal */}
+      <Modal
+        visible={titleUnlockModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setTitleUnlockModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View
+            style={[
+              styles.titleUnlockModal,
+              {
+                transform: [{ scale: xpScale }],
+                opacity: xpAnim,
+              },
+            ]}
+          >
+            <View style={styles.titleUnlockContent}>
+              <Text style={styles.titleUnlockIcon}>
+                {newlyUnlockedTitle?.icon || '🎉'}
+              </Text>
+              <Text style={styles.titleUnlockTitle}>Title Unlocked!</Text>
+              <Text style={styles.titleUnlockName}>
+                {newlyUnlockedTitle?.name || 'New Title'}
+              </Text>
+              <Text style={styles.titleUnlockDescription}>
+                {newlyUnlockedTitle?.description || ''}
+              </Text>
+              <TouchableOpacity
+                style={styles.titleUnlockButton}
+                onPress={() => {
+                  setTitleUnlockModalVisible(false);
+                  setNewlyUnlockedTitle(null);
+                }}
+              >
+                <Text style={styles.titleUnlockButtonText}>Awesome!</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
+
+      {/* Titles & Achievements Modal */}
+      <Modal
+        visible={titlesAchievementsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setTitlesAchievementsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setTitlesAchievementsModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <View style={styles.modalHeaderCenter}>
+                <Text style={styles.modalTitle}>Titles & Achievements</Text>
+              </View>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Progress Summary */}
+              {userProgress && (
+                <View style={styles.achievementsProgressSummary}>
+                  <View style={styles.achievementsProgressItem}>
+                    <Text style={styles.achievementsProgressValue}>{userProgress.globalLevel || 1}</Text>
+                    <Text style={styles.achievementsProgressLabel}>Level</Text>
+                  </View>
+                  <View style={styles.achievementsProgressItem}>
+                    <Text style={styles.achievementsProgressValue}>{userProgress.totalXP || 0}</Text>
+                    <Text style={styles.achievementsProgressLabel}>Total XP</Text>
+                  </View>
+                  <View style={styles.achievementsProgressItem}>
+                    <Text style={styles.achievementsProgressValue}>
+                      {unlockedTitles.length + unlockedAchievements.length}
+                    </Text>
+                    <Text style={styles.achievementsProgressLabel}>Unlocked</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Unlocked Titles */}
+              <View style={styles.achievementsSection}>
+                <Text style={styles.achievementsSectionTitle}>Titles</Text>
+                {unlockedTitles.length > 0 ? (
+                  <View style={styles.achievementsGrid}>
+                    {unlockedTitles.map((title) => (
+                      <View key={title.id} style={styles.achievementBadge}>
+                        <Text style={styles.achievementIcon}>{title.icon}</Text>
+                        <Text style={styles.achievementName} numberOfLines={1}>{title.name}</Text>
+                        <Text style={styles.achievementDescription} numberOfLines={2}>{title.description}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="trophy-outline" size={48} color={COLORS.textTertiary} />
+                    <Text style={styles.emptyStateText}>No titles unlocked yet</Text>
+                    <Text style={styles.emptyStateSubtext}>Complete tiers to unlock titles</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Unlocked Achievements */}
+              <View style={styles.achievementsSection}>
+                <Text style={styles.achievementsSectionTitle}>Achievements</Text>
+                {unlockedAchievements.length > 0 ? (
+                  <View style={styles.achievementsGrid}>
+                    {unlockedAchievements.map((achievement) => (
+                      <View key={achievement.id} style={styles.achievementBadge}>
+                        <Text style={styles.achievementIcon}>{achievement.icon}</Text>
+                        <Text style={styles.achievementName} numberOfLines={1}>{achievement.name}</Text>
+                        <Text style={styles.achievementDescription} numberOfLines={2}>{achievement.description}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="star-outline" size={48} color={COLORS.textTertiary} />
+                    <Text style={styles.emptyStateText}>No achievements unlocked yet</Text>
+                    <Text style={styles.emptyStateSubtext}>Complete quests and tiers to earn achievements</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Custom Alert Modal */}
       <Modal
         visible={alertModalVisible}
@@ -3157,6 +3593,48 @@ const HabitsTracker = () => {
               ))}
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Title Unlock Modal */}
+      <Modal
+        visible={titleUnlockModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setTitleUnlockModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Animated.View
+            style={[
+              styles.titleUnlockModal,
+              {
+                transform: [{ scale: xpScale }],
+                opacity: xpAnim,
+              },
+            ]}
+          >
+            <View style={styles.titleUnlockContent}>
+              <Text style={styles.titleUnlockIcon}>
+                {newlyUnlockedTitle?.icon || '🎉'}
+              </Text>
+              <Text style={styles.titleUnlockTitle}>Title Unlocked!</Text>
+              <Text style={styles.titleUnlockName}>
+                {newlyUnlockedTitle?.name || 'New Title'}
+              </Text>
+              <Text style={styles.titleUnlockDescription}>
+                {newlyUnlockedTitle?.description || ''}
+              </Text>
+              <TouchableOpacity
+                style={styles.titleUnlockButton}
+                onPress={() => {
+                  setTitleUnlockModalVisible(false);
+                  setNewlyUnlockedTitle(null);
+                }}
+              >
+                <Text style={styles.titleUnlockButtonText}>Awesome!</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -3311,6 +3789,21 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: COLORS.textPrimary,
+  },
+  globalProgressFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 6,
+  },
+  globalProgressFooterText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
   xpBarContainer: {
     marginTop: 8,
@@ -4142,6 +4635,140 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.accent.primary,
+  },
+  // Titles & Achievements Styles
+  achievementsContainer: {
+    marginBottom: 24,
+  },
+  achievementsSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  achievementsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  achievementBadge: {
+    width: '47%',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  achievementIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  achievementName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  achievementDescription: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  achievementsSection: {
+    marginBottom: 32,
+  },
+  achievementsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+  },
+  achievementsProgressSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  achievementsProgressItem: {
+    alignItems: 'center',
+  },
+  achievementsProgressValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+    marginBottom: 4,
+  },
+  achievementsProgressLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  titleUnlockModal: {
+    width: '85%',
+    maxWidth: 320,
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.accent.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  titleUnlockContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  titleUnlockIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  titleUnlockTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  titleUnlockName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.accent.primary,
+    marginBottom: 8,
+  },
+  titleUnlockDescription: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  titleUnlockButton: {
+    backgroundColor: COLORS.accent.primary,
+    borderRadius: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    minWidth: 120,
+  },
+  titleUnlockButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
   },
   // Quest Modal Styles
   arcChipsScroll: {

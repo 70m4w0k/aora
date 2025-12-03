@@ -416,7 +416,24 @@ Use: `habits_user_progress` (or generate a unique ID and update `lib/appwrite.js
    - Required: No
    - Description: Array of unlocked title IDs
 
-10. **arcProgress** (String, Optional)
+10. **unlockedAchievements** (String Array, Optional)
+    - Type: String Array
+    - Required: No
+    - Description: Array of unlocked achievement IDs
+
+11. **totalPenalties** (Integer, Optional)
+    - Type: Integer
+    - Required: No
+    - Default: 0
+    - Description: Total number of penalties applied
+
+12. **totalPenaltyXP** (Integer, Optional)
+    - Type: Integer
+    - Required: No
+    - Default: 0
+    - Description: Total XP lost due to penalties
+
+13. **arcProgress** (String, Optional)
     - Type: String (JSON)
     - Size: 5000
     - Required: No
