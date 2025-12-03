@@ -38,29 +38,24 @@ const SHOPPING_CATEGORIES_CONFIG = {
 };
 import EmptyState from "../../components/EmptyState";
 
-// Shopping Categories with icons and colors
-const SHOPPING_CATEGORY_CONFIG = {
-  groceries: { icon: "basket", label: "Groceries", color: "#22C55E" },
-  household: { icon: "home", label: "Household", color: "#8B5CF6" },
-  personal: { icon: "person", label: "Personal", color: "#F43F5E" },
-  other: { icon: "cube", label: "Other", color: "#71717A" },
-};
-
 const ShoppingScreen = () => {
   const { user, household } = useGlobalContext();
   const [items, setItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
   
-  // Quick add state
-  const [quickAddText, setQuickAddText] = useState("");
-  const [quickAddCategory, setQuickAddCategory] = useState(ShoppingCategories.GROCERIES);
-  const [isAddingItem, setIsAddingItem] = useState(false);
-  const quickAddInputRef = useRef(null);
+  // Add form state (for add modal)
+  const [addForm, setAddForm] = useState({
+    name: "",
+    quantity: "1",
+    category: ShoppingCategories.GROCERIES,
+    assignedTo: "",
+  });
   
-  // Edit form state (for modal)
-  const [form, setForm] = useState({
+  // Edit form state (for edit modal)
+  const [editForm, setEditForm] = useState({
     name: "",
     quantity: "1",
     category: ShoppingCategories.GROCERIES,
@@ -78,13 +73,13 @@ const ShoppingScreen = () => {
   // Track which category tab is active
   const [activeTab, setActiveTab] = useState("all");
 
+  // History state
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [historyItems, setHistoryItems] = useState([]);
 
-  // First, let's add a new state variable to track which item is being edited
+
+  // Track which item is being edited
   const [editingItem, setEditingItem] = useState(null);
-
-  // Modify the modal title and button text based on editing state
-  const modalTitle = editingItem ? "Edit Shopping Item" : "Add Shopping Item";
-  const submitButtonText = editingItem ? "Update" : "Add";
 
   useEffect(() => {
     if (household?.$id) {
@@ -114,28 +109,32 @@ const ShoppingScreen = () => {
     };
   }, [household?.$id]);
 
-  // Quick add item handler - ultra fast addition
-  const handleQuickAdd = async () => {
-    if (quickAddText.trim() === "") return;
-    
-    setIsAddingItem(true);
+  // Handle add item
+  const handleAddItem = async () => {
+    if (addForm.name.trim() === "") {
+      Alert.alert("Error", "Please provide an item name");
+      return;
+    }
+
     try {
       await createShoppingItem({
-        name: quickAddText.trim(),
-        quantity: "1",
-        category: quickAddCategory,
-        assignedTo: "",
+        ...addForm,
         userId: user.$id,
         householdId: household.$id,
       });
-      
-      setQuickAddText("");
-      Keyboard.dismiss();
+
       await fetchItems();
+      setAddModalVisible(false);
+      
+      // Reset form
+      setAddForm({
+        name: "",
+        quantity: "1",
+        category: ShoppingCategories.GROCERIES,
+        assignedTo: "",
+      });
     } catch (error) {
       Alert.alert("Error", error.message);
-    } finally {
-      setIsAddingItem(false);
     }
   };
 
@@ -146,6 +145,17 @@ const ShoppingScreen = () => {
       setItems(shoppingItems || []);
     } catch (error) {
       console.error("Error fetching shopping items:", error);
+    }
+  };
+
+  const fetchHistoryItems = async () => {
+    if (!household?.$id) return;
+    try {
+      const shoppingItems = await getHouseholdShoppingItems(household.$id);
+      const completed = (shoppingItems || []).filter(item => item.completed);
+      setHistoryItems(completed);
+    } catch (error) {
+      console.error("Error fetching history items:", error);
     }
   };
 
@@ -167,43 +177,33 @@ const ShoppingScreen = () => {
 
   // Function to open the edit modal for an existing item
   const handleEditItem = (item) => {
-    setForm({
+    setEditForm({
       name: item.name,
       quantity: item.quantity.toString(),
       category: item.category,
       assignedTo: item.assignedTo || "",
     });
     setEditingItem(item);
-    setModalVisible(true);
+    setEditModalVisible(true);
   };
 
-  // Update the form submission handler to either create or update
-  const handleSubmitForm = async () => {
-    if (form.name.trim() === "") {
+  // Handle edit item submission
+  const handleEditSubmit = async () => {
+    if (editForm.name.trim() === "") {
       return Alert.alert("Error", "Please provide an item name");
     }
 
     try {
-      if (editingItem) {
-        // Update existing item
-        await updateShoppingItem(editingItem.$id, {
-          ...form,
-          quantity: form.quantity,
-        });
-      } else {
-        // Create new item
-        await createShoppingItem({
-          ...form,
-          userId: user.$id,
-          householdId: household.$id,
-        });
-      }
+      await updateShoppingItem(editingItem.$id, {
+        ...editForm,
+        quantity: editForm.quantity,
+      });
 
       await fetchItems();
-      setModalVisible(false);
+      setEditModalVisible(false);
 
       // Reset form and editing state
-      setForm({
+      setEditForm({
         name: "",
         quantity: "1",
         category: ShoppingCategories.GROCERIES,
@@ -222,9 +222,82 @@ const ShoppingScreen = () => {
         completed: !item.completed,
       });
       await fetchItems();
+      // Refresh history if modal is open
+      if (historyModalVisible) {
+        await fetchHistoryItems();
+      }
     } catch (error) {
       console.error("Error updating item:", error);
       Alert.alert("Error", "Could not update item status");
+    }
+  };
+
+  const restoreItem = async (item) => {
+    try {
+      await updateShoppingItem(item.$id, {
+        completed: false,
+      });
+      await fetchItems();
+      await fetchHistoryItems();
+      Alert.alert("Success", `${item.name} has been restored to your shopping list`);
+    } catch (error) {
+      console.error("Error restoring item:", error);
+      Alert.alert("Error", "Could not restore item");
+    }
+  };
+
+  // Group history items by date
+  const groupHistoryByDate = (items) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const groups = {
+      today: [],
+      yesterday: [],
+      thisWeek: [],
+      older: [],
+    };
+
+    items.forEach((item) => {
+      const completedDate = new Date(item.$updatedAt);
+      
+      if (completedDate >= today) {
+        groups.today.push(item);
+      } else if (completedDate >= yesterday) {
+        groups.yesterday.push(item);
+      } else if (completedDate >= weekAgo) {
+        groups.thisWeek.push(item);
+      } else {
+        groups.older.push(item);
+      }
+    });
+
+    // Sort each group by date (newest first)
+    Object.keys(groups).forEach((key) => {
+      groups[key].sort((a, b) => new Date(b.$updatedAt) - new Date(a.$updatedAt));
+    });
+
+    return groups;
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return "Today";
+    } else if (diffDays === 1) {
+      return "Yesterday";
+    } else if (diffDays <= 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
     }
   };
 
@@ -386,11 +459,11 @@ const ShoppingScreen = () => {
 
   const renderCategoryTabs = () => {
     const categories = [
-      { id: "all", label: "All" },
-      { id: ShoppingCategories.GROCERIES, label: "Groceries" },
-      { id: ShoppingCategories.HOUSEHOLD, label: "Household" },
-      { id: ShoppingCategories.PERSONAL, label: "Personal" },
-      { id: ShoppingCategories.OTHER, label: "Other" },
+      { id: "all", label: "All", icon: "grid" },
+      { id: ShoppingCategories.GROCERIES, label: "Groceries", icon: SHOPPING_CATEGORIES_CONFIG.groceries.icon },
+      { id: ShoppingCategories.HOUSEHOLD, label: "Household", icon: SHOPPING_CATEGORIES_CONFIG.household.icon },
+      { id: ShoppingCategories.PERSONAL, label: "Personal", icon: SHOPPING_CATEGORIES_CONFIG.personal.icon },
+      { id: ShoppingCategories.OTHER, label: "Other", icon: SHOPPING_CATEGORIES_CONFIG.other.icon },
     ];
 
     return (
@@ -400,40 +473,50 @@ const ShoppingScreen = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabsContainer}
         >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              style={[
-                styles.categoryTab,
-                activeTab === category.id && styles.activeTab,
-              ]}
-              onPress={() => {
-                setCategoryFilter(category.id);
-                setActiveTab(category.id);
-              }}
-            >
-              <Text
+          {categories.map((category) => {
+            const categoryConfig = category.id === "all" 
+              ? null 
+              : SHOPPING_CATEGORIES_CONFIG[category.id];
+            
+            return (
+              <TouchableOpacity
+                key={category.id}
                 style={[
-                  styles.categoryTabText,
-                  activeTab === category.id && styles.activeCategoryText,
+                  styles.categoryTab,
+                  activeTab === category.id && styles.activeTab,
+                  activeTab === category.id && categoryConfig && { backgroundColor: categoryConfig.color + "20" },
                 ]}
+                onPress={() => {
+                  setCategoryFilter(category.id);
+                  setActiveTab(category.id);
+                }}
               >
-                {category.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Ionicons 
+                  name={category.icon} 
+                  size={16} 
+                  color={activeTab === category.id 
+                    ? (categoryConfig ? categoryConfig.color : "#10B981")
+                    : "#71717A"
+                  } 
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    activeTab === category.id && styles.activeCategoryText,
+                    activeTab === category.id && categoryConfig && { color: categoryConfig.color },
+                  ]}
+                >
+                  {category.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
     );
   };
 
-  // Category chip data for quick add
-  const categoryChips = [
-    { id: ShoppingCategories.GROCERIES, icon: "cart", label: "Grocery" },
-    { id: ShoppingCategories.HOUSEHOLD, icon: "home", label: "Home" },
-    { id: ShoppingCategories.PERSONAL, icon: "person", label: "Personal" },
-    { id: ShoppingCategories.OTHER, icon: "apps", label: "Other" },
-  ];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -447,6 +530,15 @@ const ShoppingScreen = () => {
             <Text style={styles.title}>Shopping List</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity 
+                style={styles.headerButton}
+                onPress={() => {
+                  setHistoryModalVisible(true);
+                  fetchHistoryItems();
+                }}
+              >
+                <Ionicons name="time-outline" size={20} color="#71717A" />
+              </TouchableOpacity>
+              <TouchableOpacity 
                 style={styles.filterToggle}
                 onPress={() => setShowCompleted(!showCompleted)}
               >
@@ -457,68 +549,6 @@ const ShoppingScreen = () => {
                 />
               </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Quick Add Input */}
-          <View style={styles.quickAddContainer}>
-            <View style={styles.quickAddInputWrapper}>
-              <Ionicons name="add-circle" size={24} color="#10B981" style={styles.quickAddIcon} />
-              <TextInput
-                ref={quickAddInputRef}
-                style={styles.quickAddInput}
-                placeholder="Add item..."
-                placeholderTextColor="#71717A"
-                value={quickAddText}
-                onChangeText={setQuickAddText}
-                onSubmitEditing={handleQuickAdd}
-                returnKeyType="done"
-                blurOnSubmit={false}
-              />
-              {quickAddText.length > 0 && (
-                <TouchableOpacity 
-                  style={styles.quickAddButton}
-                  onPress={handleQuickAdd}
-                  disabled={isAddingItem}
-                >
-                  <Ionicons 
-                    name={isAddingItem ? "hourglass" : "arrow-up-circle"} 
-                    size={28} 
-                    color="#10B981" 
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            {/* Category chips for quick selection */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoryChipsScroll}
-              contentContainerStyle={styles.categoryChipsContainer}
-            >
-              {categoryChips.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryChip,
-                    quickAddCategory === cat.id && styles.categoryChipActive,
-                  ]}
-                  onPress={() => setQuickAddCategory(cat.id)}
-                >
-                  <Ionicons 
-                    name={cat.icon} 
-                    size={14} 
-                    color={quickAddCategory === cat.id ? "#FFFFFF" : "#71717A"} 
-                  />
-                  <Text style={[
-                    styles.categoryChipText,
-                    quickAddCategory === cat.id && styles.categoryChipTextActive,
-                  ]}>
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
           </View>
 
           {/* Filter tabs */}
@@ -538,7 +568,7 @@ const ShoppingScreen = () => {
             <View style={styles.emptyState}>
               <Ionicons name="cart-outline" size={64} color="#3F3F46" />
               <Text style={styles.emptyTitle}>No items yet</Text>
-              <Text style={styles.emptySubtitle}>Add some items to your shopping list</Text>
+              <Text style={styles.emptySubtitle}>Tap the + button to add items</Text>
             </View>
           }
           // Performance optimizations
@@ -548,16 +578,23 @@ const ShoppingScreen = () => {
           initialNumToRender={10}
         />
       </Animated.View>
+
+      {/* FAB Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setAddModalVisible(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={28} color="#FFF" />
+      </TouchableOpacity>
       </KeyboardAvoidingView>
 
+      {/* Add Item Modal */}
       <Modal
-        visible={modalVisible}
+        visible={addModalVisible}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => {
-          setModalVisible(false);
-          setEditingItem(null);
-        }}
+        onRequestClose={() => setAddModalVisible(false)}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -565,17 +602,12 @@ const ShoppingScreen = () => {
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <TouchableOpacity
-                onPress={() => {
-                  setModalVisible(false);
-                  setEditingItem(null);
-                }}
-              >
+              <TouchableOpacity onPress={() => setAddModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>{modalTitle}</Text>
-              <TouchableOpacity onPress={handleSubmitForm}>
-                <Text style={styles.modalSaveText}>{submitButtonText}</Text>
+              <Text style={styles.modalTitle}>Add Shopping Item</Text>
+              <TouchableOpacity onPress={handleAddItem}>
+                <Text style={styles.modalSaveText}>Save</Text>
               </TouchableOpacity>
             </View>
 
@@ -584,8 +616,8 @@ const ShoppingScreen = () => {
               <Text style={[styles.inputLabel, { marginTop: 0 }]}>Item Name</Text>
               <TextInput
                 style={styles.input}
-                value={form.name}
-                onChangeText={(text) => setForm({ ...form, name: text })}
+                value={addForm.name}
+                onChangeText={(text) => setAddForm({ ...addForm, name: text })}
                 placeholder="What do you need?"
                 placeholderTextColor="#71717A"
               />
@@ -596,9 +628,9 @@ const ShoppingScreen = () => {
                 <TouchableOpacity
                   style={styles.quantityButton}
                   onPress={() => {
-                    const currentQty = parseInt(form.quantity || "1");
+                    const currentQty = parseInt(addForm.quantity || "1");
                     if (currentQty > 1) {
-                      setForm({ ...form, quantity: (currentQty - 1).toString() });
+                      setAddForm({ ...addForm, quantity: (currentQty - 1).toString() });
                     }
                   }}
                 >
@@ -606,10 +638,10 @@ const ShoppingScreen = () => {
                 </TouchableOpacity>
                 <TextInput
                   style={styles.quantityInput}
-                  value={form.quantity}
+                  value={addForm.quantity}
                   onChangeText={(text) => {
                     const num = parseInt(text) || 1;
-                    setForm({ ...form, quantity: Math.max(1, num).toString() });
+                    setAddForm({ ...addForm, quantity: Math.max(1, num).toString() });
                   }}
                   keyboardType="numeric"
                   textAlign="center"
@@ -617,8 +649,8 @@ const ShoppingScreen = () => {
                 <TouchableOpacity
                   style={styles.quantityButton}
                   onPress={() => {
-                    const currentQty = parseInt(form.quantity || "1");
-                    setForm({ ...form, quantity: (currentQty + 1).toString() });
+                    const currentQty = parseInt(addForm.quantity || "1");
+                    setAddForm({ ...addForm, quantity: (currentQty + 1).toString() });
                   }}
                 >
                   <Ionicons name="add" size={20} color="#FFF" />
@@ -638,18 +670,18 @@ const ShoppingScreen = () => {
                     key={key}
                     style={[
                       styles.categoryChip,
-                      form.category === key && { backgroundColor: cat.color, borderColor: cat.color },
+                      addForm.category === key && { backgroundColor: cat.color, borderColor: cat.color },
                     ]}
-                    onPress={() => setForm({ ...form, category: key })}
+                    onPress={() => setAddForm({ ...addForm, category: key })}
                   >
                     <Ionicons 
                       name={cat.icon} 
                       size={16} 
-                      color={form.category === key ? "#FFF" : "#71717A"} 
+                      color={addForm.category === key ? "#FFF" : "#71717A"} 
                     />
                     <Text style={[
                       styles.categoryChipText,
-                      form.category === key && { color: "#FFF" },
+                      addForm.category === key && { color: "#FFF" },
                     ]}>
                       {cat.label}
                     </Text>
@@ -667,16 +699,16 @@ const ShoppingScreen = () => {
                 <TouchableOpacity
                   style={[
                     styles.userChip,
-                    !form.assignedTo && styles.userChipSelected,
+                    !addForm.assignedTo && styles.userChipSelected,
                   ]}
-                  onPress={() => setForm({ ...form, assignedTo: "" })}
+                  onPress={() => setAddForm({ ...addForm, assignedTo: "" })}
                 >
                   <View style={[styles.userChipAvatar, { backgroundColor: "#71717A" }]}>
                     <Ionicons name="person-outline" size={14} color="#FFF" />
                   </View>
                   <Text style={[
                     styles.userChipText,
-                    !form.assignedTo && styles.userChipTextSelected,
+                    !addForm.assignedTo && styles.userChipTextSelected,
                   ]}>
                     Unassigned
                   </Text>
@@ -686,16 +718,16 @@ const ShoppingScreen = () => {
                     key={u.$id}
                     style={[
                       styles.userChip,
-                      form.assignedTo === u.$id && styles.userChipSelected,
+                      addForm.assignedTo === u.$id && styles.userChipSelected,
                     ]}
-                    onPress={() => setForm({ ...form, assignedTo: u.$id })}
+                    onPress={() => setAddForm({ ...addForm, assignedTo: u.$id })}
                   >
                     <View style={[styles.userChipAvatar, { backgroundColor: u.color || "#10B981" }]}>
                       <Text style={styles.userChipAvatarText}>{u.username?.[0]?.toUpperCase()}</Text>
                     </View>
                     <Text style={[
                       styles.userChipText,
-                      form.assignedTo === u.$id && styles.userChipTextSelected,
+                      addForm.assignedTo === u.$id && styles.userChipTextSelected,
                     ]}>
                       {u.username}
                     </Text>
@@ -703,6 +735,250 @@ const ShoppingScreen = () => {
                 ))}
               </ScrollView>
 
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit Item Modal */}
+      <Modal
+        visible={editModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setEditModalVisible(false);
+          setEditingItem(null);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                onPress={() => {
+                  setEditModalVisible(false);
+                  setEditingItem(null);
+                }}
+              >
+                <Ionicons name="close" size={24} color="#A1A1AA" />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Edit Shopping Item</Text>
+              <TouchableOpacity onPress={handleEditSubmit}>
+                <Text style={styles.modalSaveText}>Update</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Item Name */}
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Item Name</Text>
+              <TextInput
+                style={styles.input}
+                value={editForm.name}
+                onChangeText={(text) => setEditForm({ ...editForm, name: text })}
+                placeholder="What do you need?"
+                placeholderTextColor="#71717A"
+              />
+
+              {/* Quantity with +/- buttons */}
+              <Text style={styles.inputLabel}>Quantity</Text>
+              <View style={styles.quantityContainer}>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => {
+                    const currentQty = parseInt(editForm.quantity || "1");
+                    if (currentQty > 1) {
+                      setEditForm({ ...editForm, quantity: (currentQty - 1).toString() });
+                    }
+                  }}
+                >
+                  <Ionicons name="remove" size={20} color="#FFF" />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.quantityInput}
+                  value={editForm.quantity}
+                  onChangeText={(text) => {
+                    const num = parseInt(text) || 1;
+                    setEditForm({ ...editForm, quantity: Math.max(1, num).toString() });
+                  }}
+                  keyboardType="numeric"
+                  textAlign="center"
+                />
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => {
+                    const currentQty = parseInt(editForm.quantity || "1");
+                    setEditForm({ ...editForm, quantity: (currentQty + 1).toString() });
+                  }}
+                >
+                  <Ionicons name="add" size={20} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Category - Horizontal scroll chips */}
+              <Text style={styles.inputLabel}>Category</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoryScroll}
+                contentContainerStyle={styles.categoryScrollContent}
+              >
+                {Object.entries(SHOPPING_CATEGORIES_CONFIG).map(([key, cat]) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.categoryChip,
+                      editForm.category === key && { backgroundColor: cat.color, borderColor: cat.color },
+                    ]}
+                    onPress={() => setEditForm({ ...editForm, category: key })}
+                  >
+                    <Ionicons 
+                      name={cat.icon} 
+                      size={16} 
+                      color={editForm.category === key ? "#FFF" : "#71717A"} 
+                    />
+                    <Text style={[
+                      styles.categoryChipText,
+                      editForm.category === key && { color: "#FFF" },
+                    ]}>
+                      {cat.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Assign To - Horizontal scroll user chips */}
+              <Text style={styles.inputLabel}>Assign To</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.userChipsScroll}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.userChip,
+                    !editForm.assignedTo && styles.userChipSelected,
+                  ]}
+                  onPress={() => setEditForm({ ...editForm, assignedTo: "" })}
+                >
+                  <View style={[styles.userChipAvatar, { backgroundColor: "#71717A" }]}>
+                    <Ionicons name="person-outline" size={14} color="#FFF" />
+                  </View>
+                  <Text style={[
+                    styles.userChipText,
+                    !editForm.assignedTo && styles.userChipTextSelected,
+                  ]}>
+                    Unassigned
+                  </Text>
+                </TouchableOpacity>
+                {users.map((u) => (
+                  <TouchableOpacity
+                    key={u.$id}
+                    style={[
+                      styles.userChip,
+                      editForm.assignedTo === u.$id && styles.userChipSelected,
+                    ]}
+                    onPress={() => setEditForm({ ...editForm, assignedTo: u.$id })}
+                  >
+                    <View style={[styles.userChipAvatar, { backgroundColor: u.color || "#10B981" }]}>
+                      <Text style={styles.userChipAvatarText}>{u.username?.[0]?.toUpperCase()}</Text>
+                    </View>
+                    <Text style={[
+                      styles.userChipText,
+                      editForm.assignedTo === u.$id && styles.userChipTextSelected,
+                    ]}>
+                      {u.username}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* History Modal */}
+      <Modal
+        visible={historyModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setHistoryModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setHistoryModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#A1A1AA" />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Shopping History</Text>
+              <View style={{ width: 24 }} />
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {historyItems.length === 0 ? (
+                <View style={styles.emptyHistoryState}>
+                  <Ionicons name="time-outline" size={64} color="#3F3F46" />
+                  <Text style={styles.emptyHistoryTitle}>No history yet</Text>
+                  <Text style={styles.emptyHistorySubtitle}>Completed items will appear here</Text>
+                </View>
+              ) : (
+                (() => {
+                  const grouped = groupHistoryByDate(historyItems);
+                  const sections = [
+                    { key: "today", title: "Today", items: grouped.today },
+                    { key: "yesterday", title: "Yesterday", items: grouped.yesterday },
+                    { key: "thisWeek", title: "This Week", items: grouped.thisWeek },
+                    { key: "older", title: "Older", items: grouped.older },
+                  ].filter(section => section.items.length > 0);
+
+                  return sections.map((section) => (
+                    <View key={section.key} style={styles.historySection}>
+                      <Text style={styles.historySectionTitle}>{section.title}</Text>
+                      {section.items.map((item) => {
+                        const category = SHOPPING_CATEGORIES_CONFIG[item.category] || SHOPPING_CATEGORIES_CONFIG.other;
+                        const assignedUser = users.find((u) => u.$id === item.assignedTo);
+                        const completedDate = formatDate(item.$updatedAt);
+
+                        return (
+                          <View key={item.$id} style={styles.historyItemCard}>
+                            <View style={[styles.historyCategoryIcon, { backgroundColor: category.color + "20" }]}>
+                              <Ionicons name={category.icon} size={18} color={category.color} />
+                            </View>
+                            <View style={styles.historyItemContent}>
+                              <Text style={styles.historyItemName}>{item.name}</Text>
+                              <View style={styles.historyItemMeta}>
+                                {assignedUser && (
+                                  <Text style={styles.historyItemMetaText}>
+                                    {assignedUser.username} • 
+                                  </Text>
+                                )}
+                                <Text style={styles.historyItemMetaText}>
+                                  {category.label}
+                                  {item.quantity && parseInt(item.quantity) > 1 && ` • Qty: ${item.quantity}`}
+                                </Text>
+                              </View>
+                              <Text style={styles.historyItemDate}>{completedDate}</Text>
+                            </View>
+                            <TouchableOpacity
+                              style={styles.restoreButton}
+                              onPress={() => restoreItem(item)}
+                            >
+                              <Ionicons name="refresh" size={18} color="#10B981" />
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ));
+                })()
+              )}
               <View style={{ height: 40 }} />
             </ScrollView>
           </View>
@@ -736,6 +1012,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+  headerButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#1A1A1F",
+    marginRight: 8,
+  },
   filterToggle: {
     padding: 8,
     borderRadius: 20,
@@ -744,61 +1026,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  // Quick Add Styles
-  quickAddContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  quickAddInputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1A1A1F",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.3)",
-  },
-  quickAddIcon: {
-    marginRight: 8,
-  },
-  quickAddInput: {
-    flex: 1,
-    height: 48,
-    color: "#FFFFFF",
-    fontSize: 16,
-  },
-  quickAddButton: {
-    padding: 4,
-  },
-  categoryChipsScroll: {
-    marginTop: 10,
-  },
-  categoryChipsContainer: {
-    gap: 8,
-  },
-  categoryChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "#1A1A1F",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    gap: 4,
-  },
-  categoryChipActive: {
-    backgroundColor: "#10B981",
-    borderColor: "#10B981",
-  },
-  categoryChipText: {
-    fontSize: 12,
-    color: "#71717A",
-    fontWeight: "500",
-  },
-  categoryChipTextActive: {
     color: "#FFFFFF",
   },
   content: {
@@ -899,17 +1126,21 @@ const styles = StyleSheet.create({
     paddingRight: 20,
   },
   categoryTab: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 8,
     marginRight: 6,
     borderRadius: 16,
+    backgroundColor: "#1A1A1F",
   },
   activeTab: {
     backgroundColor: "#1A1A1F",
   },
   categoryTabText: {
-    color: "#FFFFFF",
+    color: "#71717A",
     fontWeight: "500",
+    fontSize: 13,
   },
   activeCategoryText: {
     color: "#10B981",
@@ -946,6 +1177,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#10B981",
+  },
+  fab: {
+    position: "absolute",
+    bottom: 100,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#10B981",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 8,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   modalBody: {
     padding: 20,
@@ -1056,6 +1303,83 @@ const styles = StyleSheet.create({
   itemCardCompleted: {
     opacity: 0.7,
     backgroundColor: "#111114",
+  },
+  // History Modal Styles
+  emptyHistoryState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  emptyHistoryTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFF",
+    marginTop: 16,
+  },
+  emptyHistorySubtitle: {
+    fontSize: 14,
+    color: "#71717A",
+    marginTop: 4,
+  },
+  historySection: {
+    marginBottom: 24,
+  },
+  historySectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#71717A",
+    marginBottom: 12,
+    marginTop: 0,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  historyItemCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#111114",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  historyCategoryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  historyItemContent: {
+    flex: 1,
+  },
+  historyItemName: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#FFF",
+    marginBottom: 4,
+  },
+  historyItemMeta: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 4,
+  },
+  historyItemMetaText: {
+    fontSize: 12,
+    color: "#71717A",
+  },
+  historyItemDate: {
+    fontSize: 11,
+    color: "#71717A",
+    fontStyle: "italic",
+  },
+  restoreButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
   },
 });
 
