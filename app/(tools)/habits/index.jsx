@@ -29,7 +29,13 @@ import {
   createQuest,
   updateQuest,
   deleteQuest,
+  getHouseholdTiers,
+  createTier,
+  updateTier,
+  deleteTier,
+  completeTier,
   QuestFrequencies,
+  TargetTypes,
   calculateLevel,
   getXPForNextLevel,
   getTotalXPForLevel,
@@ -61,6 +67,8 @@ const HabitsTracker = () => {
   // Data
   const [arcs, setArcs] = useState([]);
   const [quests, setQuests] = useState([]);
+  const [tiers, setTiers] = useState([]);
+  const [tierCompletions, setTierCompletions] = useState({}); // { tierId: completion }
   const [userProgress, setUserProgress] = useState(null);
   const [todayQuests, setTodayQuests] = useState([]);
   
@@ -86,6 +94,18 @@ const HabitsTracker = () => {
     xpPerCompletion: '10',
     accessLevel: '',
   });
+
+  // Tier Modal
+  const [tierModalVisible, setTierModalVisible] = useState(false);
+  const [editingTier, setEditingTier] = useState(null);
+  const [tierForm, setTierForm] = useState({
+    name: '',
+    arcId: '',
+    targetValue: '100',
+    targetType: TargetTypes.DAYS,
+    xpReward: '100',
+    titleReward: '',
+  });
   
   useEffect(() => {
     if (household?.$id && user?.$id) {
@@ -98,15 +118,31 @@ const HabitsTracker = () => {
     
     setLoading(true);
     try {
-      const [arcsData, questsData, progressData] = await Promise.all([
+      const [arcsData, questsData, tiersData, progressData] = await Promise.all([
         getHouseholdArcs(household.$id).catch(() => []),
         getHouseholdQuests(household.$id).catch(() => []),
+        getHouseholdTiers(household.$id).catch(() => []),
         getUserProgress(user.$id, household.$id).catch(() => null),
       ]);
       
       setArcs(arcsData);
       setQuests(questsData);
+      setTiers(tiersData);
       setUserProgress(progressData);
+      
+      // Fetch tier completions for current user
+      const completionsMap = {};
+      for (const tier of tiersData) {
+        try {
+          // Check if user has completed this tier
+          // We'll need to add a function to check tier completions
+          // For now, we'll calculate progress based on quest completions
+          completionsMap[tier.$id] = null; // Will be calculated later
+        } catch (error) {
+          completionsMap[tier.$id] = null;
+        }
+      }
+      setTierCompletions(completionsMap);
       
       // Filter today's quests
       // Show all quests for now (daily, weekly, monthly, annual, unique)
@@ -350,6 +386,185 @@ const HabitsTracker = () => {
         },
       ]
     );
+  };
+
+  // Tier Management
+  const openTierModal = (tier = null) => {
+    if (tier) {
+      setEditingTier(tier);
+      setTierForm({
+        name: tier.name || '',
+        arcId: typeof tier.arcId === 'object' ? tier.arcId.$id : tier.arcId || '',
+        targetValue: tier.targetValue?.toString() || '100',
+        targetType: tier.targetType || TargetTypes.DAYS,
+        xpReward: tier.xpReward?.toString() || '100',
+        titleReward: tier.titleReward || '',
+      });
+    } else {
+      setEditingTier(null);
+      setTierForm({
+        name: '',
+        arcId: arcs.length > 0 ? arcs[0].$id : '',
+        targetValue: '100',
+        targetType: TargetTypes.DAYS,
+        xpReward: '100',
+        titleReward: '',
+      });
+    }
+    setTierModalVisible(true);
+  };
+
+  const closeTierModal = () => {
+    setTierModalVisible(false);
+    setEditingTier(null);
+    setTierForm({
+      name: '',
+      arcId: arcs.length > 0 ? arcs[0].$id : '',
+      targetValue: '100',
+      targetType: TargetTypes.DAYS,
+      xpReward: '100',
+      titleReward: '',
+    });
+  };
+
+  const handleSaveTier = async () => {
+    if (!tierForm.name.trim()) {
+      Alert.alert('Error', 'Please enter a tier name');
+      return;
+    }
+    if (!tierForm.arcId) {
+      Alert.alert('Error', 'Please select an arc');
+      return;
+    }
+
+    try {
+      if (editingTier) {
+        await updateTier(editingTier.$id, {
+          name: tierForm.name.trim(),
+          arcId: tierForm.arcId,
+          targetValue: parseInt(tierForm.targetValue) || 100,
+          targetType: tierForm.targetType,
+          xpReward: parseInt(tierForm.xpReward) || 100,
+          titleReward: tierForm.titleReward.trim() || null,
+        });
+      } else {
+        await createTier({
+          name: tierForm.name.trim(),
+          arcId: tierForm.arcId,
+          targetValue: parseInt(tierForm.targetValue) || 100,
+          targetType: tierForm.targetType,
+          xpReward: parseInt(tierForm.xpReward) || 100,
+          titleReward: tierForm.titleReward.trim() || null,
+          householdId: household.$id,
+          userId: user.$id,
+        });
+      }
+      await fetchData();
+      closeTierModal();
+    } catch (error) {
+      console.error('Error saving tier:', error);
+      Alert.alert('Error', 'Could not save tier');
+    }
+  };
+
+  const handleDeleteTier = (tier) => {
+    Alert.alert(
+      'Delete Tier',
+      `Are you sure you want to delete "${tier.name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteTier(tier.$id);
+              await fetchData();
+            } catch (error) {
+              console.error('Error deleting tier:', error);
+              Alert.alert('Error', 'Could not delete tier');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCompleteTier = async (tier) => {
+    try {
+      const arcId = typeof tier.arcId === 'object' ? tier.arcId.$id : tier.arcId;
+      await completeTier({
+        tierId: tier.$id,
+        userId: user.$id,
+        householdId: household.$id,
+        xpEarned: tier.xpReward || 100,
+        arcId: arcId,
+      });
+      await fetchData();
+      Alert.alert('Success', `Tier "${tier.name}" completed! +${tier.xpReward || 100} XP`);
+    } catch (error) {
+      console.error('Error completing tier:', error);
+      Alert.alert('Error', 'Could not complete tier');
+    }
+  };
+
+  // Calculate tier progress based on quest completions
+  const getTierProgress = async (tier) => {
+    if (!tier || !user?.$id) return { current: 0, target: tier?.targetValue || 100, percentage: 0 };
+    
+    try {
+      const arcId = typeof tier.arcId === 'object' ? tier.arcId.$id : tier.arcId;
+      const arcQuests = quests.filter(q => {
+        const qArcId = typeof q.arcId === 'object' ? q.arcId.$id : q.arcId;
+        return qArcId === arcId;
+      });
+
+      if (tier.targetType === TargetTypes.DAYS) {
+        // Count unique days with quest completions
+        const today = new Date();
+        const startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - (tier.targetValue || 100));
+        
+        const completionDates = new Set();
+        for (const quest of arcQuests) {
+          try {
+            const completions = await getQuestCompletions(quest.$id, user.$id, startDate.toISOString(), today.toISOString());
+            completions.forEach(c => {
+              const date = new Date(c.completedAt);
+              completionDates.add(date.toDateString());
+            });
+          } catch (error) {
+            // Skip if error
+          }
+        }
+        return {
+          current: completionDates.size,
+          target: tier.targetValue || 100,
+          percentage: Math.min((completionDates.size / (tier.targetValue || 100)) * 100, 100),
+        };
+      } else if (tier.targetType === TargetTypes.COUNT) {
+        // Count total quest completions
+        let totalCompletions = 0;
+        for (const quest of arcQuests) {
+          try {
+            const completions = await getQuestCompletions(quest.$id, user.$id);
+            totalCompletions += completions.length;
+          } catch (error) {
+            // Skip if error
+          }
+        }
+        return {
+          current: totalCompletions,
+          target: tier.targetValue || 100,
+          percentage: Math.min((totalCompletions / (tier.targetValue || 100)) * 100, 100),
+        };
+      }
+      
+      return { current: 0, target: tier.targetValue || 100, percentage: 0 };
+    } catch (error) {
+      console.error('Error calculating tier progress:', error);
+      return { current: 0, target: tier.targetValue || 100, percentage: 0 };
+    }
   };
 
   const getArcProgress = (arcId) => {
@@ -607,6 +822,91 @@ const HabitsTracker = () => {
                         />
                       </TouchableOpacity>
                     </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* Tiers Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>TIERS & MILESTONES</Text>
+            <View style={styles.questHeaderRight}>
+              <Text style={styles.questCount}>{tiers.length}</Text>
+              <TouchableOpacity style={styles.addButton} onPress={() => openTierModal()}>
+                <Ionicons name="add" size={20} color={COLORS.accent.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          {tiers.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="trophy-outline" size={48} color={COLORS.textTertiary} />
+              <Text style={styles.emptyStateText}>No tiers yet</Text>
+              <Text style={styles.emptyStateSubtext}>Create milestones to track major achievements</Text>
+            </View>
+          ) : (
+            <View style={styles.tiersList}>
+              {tiers.map((tier) => {
+                const arc = arcs.find(a => {
+                  const aId = typeof tier.arcId === 'object' ? tier.arcId.$id : tier.arcId;
+                  return a.$id === aId;
+                });
+                
+                // Calculate progress (simplified - will be enhanced)
+                const progress = { current: 0, target: tier.targetValue || 100, percentage: 0 };
+                const isCompleted = tierCompletions[tier.$id] !== null && tierCompletions[tier.$id] !== undefined;
+                
+                return (
+                  <TouchableOpacity
+                    key={tier.$id}
+                    style={styles.tierCard}
+                    activeOpacity={0.7}
+                    onPress={() => openTierModal(tier)}
+                    onLongPress={() => handleDeleteTier(tier)}
+                  >
+                    <View style={[styles.tierIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
+                    <View style={styles.tierContent}>
+                      <View style={styles.tierHeader}>
+                        <Text style={styles.tierName}>{tier.name}</Text>
+                        {isCompleted && (
+                          <Ionicons name="checkmark-circle" size={20} color={COLORS.accent.success} />
+                        )}
+                      </View>
+                      <View style={styles.tierMeta}>
+                        <Text style={styles.tierArc}>{arc?.name || 'Unassigned'}</Text>
+                        <Text style={styles.tierXP}>+{tier.xpReward || 100} XP</Text>
+                      </View>
+                      <View style={styles.tierProgressContainer}>
+                        <View style={styles.tierProgressBar}>
+                          <View 
+                            style={[
+                              styles.tierProgressFill,
+                              {
+                                width: `${isCompleted ? 100 : progress.percentage}%`,
+                                backgroundColor: arc?.color || COLORS.accent.primary,
+                              }
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.tierProgressText}>
+                          {isCompleted ? 'Completed!' : `${progress.current} / ${progress.target} ${tier.targetType || 'days'}`}
+                        </Text>
+                      </View>
+                    </View>
+                    {!isCompleted && (
+                      <TouchableOpacity
+                        style={styles.tierCompleteButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleCompleteTier(tier);
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.accent.success} />
+                      </TouchableOpacity>
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -893,6 +1193,161 @@ const HabitsTracker = () => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Tier Management Modal */}
+      <Modal
+        visible={tierModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeTierModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closeTierModal}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>{editingTier ? 'Edit Tier' : 'Add Tier'}</Text>
+              <TouchableOpacity onPress={handleSaveTier}>
+                <Text style={styles.modalSaveText}>{editingTier ? 'Update' : 'Save'}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Tier Name */}
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Tier Name</Text>
+              <TextInput
+                style={styles.input}
+                value={tierForm.name}
+                onChangeText={(text) => setTierForm({ ...tierForm, name: text })}
+                placeholder="e.g., 100 days of meditation, Run a marathon"
+                placeholderTextColor={COLORS.textTertiary}
+                maxLength={200}
+              />
+
+              {/* Arc Selection */}
+              <Text style={styles.inputLabel}>Assign to Arc</Text>
+              {arcs.length === 0 ? (
+                <View style={styles.emptyArcWarning}>
+                  <Ionicons name="alert-circle-outline" size={20} color={COLORS.accent.warning} />
+                  <Text style={styles.emptyArcWarningText}>Create an arc first</Text>
+                </View>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.arcChipsScroll}>
+                  {arcs.map((arc) => (
+                    <TouchableOpacity
+                      key={arc.$id}
+                      style={[
+                        styles.arcChip,
+                        tierForm.arcId === arc.$id && { backgroundColor: `${arc.color || COLORS.accent.primary}20`, borderColor: arc.color || COLORS.accent.primary },
+                      ]}
+                      onPress={() => setTierForm({ ...tierForm, arcId: arc.$id })}
+                    >
+                      <View style={[styles.arcChipIndicator, { backgroundColor: arc.color || COLORS.accent.primary }]} />
+                      <Text style={[
+                        styles.arcChipText,
+                        tierForm.arcId === arc.$id && { color: COLORS.textPrimary },
+                      ]}>
+                        {arc.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Target Type */}
+              <Text style={styles.inputLabel}>Target Type</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.frequencyScroll}>
+                {Object.entries({
+                  [TargetTypes.DAYS]: 'Days',
+                  [TargetTypes.COUNT]: 'Count',
+                  [TargetTypes.AMOUNT]: 'Amount',
+                }).map(([value, label]) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[
+                      styles.frequencyChip,
+                      tierForm.targetType === value && styles.frequencyChipSelected,
+                    ]}
+                    onPress={() => setTierForm({ ...tierForm, targetType: value })}
+                  >
+                    <Text style={[
+                      styles.frequencyChipText,
+                      tierForm.targetType === value && styles.frequencyChipTextSelected,
+                    ]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Target Value */}
+              <Text style={styles.inputLabel}>Target Value</Text>
+              <TextInput
+                style={styles.input}
+                value={tierForm.targetValue}
+                onChangeText={(text) => {
+                  const num = parseInt(text) || 100;
+                  setTierForm({ ...tierForm, targetValue: Math.max(1, num).toString() });
+                }}
+                placeholder="e.g., 100 (for 100 days)"
+                placeholderTextColor={COLORS.textTertiary}
+                keyboardType="numeric"
+              />
+              <Text style={styles.inputHint}>
+                The target value to achieve (e.g., 100 for "100 days")
+              </Text>
+
+              {/* XP Reward */}
+              <Text style={styles.inputLabel}>XP Reward</Text>
+              <TextInput
+                style={styles.input}
+                value={tierForm.xpReward}
+                onChangeText={(text) => {
+                  const num = parseInt(text) || 100;
+                  setTierForm({ ...tierForm, xpReward: Math.max(1, num).toString() });
+                }}
+                placeholder="100"
+                placeholderTextColor={COLORS.textTertiary}
+                keyboardType="numeric"
+              />
+
+              {/* Title Reward (Optional) */}
+              <Text style={styles.inputLabel}>Title Reward (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={tierForm.titleReward}
+                onChangeText={(text) => setTierForm({ ...tierForm, titleReward: text })}
+                placeholder="e.g., Master Meditator"
+                placeholderTextColor={COLORS.textTertiary}
+                maxLength={100}
+              />
+              <Text style={styles.inputHint}>
+                Optional class title unlocked when tier is achieved
+              </Text>
+
+              {/* Delete Button (only when editing) */}
+              {editingTier && (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => {
+                    closeTierModal();
+                    handleDeleteTier(editingTier);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color={COLORS.accent.danger} />
+                  <Text style={styles.deleteButtonText}>Delete Tier</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1142,6 +1597,78 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Tier Styles
+  tiersList: {
+    gap: 12,
+  },
+  tierCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.accent.primary,
+  },
+  tierIndicator: {
+    width: 4,
+    borderRadius: 2,
+    marginRight: 12,
+  },
+  tierContent: {
+    flex: 1,
+  },
+  tierHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  tierName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  tierMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  tierArc: {
+    fontSize: 13,
+    color: COLORS.textTertiary,
+  },
+  tierXP: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.accent.primary,
+  },
+  tierProgressContainer: {
+    marginTop: 8,
+  },
+  tierProgressBar: {
+    height: 6,
+    backgroundColor: COLORS.elevated,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  tierProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  tierProgressText: {
+    fontSize: 11,
+    color: COLORS.textTertiary,
+  },
+  tierCompleteButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
   // Quest Modal Styles
   arcChipsScroll: {
     marginBottom: 8,
@@ -1184,12 +1711,20 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent.primary,
     borderColor: COLORS.accent.primary,
   },
+  frequencyChipSelected: {
+    backgroundColor: COLORS.accent.primary,
+    borderColor: COLORS.accent.primary,
+  },
   frequencyChipText: {
     fontSize: 14,
     color: COLORS.textSecondary,
     fontWeight: '500',
   },
   frequencyChipTextActive: {
+    color: COLORS.textPrimary,
+    fontWeight: '600',
+  },
+  frequencyChipTextSelected: {
     color: COLORS.textPrimary,
     fontWeight: '600',
   },
@@ -1236,6 +1771,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textTertiary,
     marginTop: 4,
+  },
+  emptyStateSmall: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  emptyStateTextSmall: {
+    fontSize: 14,
+    color: COLORS.textTertiary,
+    textAlign: 'center',
   },
   // Modal Styles
   modalOverlay: {
