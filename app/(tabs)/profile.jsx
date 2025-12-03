@@ -18,6 +18,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Avatar, Badge } from "../../components/ui";
 import { getAllTasksDone, signOut, leaveHousehold, regenerateInviteCode } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import ProfileEditModal from "../../components/ProfileEditModal";
 
 // Dark theme colors - consistent across app
 const COLORS = {
@@ -99,10 +100,37 @@ const Profile = () => {
   const [stats, setStats] = useState({ completedTasks: 0, tasksPerWeek: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [appearanceModalVisible, setAppearanceModalVisible] = useState(false);
+  const [profileEditModalVisible, setProfileEditModalVisible] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState('dark');
   const [selectedAccent, setSelectedAccent] = useState('#8B5CF6');
 
   const isAdmin = user?.role === 'admin';
+
+  // Calculate seniority (time since joining household)
+  const getSeniorityText = (user) => {
+    if (!user || !user.householdId) return '';
+    
+    // Try to get join date from user document or use $createdAt as fallback
+    const joinDate = user.householdJoinDate ? new Date(user.householdJoinDate) : (user.$createdAt ? new Date(user.$createdAt) : null);
+    
+    if (!joinDate || isNaN(joinDate.getTime())) {
+      return 'Member since recently';
+    }
+
+    const now = new Date();
+    const diffTime = Math.abs(now - joinDate);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffMonths = Math.floor(diffDays / 30);
+    const diffYears = Math.floor(diffMonths / 12);
+
+    if (diffYears > 0) {
+      return `Member since ${diffYears} year${diffYears > 1 ? 's' : ''}`;
+    } else if (diffMonths > 0) {
+      return `Member since ${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
+    } else {
+      return `Member since ${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    }
+  };
 
   const fetchUserStats = useCallback(async () => {
     setIsLoading(true);
@@ -324,17 +352,23 @@ const Profile = () => {
         </View>
 
         {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <Avatar source={user?.avatar} name={user?.username} size="xl" />
+        <TouchableOpacity 
+          style={styles.profileCard}
+          onPress={() => setProfileEditModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Avatar source={user?.avatar} name={user?.username} size="lg" color={user?.color} />
           <Text style={styles.username}>{user?.username}</Text>
-          <Text style={styles.email}>{user?.email}</Text>
+          {user?.householdId && (
+            <Text style={styles.seniority}>{getSeniorityText(user)}</Text>
+          )}
           
           <View style={styles.statsRow}>
             <StatCard icon="checkmark-circle" value={stats.completedTasks} label="Tasks Done" color={COLORS.accent.chores} />
             <View style={styles.statDivider} />
             <StatCard icon="trending-up" value={stats.tasksPerWeek} label="Per Week" color={COLORS.accent.primary} />
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Household Section */}
         {household && (
@@ -414,6 +448,22 @@ const Profile = () => {
 
       {/* Appearance Modal */}
       {renderAppearanceModal()}
+      
+      {/* Profile Edit Modal */}
+      <ProfileEditModal
+        visible={profileEditModalVisible}
+        user={user}
+        onClose={() => setProfileEditModalVisible(false)}
+        onUpdate={async () => {
+          // Refresh user data to get updated color
+          const updatedUser = await refreshUser();
+          await fetchUserStats();
+          // Force re-render by updating state
+          if (updatedUser) {
+            setUser(updatedUser);
+          }
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -429,9 +479,9 @@ const styles = StyleSheet.create({
   logoutButton: { padding: 8 },
 
   // Profile Card
-  profileCard: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16, backgroundColor: COLORS.card, borderRadius: 20, marginBottom: 24 },
-  username: { fontSize: 22, fontWeight: '600', color: COLORS.textPrimary, marginTop: 12 },
-  email: { fontSize: 15, color: COLORS.textTertiary, marginTop: 4 },
+  profileCard: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 16, backgroundColor: COLORS.card, borderRadius: 20, marginBottom: 24 },
+  username: { fontSize: 20, fontWeight: '600', color: COLORS.textPrimary, marginTop: 12 },
+  seniority: { fontSize: 13, color: COLORS.textTertiary, marginTop: 4 },
   statsRow: { flexDirection: 'row', marginTop: 24, alignItems: 'center' },
   statCard: { alignItems: 'center', flex: 1 },
   statIconContainer: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },

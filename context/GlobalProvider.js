@@ -54,9 +54,12 @@ const GlobalProvider = ({ children }) => {
           setHousehold(null);
           setHouseholdMembers([]);
         }
+        return userData; // Return updated user data
       }
+      return null;
     } catch (error) {
       console.error("Error refreshing user:", error);
+      return null;
     }
   };
 
