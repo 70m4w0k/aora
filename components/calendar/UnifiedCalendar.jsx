@@ -2051,15 +2051,25 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
         {/* Event indicators */}
         {dayItems.length > 0 && (
           <View style={styles.dayEvents}>
-            {dayItems.slice(0, 3).map((item, idx) => (
-              <View
-                key={item.id}
-                style={[
-                  styles.eventDot,
-                  { backgroundColor: item.color || item.type === "completed_task" ? "#06B6D4" : "#71717A" },
-                ]}
-              />
-            ))}
+            {dayItems.slice(0, 3).map((item, idx) => {
+              // Determine dot color: use user's color for completed tasks, event color for events
+              let dotColor = "#71717A"; // default
+              if (item.type === "completed_task") {
+                dotColor = item.completedBy?.color || "#06B6D4";
+              } else if (item.color) {
+                dotColor = item.color;
+              }
+              
+              return (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.eventDot,
+                    { backgroundColor: dotColor },
+                  ]}
+                />
+              );
+            })}
             {dayItems.length > 3 && (
               <Text style={styles.moreEventsText}>+{dayItems.length - 3}</Text>
             )}
