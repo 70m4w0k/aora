@@ -23,6 +23,7 @@ import { router } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useGlobalContext } from "../../../context/GlobalProvider";
+import { useTranslation } from "../../../hooks/useTranslation";
 import {
   DocumentCategories,
   getHouseholdDocuments,
@@ -37,6 +38,7 @@ const { width: screenWidth } = Dimensions.get("window");
 
 const DocumentsScreen = () => {
   const { user, household } = useGlobalContext();
+  const t = useTranslation();
   const [documents, setDocuments] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -147,7 +149,7 @@ const DocumentsScreen = () => {
       }
     } catch (error) {
       console.error("Error picking document:", error);
-      Alert.alert("Error", "Could not select file");
+      Alert.alert(t("common.error"), t("documents.couldNotSelectFile"));
     }
   };
 
@@ -156,7 +158,7 @@ const DocumentsScreen = () => {
       // Request camera permission
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission needed", "Camera permission is required to take photos");
+        Alert.alert(t("common.permissionNeeded"), t("documents.cameraPermissionForPhotos"));
         return;
       }
 
@@ -179,18 +181,18 @@ const DocumentsScreen = () => {
         });
         // Auto-fill name if empty
         if (!form.name) {
-          setForm({ ...form, name: `Photo ${new Date().toLocaleDateString()}` });
+          setForm({ ...form, name: `${t("documents.photo")} ${new Date().toLocaleDateString()}` });
         }
       }
     } catch (error) {
       console.error("Error taking photo:", error);
-      Alert.alert("Error", "Could not take photo");
+      Alert.alert(t("common.error"), t("documents.couldNotTakePhoto"));
     }
   };
 
   const handleSubmit = async () => {
     if (!form.name.trim()) {
-      return Alert.alert("Error", "Please provide a document name");
+      return Alert.alert(t("common.error"), t("documents.pleaseProvideDocumentName"));
     }
 
     setIsSubmitting(true);
@@ -233,10 +235,10 @@ const DocumentsScreen = () => {
 
       await fetchDocuments();
       closeModal();
-      Alert.alert("Success", editingDoc ? "Document updated!" : "Document added!");
+      Alert.alert(t("common.success"), editingDoc ? t("documents.documentUpdated") : t("documents.documentAdded"));
     } catch (error) {
       console.error("Error saving document:", error);
-      Alert.alert("Error", "Could not save document");
+      Alert.alert(t("common.error"), t("documents.couldNotSaveDocument"));
     } finally {
       setIsSubmitting(false);
     }
@@ -244,12 +246,12 @@ const DocumentsScreen = () => {
 
   const confirmDelete = (doc) => {
     Alert.alert(
-      "Delete Document",
-      `Are you sure you want to delete "${doc.name}"?`,
+      t("documents.deleteDocument"),
+      t("documents.deleteDocumentConfirm").replace("{{name}}", doc.name || ""),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: () => handleDelete(doc),
         },
@@ -263,7 +265,7 @@ const DocumentsScreen = () => {
       await fetchDocuments();
     } catch (error) {
       console.error("Error deleting document:", error);
-      Alert.alert("Error", "Could not delete document");
+      Alert.alert(t("common.error"), t("documents.couldNotDeleteDocument"));
     }
   };
 
@@ -272,20 +274,20 @@ const DocumentsScreen = () => {
       try {
         await Linking.openURL(doc.fileUrl);
       } catch (error) {
-        Alert.alert("Error", "Could not open file");
+        Alert.alert(t("common.error"), t("documents.couldNotOpenFile"));
       }
     } else {
-      Alert.alert("No File", "This document has no attached file");
+      Alert.alert(t("documents.noFile"), t("documents.noAttachedFile"));
     }
   };
 
   const getCategoryConfig = (category) => {
     const configs = {
-      [DocumentCategories.BILLS]: { icon: "receipt", color: "#F43F5E", label: "Bills" },
-      [DocumentCategories.INSURANCE]: { icon: "shield-checkmark", color: "#8B5CF6", label: "Insurance" },
-      [DocumentCategories.CONTRACTS]: { icon: "document-text", color: "#06B6D4", label: "Contracts" },
-      [DocumentCategories.RECEIPTS]: { icon: "pricetag", color: "#10B981", label: "Receipts" },
-      [DocumentCategories.OTHER]: { icon: "folder", color: "#F59E0B", label: "Other" },
+      [DocumentCategories.BILLS]: { icon: "receipt", color: "#F43F5E", labelKey: "documents.bills" },
+      [DocumentCategories.INSURANCE]: { icon: "shield-checkmark", color: "#8B5CF6", labelKey: "documents.insurance" },
+      [DocumentCategories.CONTRACTS]: { icon: "document-text", color: "#06B6D4", labelKey: "documents.contracts" },
+      [DocumentCategories.RECEIPTS]: { icon: "pricetag", color: "#10B981", labelKey: "documents.receipts" },
+      [DocumentCategories.OTHER]: { icon: "folder", color: "#F59E0B", labelKey: "documents.other" },
     };
     return configs[category] || configs[DocumentCategories.OTHER];
   };
@@ -296,7 +298,7 @@ const DocumentsScreen = () => {
   });
 
   const formatDate = (dateString) => {
-    if (!dateString) return "No date";
+    if (!dateString) return t("documents.noDate");
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
@@ -308,12 +310,12 @@ const DocumentsScreen = () => {
 
   const renderCategoryTabs = () => {
     const tabs = [
-      { id: "all", label: "All", icon: "apps" },
-      { id: DocumentCategories.BILLS, label: "Bills", icon: "receipt" },
-      { id: DocumentCategories.INSURANCE, label: "Insurance", icon: "shield-checkmark" },
-      { id: DocumentCategories.CONTRACTS, label: "Contracts", icon: "document-text" },
-      { id: DocumentCategories.RECEIPTS, label: "Receipts", icon: "pricetag" },
-      { id: DocumentCategories.OTHER, label: "Other", icon: "folder" },
+      { id: "all", labelKey: "common.all", icon: "apps" },
+      { id: DocumentCategories.BILLS, labelKey: "documents.bills", icon: "receipt" },
+      { id: DocumentCategories.INSURANCE, labelKey: "documents.insurance", icon: "shield-checkmark" },
+      { id: DocumentCategories.CONTRACTS, labelKey: "documents.contracts", icon: "document-text" },
+      { id: DocumentCategories.RECEIPTS, labelKey: "documents.receipts", icon: "pricetag" },
+      { id: DocumentCategories.OTHER, labelKey: "documents.other", icon: "folder" },
     ];
 
     return (
@@ -343,7 +345,7 @@ const DocumentsScreen = () => {
                 categoryFilter === tab.id && styles.categoryTabTextActive,
               ]}
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -372,7 +374,7 @@ const DocumentsScreen = () => {
           <View style={styles.cardMeta}>
             <View style={[styles.categoryBadge, { backgroundColor: config.color + "20" }]}>
               <Text style={[styles.categoryBadgeText, { color: config.color }]}>
-                {config.label}
+                {t(config.labelKey)}
               </Text>
             </View>
             <Text style={styles.cardDate}>{formatDate(item.date)}</Text>
@@ -393,7 +395,7 @@ const DocumentsScreen = () => {
             <View style={styles.fileIndicator}>
               <Ionicons name="attach" size={14} color="#71717A" />
               <Text style={styles.fileIndicatorText} numberOfLines={1}>
-                {item.fileName || "Attached file"}
+                    {item.fileName || t("documents.attachedFile")}
               </Text>
             </View>
           )}
@@ -435,7 +437,7 @@ const DocumentsScreen = () => {
                 color={isSelected ? "#FFFFFF" : "#71717A"}
               />
               <Text style={[styles.categoryChipText, isSelected && { color: "#FFFFFF" }]}>
-                {config.label}
+                {t(config.labelKey)}
               </Text>
             </TouchableOpacity>
           );
@@ -452,7 +454,7 @@ const DocumentsScreen = () => {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.title}>Documents</Text>
+          <Text style={styles.title}>{t("documents.title")}</Text>
           <TouchableOpacity style={styles.addButton} onPress={() => openModal()}>
             <Ionicons name="add" size={20} color="#FFFFFF" />
           </TouchableOpacity>
@@ -482,9 +484,9 @@ const DocumentsScreen = () => {
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
                 <Ionicons name="document-outline" size={64} color="#3F3F46" />
-                <Text style={styles.emptyTitle}>No Documents</Text>
+                <Text style={styles.emptyTitle}>{t("documents.noDocuments")}</Text>
                 <Text style={styles.emptySubtitle}>
-                  Add your first document by tapping the + button
+                  {t("documents.addFirstDocument")}
                 </Text>
               </View>
             }
@@ -506,7 +508,7 @@ const DocumentsScreen = () => {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {editingDoc ? "Edit Document" : "Add Document"}
+                {editingDoc ? t("documents.editDocument") : t("documents.addDocument")}
               </Text>
               <TouchableOpacity onPress={closeModal}>
                 <Ionicons name="close" size={24} color="#A1A1AA" />
@@ -515,21 +517,21 @@ const DocumentsScreen = () => {
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Name */}
-              <Text style={styles.inputLabel}>Name *</Text>
+              <Text style={styles.inputLabel}>{t("documents.name")} *</Text>
               <TextInput
                 style={styles.input}
                 value={form.name}
                 onChangeText={(text) => setForm({ ...form, name: text })}
-                placeholder="e.g., Electricity Bill January"
+                placeholder={t("documents.namePlaceholder")}
                 placeholderTextColor="#71717A"
               />
 
               {/* Category */}
-              <Text style={styles.inputLabel}>Category</Text>
+              <Text style={styles.inputLabel}>{t("documents.category")}</Text>
               {renderCategoryChips()}
 
               {/* Amount */}
-              <Text style={styles.inputLabel}>Amount (€)</Text>
+              <Text style={styles.inputLabel}>{t("documents.amount")}</Text>
               <TextInput
                 style={styles.input}
                 value={form.amount}
@@ -540,7 +542,7 @@ const DocumentsScreen = () => {
               />
 
               {/* Date */}
-              <Text style={styles.inputLabel}>Date</Text>
+              <Text style={styles.inputLabel}>{t("documents.date")}</Text>
               <TextInput
                 style={styles.input}
                 value={form.date}
@@ -550,27 +552,27 @@ const DocumentsScreen = () => {
               />
 
               {/* Description */}
-              <Text style={styles.inputLabel}>Description</Text>
+              <Text style={styles.inputLabel}>{t("documents.description")}</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={form.description}
                 onChangeText={(text) => setForm({ ...form, description: text })}
-                placeholder="Optional notes..."
+                placeholder={t("documents.descriptionPlaceholder")}
                 placeholderTextColor="#71717A"
                 multiline
                 numberOfLines={3}
               />
 
               {/* File Upload */}
-              <Text style={styles.inputLabel}>Attach File</Text>
+              <Text style={styles.inputLabel}>{t("documents.attachFile")}</Text>
               <View style={styles.filePickerRow}>
                 <TouchableOpacity style={styles.filePickerOption} onPress={takePhoto}>
                   <Ionicons name="camera" size={24} color="#8B5CF6" />
-                  <Text style={styles.filePickerOptionText}>Camera</Text>
+                  <Text style={styles.filePickerOptionText}>{t("documents.camera")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.filePickerOption} onPress={pickDocument}>
                   <Ionicons name="document" size={24} color="#8B5CF6" />
-                  <Text style={styles.filePickerOptionText}>File</Text>
+                  <Text style={styles.filePickerOptionText}>{t("documents.file")}</Text>
                 </TouchableOpacity>
               </View>
               
@@ -596,7 +598,7 @@ const DocumentsScreen = () => {
             {/* Actions */}
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelButton} onPress={closeModal}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>{t("common.cancel")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
@@ -607,7 +609,7 @@ const DocumentsScreen = () => {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.saveButtonText}>
-                    {editingDoc ? "Update" : "Add"}
+                    {editingDoc ? t("common.save") : t("common.add")}
                   </Text>
                 )}
               </TouchableOpacity>
