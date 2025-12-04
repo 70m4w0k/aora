@@ -1,8 +1,11 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../constants';
+import { COLORS, TYPOGRAPHY } from '../constants';
 import { getXPForNextLevel, getTotalXPForLevel } from '../../../../lib/appwrite';
+import { createGlow, getRarityColor } from '../utils/visualEffects';
+import XPBar from './XPBar';
+import GlowView from './GlowView';
 
 export default function GlobalProgressCard({ 
   userProgress, 
@@ -22,6 +25,8 @@ export default function GlobalProgressCard({
   const xpInCurrentLevel = Math.max(0, currentXP - xpForCurrentLevel);
   const progressPercent = Math.min((xpInCurrentLevel / xpForNextLevel) * 100, 100);
 
+  const rarityColor = getRarityColor(currentLevel);
+
   return (
     <TouchableOpacity 
       style={styles.card}
@@ -30,11 +35,13 @@ export default function GlobalProgressCard({
     >
       <View style={styles.header}>
         <View>
-          <Text style={styles.label}>Level</Text>
-          <Text style={styles.level}>{userProgress.globalLevel || 1}</Text>
+          <Text style={styles.label}>LEVEL</Text>
+          <GlowView glowColor={rarityColor} intensity={0.6} style={styles.levelContainer}>
+            <Text style={[styles.level, { color: rarityColor }]}>{userProgress.globalLevel || 1}</Text>
+          </GlowView>
         </View>
         <View style={styles.xpContainer}>
-          <Text style={styles.label}>Total XP</Text>
+          <Text style={styles.label}>TOTAL XP</Text>
           <Text style={styles.xp}>{userProgress.totalXP || 0}</Text>
         </View>
       </View>
@@ -46,17 +53,15 @@ export default function GlobalProgressCard({
           },
         ]}
       >
-        <View style={styles.xpBarBackground}>
-          <Animated.View 
-            style={[
-              styles.xpBarFill, 
-              { width: `${progressPercent}%` }
-            ]} 
-          />
-        </View>
-        <Text style={styles.xpBarText}>
-          {Math.floor(xpInCurrentLevel)} / {xpForNextLevel} XP to level {currentLevel + 1}
-        </Text>
+        <XPBar
+          currentXP={currentXP}
+          xpForNextLevel={xpForNextLevel}
+          xpForCurrentLevel={xpForCurrentLevel}
+          level={currentLevel}
+          animated={true}
+          showText={true}
+          height={10}
+        />
       </Animated.View>
       <View style={styles.footer}>
         <TouchableOpacity 
@@ -93,6 +98,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 16,
     padding: 20,
+    ...createGlow(COLORS.glows.primary, 0.3),
   },
   header: {
     flexDirection: 'row',
@@ -100,42 +106,28 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 12,
+    ...TYPOGRAPHY.label,
+    fontSize: 11,
     color: COLORS.textTertiary,
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  levelContainer: {
+    alignItems: 'flex-start',
   },
   level: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: COLORS.accent.primary,
+    ...TYPOGRAPHY.hero,
+    fontSize: 40,
   },
   xpContainer: {
     alignItems: 'flex-end',
   },
   xp: {
-    fontSize: 24,
-    fontWeight: '600',
+    ...TYPOGRAPHY.stat,
+    fontSize: 22,
     color: COLORS.textPrimary,
   },
   xpBarContainer: {
     marginBottom: 16,
-  },
-  xpBarBackground: {
-    height: 8,
-    backgroundColor: COLORS.elevated,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  xpBarFill: {
-    height: '100%',
-    backgroundColor: COLORS.accent.primary,
-    borderRadius: 4,
-  },
-  xpBarText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
   },
   footer: {
     flexDirection: 'row',

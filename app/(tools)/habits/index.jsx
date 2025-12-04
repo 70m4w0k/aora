@@ -53,6 +53,7 @@ import {
   handleCompleteTier as handleCompleteTierUtil
 } from './handlers';
 import GlobalProgressCard from './components/GlobalProgressCard';
+import CharacterProfileCard from './components/CharacterProfileCard';
 import MissedQuestsBanner from './components/MissedQuestsBanner';
 import ArcsSection from './components/ArcsSection';
 import TodaysQuestsSection from './components/TodaysQuestsSection';
@@ -967,14 +968,18 @@ const HabitsTracker = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent.primary} />
         }
       >
-        {/* Global Progress Card */}
-        <GlobalProgressCard
+        {/* Character Profile Card */}
+        <CharacterProfileCard
+          user={user}
           userProgress={userProgress}
           unlockedTitles={unlockedTitles}
           unlockedAchievements={unlockedAchievements}
+          questStreaks={questStreaks}
+          arcs={arcs}
           xpBarPulse={xpBarPulse}
           onPressTitles={() => setTitlesAchievementsModalVisible(true)}
           onPressXpHistory={() => setXpHistoryModalVisible(true)}
+          onPressCharacter={() => setTitlesAchievementsModalVisible(true)}
         />
 
         {/* Missed Quests Notification Banner */}
