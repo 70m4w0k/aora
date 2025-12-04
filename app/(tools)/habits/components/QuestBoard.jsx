@@ -33,6 +33,18 @@ export default function QuestBoard({
   const completedCount = Object.values(questCompletions).filter(Boolean).length;
   const totalCount = todayQuests.length;
 
+  // Sort quests: incomplete first, completed last
+  const sortedQuests = [...todayQuests].sort((a, b) => {
+    const aCompleted = questCompletions[a.$id] || false;
+    const bCompleted = questCompletions[b.$id] || false;
+    
+    // If both have same completion status, maintain original order
+    if (aCompleted === bCompleted) return 0;
+    
+    // Incomplete quests come first (return -1), completed come last (return 1)
+    return aCompleted ? 1 : -1;
+  });
+
   return (
     <View style={styles.section}>
       {/* Quest Board Header */}
@@ -60,7 +72,7 @@ export default function QuestBoard({
       </View>
 
       {/* Quest List */}
-      {todayQuests.length === 0 ? (
+      {sortedQuests.length === 0 ? (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconContainer}>
             <Ionicons name="checkmark-circle-outline" size={64} color={COLORS.textTertiary} />
@@ -73,7 +85,7 @@ export default function QuestBoard({
         </View>
       ) : (
         <View style={styles.questsContainer}>
-          {todayQuests.map((quest) => {
+          {sortedQuests.map((quest) => {
             const arc = arcs.find(a => {
               const aId = typeof quest.arcId === 'object' ? quest.arcId.$id : quest.arcId;
               return a.$id === aId;
