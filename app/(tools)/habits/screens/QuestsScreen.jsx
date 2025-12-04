@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native
 import { COLORS, TYPOGRAPHY } from '../constants';
 import QuestBoard from '../components/QuestBoard';
 import FilterBar from '../components/FilterBar';
+import QuestCalendarView from '../components/QuestCalendarView';
 import { applyFiltersAndSort } from '../utils/filters';
 
 /**
@@ -81,6 +82,15 @@ export default function QuestsScreen({
         overridePenalty={handlers.overridePenalty}
       />
 
+      {/* Quest Calendar - At the end */}
+      <View style={styles.calendarSection}>
+        <QuestCalendarView
+          quests={quests}
+          arcs={arcs}
+          userId={user?.$id}
+        />
+      </View>
+
       <View style={{ height: 100 }} />
     </ScrollView>
   );
@@ -106,6 +116,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  calendarSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: COLORS.surface,
+    marginBottom: 16,
   },
 });
 
