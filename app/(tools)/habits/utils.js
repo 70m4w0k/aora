@@ -1,4 +1,4 @@
-import { TITLES, ACHIEVEMENTS } from './constants';
+import { TITLES, ACHIEVEMENTS, COLORS } from './constants';
 import { QuestFrequencies, TargetTypes } from '../../../lib/appwrite';
 
 // Helper function to check and unlock titles/achievements
