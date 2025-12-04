@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Platform,
   Modal,
   TextInput,
   KeyboardAvoidingView,
@@ -73,6 +72,8 @@ import XpHistoryModal from './components/XpHistoryModal';
 import StreakStatisticsModal from './components/StreakStatisticsModal';
 import StreakCalendarModal from './components/StreakCalendarModal';
 import TitlesAchievementsModal from './components/TitlesAchievementsModal';
+import XpNotification from './components/XpNotification';
+import Header from './components/Header';
 
 
 const HabitsTracker = () => {
@@ -173,8 +174,6 @@ const HabitsTracker = () => {
 
   // XP Notification
   const [xpNotification, setXpNotification] = useState(null);
-  const xpAnim = useRef(new Animated.Value(0)).current;
-  const xpScale = useRef(new Animated.Value(0)).current;
   
   // XP Bar Pulse Animation
   const xpBarPulse = useRef(new Animated.Value(1)).current;
@@ -380,86 +379,16 @@ const HabitsTracker = () => {
   const showLevelUp = (type, level, xpEarned, arc = null) => {
     setLevelUpData({ type, level, xpEarned, arc });
     setLevelUpModalVisible(true);
-    
-    // Animate modal entry
-    xpAnim.setValue(0);
-    xpScale.setValue(0);
-    Animated.parallel([
-      Animated.spring(xpAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.spring(xpScale, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   const showTitleUnlock = (titleOrAchievement) => {
     setNewlyUnlockedTitle(titleOrAchievement);
     setTitleUnlockModalVisible(true);
-    
-    // Animate modal entry
-    xpAnim.setValue(0);
-    xpScale.setValue(0);
-    Animated.parallel([
-      Animated.spring(xpAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.spring(xpScale, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
   };
 
   // Show XP Notification
   const showXPNotification = (xp, arcColor = null) => {
     setXpNotification({ xp, arcColor });
-    
-    // Reset animations
-    xpAnim.setValue(0);
-    xpScale.setValue(0);
-    
-    // Animate scale (pop in)
-    Animated.spring(xpScale, {
-      toValue: 1,
-      tension: 100,
-      friction: 8,
-      useNativeDriver: true,
-    }).start();
-    
-    // Animate upward and fade out
-    Animated.parallel([
-      Animated.timing(xpAnim, {
-        toValue: 1,
-        duration: 2000,
-        useNativeDriver: true,
-      }),
-      Animated.sequence([
-        Animated.delay(300),
-        Animated.timing(xpScale, {
-          toValue: 0.8,
-          duration: 1700,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start(() => {
-      // Reset after animation
-      setXpNotification(null);
-      xpAnim.setValue(0);
-      xpScale.setValue(0);
-    });
     
     // Pulse XP bar
     Animated.sequence([
@@ -2237,19 +2166,10 @@ const HabitsTracker = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>NEOSYSTEM</Text>
-            <Text style={styles.headerSubtitle}>Habits Tracker</Text>
-          </View>
-          <View style={{ width: 40 }} />
-        </View>
+        <Header
+          onBackPress={() => router.back()}
+          onSettingsPress={() => setSettingsModalVisible(true)}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.accent.primary} />
         </View>
@@ -2260,67 +2180,16 @@ const HabitsTracker = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* XP Notification */}
-      {xpNotification && (
-        <Animated.View
-          style={[
-            styles.xpNotification,
-            {
-              opacity: xpAnim.interpolate({
-                inputRange: [0, 0.3, 1],
-                outputRange: [0, 1, 0],
-              }),
-              transform: [
-                {
-                  translateY: xpAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -100],
-                  }),
-                },
-                {
-                  scale: xpScale.interpolate({
-                    inputRange: [0, 0.5, 1],
-                    outputRange: [0, 1.2, 1],
-                  }),
-                },
-              ],
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <View style={[
-            styles.xpNotificationContent,
-            xpNotification.arcColor && { borderColor: xpNotification.arcColor },
-          ]}>
-            <Ionicons name="star" size={20} color={xpNotification.arcColor || COLORS.accent.primary} />
-            <Text style={[
-              styles.xpNotificationText,
-              xpNotification.arcColor && { color: xpNotification.arcColor },
-            ]}>
-              +{xpNotification.xp} XP
-            </Text>
-          </View>
-        </Animated.View>
-      )}
+      <XpNotification 
+        xpNotification={xpNotification}
+        onAnimationComplete={() => setXpNotification(null)}
+      />
 
       {/* Header */}
-      <View style={[styles.header, Platform.OS === 'android' && styles.headerAndroid]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>NEOSYSTEM</Text>
-          <Text style={styles.headerSubtitle}>Habits Tracker</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => setSettingsModalVisible(true)}
-        >
-          <Ionicons name="settings-outline" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-      </View>
+      <Header
+        onBackPress={() => router.back()}
+        onSettingsPress={() => setSettingsModalVisible(true)}
+      />
 
       <ScrollView
         style={styles.content}
@@ -2609,43 +2478,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 8 : 0,
-    paddingBottom: 12,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  headerAndroid: {
-    paddingTop: 8,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerContent: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    letterSpacing: 1,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: COLORS.textTertiary,
-    marginTop: 2,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -2844,39 +2676,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textTertiary,
     textAlign: 'center',
-  },
-  // XP Notification Styles
-  xpNotification: {
-    position: 'absolute',
-    top: 100,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-    pointerEvents: 'none',
-  },
-  xpNotificationContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: COLORS.accent.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    gap: 8,
-  },
-  xpNotificationText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.accent.primary,
-    letterSpacing: 0.5,
   },
   // Alert Modal Styles
   alertOverlay: {
