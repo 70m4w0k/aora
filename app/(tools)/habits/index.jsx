@@ -3,8 +3,6 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  RefreshControl,
-  ActivityIndicator,
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,16 +50,6 @@ import {
   handleCompleteQuest as handleCompleteQuestUtil,
   handleCompleteTier as handleCompleteTierUtil
 } from './handlers';
-import GlobalProgressCard from './components/GlobalProgressCard';
-import CharacterProfileCard from './components/CharacterProfileCard';
-import MissedQuestsBanner from './components/MissedQuestsBanner';
-import ArcsSection from './components/ArcsSection';
-import TodaysQuestsSection from './components/TodaysQuestsSection';
-import QuestBoard from './components/QuestBoard';
-import TiersSection from './components/TiersSection';
-import StatisticsSection from './components/StatisticsSection';
-import StreakStatisticsSection from './components/StreakStatisticsSection';
-import StreakCalendarSection from './components/StreakCalendarSection';
 import ArcModal from './components/ArcModal';
 import TierModal from './components/TierModal';
 import QuestModal from './components/QuestModal';
@@ -78,15 +66,14 @@ import TitlesAchievementsModal from './components/TitlesAchievementsModal';
 import XpNotification from './components/XpNotification';
 import Header from './components/Header';
 import FloatingActionButton from './components/FloatingActionButton';
-import FilterBar from './components/FilterBar';
 import TabSwitcher from './components/TabSwitcher';
-import { applyFiltersAndSort } from './utils/filters';
+import AnimatedScreen from './components/AnimatedScreen';
+import { SkeletonCard, SkeletonQuestCard } from './components/SkeletonLoader';
 import DashboardScreen from './screens/DashboardScreen';
 import QuestsScreen from './screens/QuestsScreen';
 import ArcsScreen from './screens/ArcsScreen';
 import ProgressScreen from './screens/ProgressScreen';
 import CharacterScreen from './screens/CharacterScreen';
-import { HabitsProvider } from './context/HabitsContext';
 
 
 const HabitsTracker = () => {
@@ -983,98 +970,103 @@ const HabitsTracker = () => {
           onBackPress={() => router.back()}
           onSettingsPress={() => setSettingsModalVisible(true)}
         />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.accent.primary} />
-        </View>
+        <TabSwitcher activeTab={activeTab} onTabChange={setActiveTab} />
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <SkeletonCard style={{ margin: 16 }} />
+          <SkeletonQuestCard style={{ marginHorizontal: 16 }} />
+          <SkeletonQuestCard style={{ marginHorizontal: 16 }} />
+          <SkeletonQuestCard style={{ marginHorizontal: 16 }} />
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
-  // Render active screen based on tab
+  // Render active screen based on tab with animations
   const renderActiveScreen = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return (
-          <DashboardScreen
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            todayQuests={todayQuests}
-            arcs={arcs}
-            questStreaks={questStreaks}
-            questCompletions={questCompletions}
-            questPenalties={questPenalties}
-            userProgress={userProgress}
-            notificationsEnabled={notificationsEnabled}
-            missedQuests={missedQuests}
-            user={user}
-            household={household}
-            unlockedTitles={unlockedTitles}
-            unlockedAchievements={unlockedAchievements}
-            xpBarPulse={xpBarPulse}
-            handlers={handlers}
-          />
-        );
-      case 'quests':
-        return (
-          <QuestsScreen
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            quests={quests}
-            arcs={arcs}
-            questStreaks={questStreaks}
-            questCompletions={questCompletions}
-            questPenalties={questPenalties}
-            userProgress={userProgress}
-            notificationsEnabled={notificationsEnabled}
-            missedQuests={missedQuests}
-            user={user}
-            household={household}
-            handlers={handlers}
-          />
-        );
-      case 'arcs':
-        return (
-          <ArcsScreen
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            arcs={arcs}
-            quests={quests}
-            userProgress={userProgress}
-            getArcProgress={getArcProgress}
-            handlers={handlers}
-          />
-        );
-      case 'progress':
-        return (
-          <ProgressScreen
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            statistics={statistics}
-            questStreaks={questStreaks}
-            handlers={handlers}
-          />
-        );
-      case 'character':
-        return (
-          <CharacterScreen
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            user={user}
-            userProgress={userProgress}
-            unlockedTitles={unlockedTitles}
-            unlockedAchievements={unlockedAchievements}
-            questStreaks={questStreaks}
-            arcs={arcs}
-            xpBarPulse={xpBarPulse}
-            tiers={tiers}
-            tierProgress={tierProgress}
-            tierCompletions={tierCompletions}
-            handlers={handlers}
-          />
-        );
-      default:
-        return null;
-    }
+    const tabs = ['dashboard', 'quests', 'arcs', 'progress', 'character'];
+    
+    return (
+      <View style={{ flex: 1, position: 'relative' }}>
+        {tabs.map((tab) => (
+          <AnimatedScreen key={tab} active={activeTab === tab} direction="horizontal">
+            {tab === 'dashboard' && (
+              <DashboardScreen
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                todayQuests={todayQuests}
+                arcs={arcs}
+                questStreaks={questStreaks}
+                questCompletions={questCompletions}
+                questPenalties={questPenalties}
+                userProgress={userProgress}
+                notificationsEnabled={notificationsEnabled}
+                missedQuests={missedQuests}
+                user={user}
+                household={household}
+                unlockedTitles={unlockedTitles}
+                unlockedAchievements={unlockedAchievements}
+                xpBarPulse={xpBarPulse}
+                handlers={handlers}
+              />
+            )}
+            {tab === 'quests' && (
+              <QuestsScreen
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                quests={quests}
+                arcs={arcs}
+                questStreaks={questStreaks}
+                questCompletions={questCompletions}
+                questPenalties={questPenalties}
+                userProgress={userProgress}
+                notificationsEnabled={notificationsEnabled}
+                missedQuests={missedQuests}
+                user={user}
+                household={household}
+                handlers={handlers}
+              />
+            )}
+            {tab === 'arcs' && (
+              <ArcsScreen
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                arcs={arcs}
+                quests={quests}
+                userProgress={userProgress}
+                getArcProgress={getArcProgress}
+                handlers={handlers}
+              />
+            )}
+            {tab === 'progress' && (
+              <ProgressScreen
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                statistics={statistics}
+                questStreaks={questStreaks}
+                handlers={handlers}
+              />
+            )}
+            {tab === 'character' && (
+              <CharacterScreen
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                user={user}
+                userProgress={userProgress}
+                unlockedTitles={unlockedTitles}
+                unlockedAchievements={unlockedAchievements}
+                questStreaks={questStreaks}
+                arcs={arcs}
+                xpBarPulse={xpBarPulse}
+                tiers={tiers}
+                tierProgress={tierProgress}
+                tierCompletions={tierCompletions}
+                handlers={handlers}
+              />
+            )}
+          </AnimatedScreen>
+        ))}
+      </View>
+    );
   };
 
   return (

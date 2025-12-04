@@ -39,7 +39,6 @@ export default function QuestBoard({
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.titleContainer}>
-            <Ionicons name="scroll" size={20} color={COLORS.accent.primary} />
             <Text style={styles.title}>TODAY'S QUESTS</Text>
           </View>
           <View style={styles.countBadge}>
