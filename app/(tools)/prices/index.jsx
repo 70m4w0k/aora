@@ -19,6 +19,7 @@ import { router } from "expo-router";
 
 import BarcodeScanner from "../../../components/BarcodeScanner";
 import { useGlobalContext } from "../../../context/GlobalProvider";
+import { useTranslation } from "../../../hooks/useTranslation";
 import {
   getHouseholdProducts,
   getHouseholdStores,
@@ -70,6 +71,7 @@ const CATEGORY_CONFIG = {
 
 const PriceTracker = () => {
   const { user } = useGlobalContext();
+  const t = useTranslation();
   const householdId = user?.householdId;
 
   const [products, setProducts] = useState([]);
@@ -185,14 +187,14 @@ const PriceTracker = () => {
       setAddProductModalVisible(true);
     } catch (error) {
       setLookingUp(false);
-      Alert.alert("Error", "Failed to lookup barcode");
+      Alert.alert(t("common.error"), t("prices.failedToLookupBarcode"));
     }
   };
 
   // Add new product
   const handleAddProduct = async () => {
     if (!newProduct.name.trim()) {
-      Alert.alert("Error", "Please enter a product name");
+      Alert.alert(t("common.error"), t("prices.pleaseEnterProductName"));
       return;
     }
 
@@ -207,16 +209,16 @@ const PriceTracker = () => {
       setNewProduct({ name: "", brand: "", barcode: "", category: "groceries", unit: "g", weight: "", imageUrl: "" });
       setOffData(null);
       fetchData();
-      Alert.alert("Success", "Product added!");
+      Alert.alert(t("common.success"), t("prices.productAdded"));
     } catch (error) {
-      Alert.alert("Error", "Failed to add product");
+      Alert.alert(t("common.error"), t("prices.failedToAddProduct"));
     }
   };
 
   // Update product
   const handleUpdateProduct = async () => {
     if (!selectedProduct || !newProduct.name.trim()) {
-      Alert.alert("Error", "Please enter a product name");
+      Alert.alert(t("common.error"), t("prices.pleaseEnterProductName"));
       return;
     }
 
@@ -232,21 +234,21 @@ const PriceTracker = () => {
       setIsEditingProduct(false);
       setSelectedProduct({ ...selectedProduct, ...newProduct, weight: newProduct.weight ? parseFloat(newProduct.weight) : null });
       fetchData();
-      Alert.alert("Success", "Product updated!");
+      Alert.alert(t("common.success"), t("prices.productUpdated"));
     } catch (error) {
-      Alert.alert("Error", "Failed to update product");
+      Alert.alert(t("common.error"), t("prices.failedToUpdateProduct"));
     }
   };
 
   // Delete product
   const handleDeleteProduct = () => {
     Alert.alert(
-      "Delete Product",
-      `Are you sure you want to delete "${selectedProduct?.name}"? This will also delete all price history.`,
+      t("prices.deleteProduct"),
+      t("prices.deleteProductConfirm").replace("{{name}}", selectedProduct?.name || ""),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             try {
@@ -254,9 +256,9 @@ const PriceTracker = () => {
               setProductDetailVisible(false);
               setSelectedProduct(null);
               fetchData();
-              Alert.alert("Success", "Product deleted!");
+              Alert.alert(t("common.success"), t("prices.productDeleted"));
             } catch (error) {
-              Alert.alert("Error", "Failed to delete product");
+              Alert.alert(t("common.error"), t("prices.failedToDeleteProduct"));
             }
           },
         },
@@ -267,7 +269,7 @@ const PriceTracker = () => {
   // Add new store
   const handleAddStore = async () => {
     if (!newStore.name.trim()) {
-      Alert.alert("Error", "Please enter a store name");
+      Alert.alert(t("common.error"), t("prices.pleaseEnterStoreName"));
       return;
     }
 
@@ -280,9 +282,9 @@ const PriceTracker = () => {
       setAddStoreModalVisible(false);
       setNewStore({ name: "", address: "" });
       fetchData();
-      Alert.alert("Success", "Store added!");
+      Alert.alert(t("common.success"), t("prices.storeAdded"));
     } catch (error) {
-      Alert.alert("Error", "Failed to add store");
+      Alert.alert(t("common.error"), t("prices.failedToAddStore"));
     }
   };
 
@@ -295,7 +297,7 @@ const PriceTracker = () => {
 
   const handleUpdateStore = async () => {
     if (!editStore || !newStore.name.trim()) {
-      Alert.alert("Error", "Please enter a store name");
+      Alert.alert(t("common.error"), t("prices.pleaseEnterStoreName"));
       return;
     }
 
@@ -308,29 +310,29 @@ const PriceTracker = () => {
       setEditStore(null);
       setNewStore({ name: "", address: "" });
       fetchData();
-      Alert.alert("Success", "Store updated!");
+      Alert.alert(t("common.success"), t("prices.storeUpdated"));
     } catch (error) {
-      Alert.alert("Error", "Failed to update store");
+      Alert.alert(t("common.error"), t("prices.failedToUpdateStore"));
     }
   };
 
   // Delete store
   const handleDeleteStore = (store) => {
     Alert.alert(
-      "Delete Store",
-      `Are you sure you want to delete "${store.name}"?`,
+      t("prices.deleteStore"),
+      t("prices.deleteStoreConfirm").replace("{{name}}", store.name || ""),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteStore(store.$id);
               fetchData();
-              Alert.alert("Success", "Store deleted!");
+              Alert.alert(t("common.success"), t("prices.storeDeleted"));
             } catch (error) {
-              Alert.alert("Error", "Failed to delete store");
+              Alert.alert(t("common.error"), t("prices.failedToDeleteStore"));
             }
           },
         },
@@ -341,7 +343,7 @@ const PriceTracker = () => {
   // Add price entry
   const handleAddPrice = async () => {
     if (!newPrice.productId || !newPrice.storeId || !newPrice.price) {
-      Alert.alert("Error", "Please fill all required fields");
+      Alert.alert(t("common.error"), t("prices.pleaseFillAllRequiredFields"));
       return;
     }
 
@@ -367,21 +369,21 @@ const PriceTracker = () => {
         openProductDetail(selectedProduct);
       }
       
-      Alert.alert("Success", "Price recorded!");
+      Alert.alert(t("common.success"), t("prices.priceRecorded"));
     } catch (error) {
-      Alert.alert("Error", "Failed to record price");
+      Alert.alert(t("common.error"), t("prices.failedToRecordPrice"));
     }
   };
 
   // Delete price entry
   const handleDeletePriceEntry = (entry) => {
     Alert.alert(
-      "Delete Price Entry",
-      "Are you sure you want to delete this price entry?",
+      t("prices.deletePriceEntry"),
+      t("prices.deletePriceEntryConfirm"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             try {
@@ -433,7 +435,7 @@ const PriceTracker = () => {
   const getStoreName = (storeId) => {
     const id = typeof storeId === 'object' ? storeId.$id : storeId;
     const store = stores.find(s => s.$id === id);
-    return store?.name || "Unknown Store";
+    return store?.name || t("prices.unknownStore");
   };
 
   // Render product card
@@ -455,7 +457,7 @@ const PriceTracker = () => {
         <View style={styles.productInfo}>
           <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
           <Text style={styles.productBrand} numberOfLines={1}>
-            {[product.brand, product.weight && `${product.weight}${product.unit || 'g'}`].filter(Boolean).join(' • ') || 'No details'}
+            {[product.brand, product.weight && `${product.weight}${product.unit || 'g'}`].filter(Boolean).join(' • ') || t("prices.noDetails")}
           </Text>
         </View>
         <TouchableOpacity 
@@ -494,7 +496,7 @@ const PriceTracker = () => {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Price Tracker</Text>
+        <Text style={styles.headerTitle}>{t("prices.title")}</Text>
         <TouchableOpacity style={styles.scanButton} onPress={() => setScannerVisible(true)}>
           <Ionicons name="barcode-outline" size={24} color={COLORS.accent} />
         </TouchableOpacity>
@@ -505,7 +507,7 @@ const PriceTracker = () => {
         <Ionicons name="search" size={20} color={COLORS.textTertiary} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search products..."
+          placeholder={t("prices.searchProducts")}
           placeholderTextColor={COLORS.textTertiary}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -529,7 +531,7 @@ const PriceTracker = () => {
             color={activeTab === "products" ? COLORS.accent : COLORS.textTertiary} 
           />
           <Text style={[styles.tabText, activeTab === "products" && styles.tabTextActive]}>
-            Products ({products.length})
+            {t("prices.products")} ({products.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -542,7 +544,7 @@ const PriceTracker = () => {
             color={activeTab === "stores" ? COLORS.accent : COLORS.textTertiary} 
           />
           <Text style={[styles.tabText, activeTab === "stores" && styles.tabTextActive]}>
-            Stores ({stores.length})
+            {t("prices.stores")} ({stores.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -560,8 +562,8 @@ const PriceTracker = () => {
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="cube-outline" size={64} color={COLORS.textTertiary} />
-              <Text style={styles.emptyTitle}>No products yet</Text>
-              <Text style={styles.emptySubtitle}>Scan a barcode or add manually</Text>
+              <Text style={styles.emptyTitle}>{t("prices.noProductsYet")}</Text>
+              <Text style={styles.emptySubtitle}>{t("prices.scanBarcodeOrAddManually")}</Text>
             </View>
           }
         />
@@ -577,8 +579,8 @@ const PriceTracker = () => {
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="storefront-outline" size={64} color={COLORS.textTertiary} />
-              <Text style={styles.emptyTitle}>No stores yet</Text>
-              <Text style={styles.emptySubtitle}>Add your frequently visited stores</Text>
+              <Text style={styles.emptyTitle}>{t("prices.noStoresYet")}</Text>
+              <Text style={styles.emptySubtitle}>{t("prices.addFrequentlyVisitedStores")}</Text>
             </View>
           }
         />
@@ -604,7 +606,7 @@ const PriceTracker = () => {
         <View style={styles.lookupOverlay}>
           <View style={styles.lookupCard}>
             <ActivityIndicator size="large" color={COLORS.accent} />
-            <Text style={styles.lookupText}>Looking up product...</Text>
+            <Text style={styles.lookupText}>{t("prices.lookingUpProduct")}</Text>
           </View>
         </View>
       )}
@@ -615,7 +617,7 @@ const PriceTracker = () => {
           <ScrollView style={{ maxHeight: '90%' }}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add Product</Text>
+                <Text style={styles.modalTitle}>{t("prices.addProduct")}</Text>
                 <TouchableOpacity onPress={() => {
                   setAddProductModalVisible(false);
                   setOffData(null);
@@ -635,17 +637,17 @@ const PriceTracker = () => {
                     <View style={styles.offBannerInfo}>
                       <View style={styles.offBadge}>
                         <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
-                        <Text style={styles.offBadgeText}>Found in Open Food Facts</Text>
+                        <Text style={styles.offBadgeText}>{t("prices.foundInOpenFoodFacts")}</Text>
                       </View>
                       {offData.nutriScore && (
                         <Text style={styles.offNutriScore}>
-                          Nutri-Score: {offData.nutriScore.toUpperCase()}
+                          {t("prices.nutriScore")}: {offData.nutriScore.toUpperCase()}
                         </Text>
                       )}
                     </View>
                   </View>
                   {offData.quantity && (
-                    <Text style={styles.offQuantity}>Package: {offData.quantity}</Text>
+                      <Text style={styles.offQuantity}>{t("prices.package")}: {offData.quantity}</Text>
                   )}
                 </View>
               )}
@@ -659,7 +661,7 @@ const PriceTracker = () => {
 
               <TextInput
                 style={styles.input}
-                placeholder="Product name *"
+                placeholder={t("prices.productName")}
                 placeholderTextColor={COLORS.textTertiary}
                 value={newProduct.name}
                 onChangeText={(text) => setNewProduct({ ...newProduct, name: text })}
@@ -667,7 +669,7 @@ const PriceTracker = () => {
 
               <TextInput
                 style={styles.input}
-                placeholder="Brand (optional)"
+                placeholder={t("prices.brandOptional")}
                 placeholderTextColor={COLORS.textTertiary}
                 value={newProduct.brand}
                 onChangeText={(text) => setNewProduct({ ...newProduct, brand: text })}
@@ -676,10 +678,10 @@ const PriceTracker = () => {
               {/* Weight / Volume */}
               <View style={styles.weightRow}>
                 <View style={styles.weightInputContainer}>
-                  <Text style={styles.inputLabel}>Weight/Volume</Text>
+                  <Text style={styles.inputLabel}>{t("prices.weightVolume")}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. 500"
+                    placeholder={t("prices.weightExample")}
                     placeholderTextColor={COLORS.textTertiary}
                     keyboardType="decimal-pad"
                     value={newProduct.weight}
@@ -687,7 +689,7 @@ const PriceTracker = () => {
                   />
                 </View>
                 <View style={styles.unitInputContainer}>
-                  <Text style={styles.inputLabel}>Unit</Text>
+                  <Text style={styles.inputLabel}>{t("prices.unit")}</Text>
                   <View style={styles.unitButtons}>
                     {['g', 'kg', 'mL', 'L'].map(unit => (
                       <TouchableOpacity
@@ -704,7 +706,7 @@ const PriceTracker = () => {
                 </View>
               </View>
 
-              <Text style={styles.inputLabel}>Category</Text>
+              <Text style={styles.inputLabel}>{t("prices.category")}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
                 {Object.entries(CATEGORY_CONFIG).map(([key, config]) => (
                   <TouchableOpacity
@@ -717,14 +719,14 @@ const PriceTracker = () => {
                   >
                     <Ionicons name={config.icon} size={16} color={newProduct.category === key ? config.color : COLORS.textSecondary} />
                     <Text style={[styles.categoryChipText, newProduct.category === key && { color: config.color }]}>
-                      {key.replace("_", " ")}
+                      {t(`prices.category${key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join('')}`)}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
 
               <TouchableOpacity style={styles.submitButton} onPress={handleAddProduct}>
-                <Text style={styles.submitButtonText}>Add Product</Text>
+                <Text style={styles.submitButtonText}>{t("prices.addProduct")}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -736,7 +738,7 @@ const PriceTracker = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Store</Text>
+              <Text style={styles.modalTitle}>{t("prices.addStore")}</Text>
               <TouchableOpacity onPress={() => setAddStoreModalVisible(false)}>
                 <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
@@ -744,7 +746,7 @@ const PriceTracker = () => {
 
             <TextInput
               style={styles.input}
-              placeholder="Store name *"
+              placeholder={t("prices.storeName")}
               placeholderTextColor={COLORS.textTertiary}
               value={newStore.name}
               onChangeText={(text) => setNewStore({ ...newStore, name: text })}
@@ -752,14 +754,14 @@ const PriceTracker = () => {
 
             <TextInput
               style={styles.input}
-              placeholder="Address (optional)"
+              placeholder={t("prices.addressOptional")}
               placeholderTextColor={COLORS.textTertiary}
               value={newStore.address}
               onChangeText={(text) => setNewStore({ ...newStore, address: text })}
             />
 
             <TouchableOpacity style={styles.submitButton} onPress={handleAddStore}>
-              <Text style={styles.submitButtonText}>Add Store</Text>
+              <Text style={styles.submitButtonText}>{t("prices.addStore")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -770,7 +772,7 @@ const PriceTracker = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Store</Text>
+              <Text style={styles.modalTitle}>{t("prices.editStore")}</Text>
               <TouchableOpacity onPress={() => {
                 setEditStoreModalVisible(false);
                 setEditStore(null);
@@ -782,7 +784,7 @@ const PriceTracker = () => {
 
             <TextInput
               style={styles.input}
-              placeholder="Store name *"
+              placeholder={t("prices.storeName")}
               placeholderTextColor={COLORS.textTertiary}
               value={newStore.name}
               onChangeText={(text) => setNewStore({ ...newStore, name: text })}
@@ -790,14 +792,14 @@ const PriceTracker = () => {
 
             <TextInput
               style={styles.input}
-              placeholder="Address (optional)"
+              placeholder={t("prices.addressOptional")}
               placeholderTextColor={COLORS.textTertiary}
               value={newStore.address}
               onChangeText={(text) => setNewStore({ ...newStore, address: text })}
             />
 
             <TouchableOpacity style={styles.submitButton} onPress={handleUpdateStore}>
-              <Text style={styles.submitButtonText}>Save Changes</Text>
+              <Text style={styles.submitButtonText}>{t("prices.saveChanges")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -808,13 +810,13 @@ const PriceTracker = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Record Price</Text>
+              <Text style={styles.modalTitle}>{t("prices.recordPrice")}</Text>
               <TouchableOpacity onPress={() => setAddPriceModalVisible(false)}>
                 <Ionicons name="close" size={24} color={COLORS.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Select Store *</Text>
+            <Text style={styles.inputLabel}>{t("prices.selectStore")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storeScroll}>
               {stores.map((store) => (
                 <TouchableOpacity
@@ -843,13 +845,13 @@ const PriceTracker = () => {
                 setAddStoreModalVisible(true);
               }}>
                 <Ionicons name="add" size={14} color={COLORS.textTertiary} />
-                <Text style={styles.addStoreChipText}>Add Store</Text>
+                <Text style={styles.addStoreChipText}>{t("prices.addStore")}</Text>
               </TouchableOpacity>
             </ScrollView>
 
             <View style={styles.priceRow}>
               <View style={styles.priceInputContainer}>
-                <Text style={styles.inputLabel}>Price *</Text>
+                <Text style={styles.inputLabel}>{t("prices.price")}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
@@ -860,7 +862,7 @@ const PriceTracker = () => {
                 />
               </View>
               <View style={styles.quantityInputContainer}>
-                <Text style={styles.inputLabel}>Quantity</Text>
+                <Text style={styles.inputLabel}>{t("prices.quantity")}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="1"
@@ -873,7 +875,7 @@ const PriceTracker = () => {
             </View>
 
             <TouchableOpacity style={styles.submitButton} onPress={handleAddPrice}>
-              <Text style={styles.submitButtonText}>Record Price</Text>
+              <Text style={styles.submitButtonText}>{t("prices.recordPrice")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -943,14 +945,14 @@ const PriceTracker = () => {
                 <View style={styles.editProductForm}>
                   <TextInput
                     style={styles.input}
-                    placeholder="Product name *"
+                    placeholder={t("prices.productName")}
                     placeholderTextColor={COLORS.textTertiary}
                     value={newProduct.name}
                     onChangeText={(text) => setNewProduct({ ...newProduct, name: text })}
                   />
                   <TextInput
                     style={styles.input}
-                    placeholder="Brand"
+                    placeholder={t("prices.brand")}
                     placeholderTextColor={COLORS.textTertiary}
                     value={newProduct.brand}
                     onChangeText={(text) => setNewProduct({ ...newProduct, brand: text })}
@@ -959,7 +961,7 @@ const PriceTracker = () => {
                     <View style={styles.weightInputContainer}>
                       <TextInput
                         style={styles.input}
-                        placeholder="Weight"
+                        placeholder={t("prices.weight")}
                         placeholderTextColor={COLORS.textTertiary}
                         keyboardType="decimal-pad"
                         value={newProduct.weight}
@@ -987,10 +989,10 @@ const PriceTracker = () => {
                       style={[styles.editCancelBtn]}
                       onPress={() => setIsEditingProduct(false)}
                     >
-                      <Text style={styles.editCancelBtnText}>Cancel</Text>
+                      <Text style={styles.editCancelBtnText}>{t("common.cancel")}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.editSaveBtn} onPress={handleUpdateProduct}>
-                      <Text style={styles.editSaveBtnText}>Save</Text>
+                      <Text style={styles.editSaveBtnText}>{t("common.save")}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -999,7 +1001,7 @@ const PriceTracker = () => {
               {!isEditingProduct && (
                 <>
                   {/* Latest Prices by Store */}
-                  <Text style={styles.sectionTitle}>Latest Prices</Text>
+                  <Text style={styles.sectionTitle}>{t("prices.latestPrices")}</Text>
                   {productLatestPrices.length > 0 ? (
                     <View style={styles.latestPricesContainer}>
                       {productLatestPrices.map((entry, index) => {
@@ -1011,7 +1013,7 @@ const PriceTracker = () => {
                               <Text style={styles.priceCardStore}>{getStoreName(entry.storeId)}</Text>
                               {isLowest && (
                                 <View style={styles.bestPriceBadge}>
-                                  <Text style={styles.bestPriceText}>Best</Text>
+                                  <Text style={styles.bestPriceText}>{t("prices.best")}</Text>
                                 </View>
                               )}
                             </View>
@@ -1027,11 +1029,11 @@ const PriceTracker = () => {
                       })}
                     </View>
                   ) : (
-                    <Text style={styles.noPricesText}>No prices recorded yet</Text>
+                    <Text style={styles.noPricesText}>{t("prices.noPricesRecordedYet")}</Text>
                   )}
 
                   {/* Price History */}
-                  <Text style={styles.sectionTitle}>Price History</Text>
+                  <Text style={styles.sectionTitle}>{t("prices.priceHistory")}</Text>
                   <View style={styles.historyList}>
                     {productPriceHistory.map((entry) => (
                       <View key={entry.$id} style={styles.historyItem}>
@@ -1056,7 +1058,7 @@ const PriceTracker = () => {
                       </View>
                     ))}
                     {productPriceHistory.length === 0 && (
-                      <Text style={styles.noPricesText}>No history yet</Text>
+                      <Text style={styles.noPricesText}>{t("prices.noHistoryYet")}</Text>
                     )}
                   </View>
 
@@ -1069,7 +1071,7 @@ const PriceTracker = () => {
                     }}
                   >
                     <Ionicons name="add" size={20} color="#FFF" />
-                    <Text style={styles.submitButtonText}>Record New Price</Text>
+                    <Text style={styles.submitButtonText}>{t("prices.recordNewPrice")}</Text>
                   </TouchableOpacity>
                 </>
               )}

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { parseAppwriteError } from '../lib/errorHandler';
+import { useTranslation } from '../hooks/useTranslation';
 
 const COLORS = {
   bg: '#0A0A0C',
@@ -19,12 +20,14 @@ const COLORS = {
 const ErrorDisplay = ({ 
   error, 
   onRetry, 
-  title = "Something went wrong",
+  title = null,
   message = null,
   showRetry = true,
   style 
 }) => {
+  const t = useTranslation();
   const errorMessage = message || parseAppwriteError(error);
+  const displayTitle = title || t("errors.somethingWentWrong");
 
   return (
     <View style={[styles.container, style]}>
@@ -33,20 +36,20 @@ const ErrorDisplay = ({
           <Ionicons name="alert-circle" size={48} color={COLORS.error} />
         </View>
         
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title}>{displayTitle}</Text>
         
         <Text style={styles.message}>{errorMessage}</Text>
         
         {showRetry && onRetry && (
           <TouchableOpacity style={styles.retryButton} onPress={onRetry}>
             <Ionicons name="refresh" size={18} color="#FFF" />
-            <Text style={styles.retryText}>Try Again</Text>
+            <Text style={styles.retryText}>{t("errors.tryAgain")}</Text>
           </TouchableOpacity>
         )}
         
         {__DEV__ && error && (
           <View style={styles.errorDetails}>
-            <Text style={styles.errorLabel}>Error Details (Dev Only):</Text>
+            <Text style={styles.errorLabel}>{t("errors.errorDetails")}</Text>
             <Text style={styles.errorText}>
               {error.message || error.toString()}
             </Text>

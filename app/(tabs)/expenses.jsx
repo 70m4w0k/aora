@@ -308,7 +308,7 @@ const ExpensesScreen = () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert("Permission Denied", "Camera roll permission is required");
+        Alert.alert(t("common.permissionDenied"), t("common.cameraRollPermissionRequired"));
         return;
       }
 
@@ -341,7 +341,7 @@ const ExpensesScreen = () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission needed", "Camera permission is required");
+        Alert.alert(t("common.permissionNeeded"), t("common.cameraPermissionRequired"));
         return;
       }
 
@@ -563,7 +563,7 @@ const ExpensesScreen = () => {
         <View style={styles.expenseContent}>
           <Text style={styles.expenseTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.expenseSubtitle}>
-            <Text style={styles.expensePayer}>{paidByName}</Text> paid • {formatDate(item.date)}
+            <Text style={styles.expensePayer}>{paidByName}</Text> {t("expenses.paid")} • {formatDate(item.date)}
           </Text>
         </View>
 
@@ -571,7 +571,7 @@ const ExpensesScreen = () => {
         <View style={styles.expenseRightSection}>
           <View style={styles.expenseAmountContainer}>
             <Text style={styles.expenseAmount}>{formatCurrency(item.amount)}</Text>
-            <Text style={styles.expensePerPerson}>{formatCurrency(perPerson)}/person</Text>
+            <Text style={styles.expensePerPerson}>{formatCurrency(perPerson)}/{t("expenses.perPerson")}</Text>
           </View>
           
           {/* Delete button */}

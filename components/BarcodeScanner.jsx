@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
+import { useTranslation } from "../hooks/useTranslation";
 
 const { width } = Dimensions.get("window");
 const SCAN_AREA_SIZE = width * 0.7;
@@ -25,6 +26,7 @@ const COLORS = {
 };
 
 const BarcodeScanner = ({ visible, onClose, onBarcodeScanned }) => {
+  const t = useTranslation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [scanLineAnim] = useState(new Animated.Value(0));
@@ -80,15 +82,15 @@ const BarcodeScanner = ({ visible, onClose, onBarcodeScanned }) => {
         {!permission.granted ? (
           <View style={styles.permissionContainer}>
             <Ionicons name="camera-outline" size={64} color={COLORS.textSecondary} />
-            <Text style={styles.permissionTitle}>Camera Permission Required</Text>
+            <Text style={styles.permissionTitle}>{t("common.cameraPermissionRequired")}</Text>
             <Text style={styles.permissionText}>
-              We need camera access to scan barcodes
+              {t("prices.cameraAccessForBarcodeScanning")}
             </Text>
             <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-              <Text style={styles.permissionButtonText}>Grant Permission</Text>
+              <Text style={styles.permissionButtonText}>{t("prices.grantPermission")}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeButtonText}>Cancel</Text>
+              <Text style={styles.closeButtonText}>{t("common.cancel")}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -117,7 +119,7 @@ const BarcodeScanner = ({ visible, onClose, onBarcodeScanned }) => {
                 <TouchableOpacity style={styles.backButton} onPress={onClose}>
                   <Ionicons name="close" size={28} color="#FFF" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Scan Barcode</Text>
+                <Text style={styles.headerTitle}>{t("prices.scanBarcode")}</Text>
                 <View style={{ width: 44 }} />
               </View>
 
@@ -153,8 +155,8 @@ const BarcodeScanner = ({ visible, onClose, onBarcodeScanned }) => {
               <View style={styles.footer}>
                 <Text style={styles.instructionText}>
                   {scanned 
-                    ? "Barcode scanned!" 
-                    : "Position the barcode within the frame"
+                    ? t("prices.barcodeScanned") 
+                    : t("prices.positionBarcodeInFrame")
                   }
                 </Text>
                 {scanned && (
@@ -163,7 +165,7 @@ const BarcodeScanner = ({ visible, onClose, onBarcodeScanned }) => {
                     onPress={() => setScanned(false)}
                   >
                     <Ionicons name="refresh" size={20} color="#FFF" />
-                    <Text style={styles.scanAgainText}>Scan Again</Text>
+                    <Text style={styles.scanAgainText}>{t("prices.scanAgain")}</Text>
                   </TouchableOpacity>
                 )}
               </View>

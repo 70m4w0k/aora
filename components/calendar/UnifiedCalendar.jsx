@@ -43,15 +43,15 @@ const WEEKS_IN_YEAR = 52;
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// Event category config with colors and icons
+// Event category config with colors and icons (labels will be translated in component)
 const EVENT_CATEGORY_CONFIG = {
-  [EventCategories.CHORE]: { icon: "checkbox", color: "#06B6D4", label: "Chore" },
-  [EventCategories.MEETING]: { icon: "people", color: "#8B5CF6", label: "Meeting" },
-  [EventCategories.SOCIAL]: { icon: "wine", color: "#EC4899", label: "Social" },
-  [EventCategories.WORK]: { icon: "briefcase", color: "#F59E0B", label: "Work" },
-  [EventCategories.PERSONAL]: { icon: "person", color: "#10B981", label: "Personal" },
-  [EventCategories.REMINDER]: { icon: "notifications", color: "#F43F5E", label: "Reminder" },
-  [EventCategories.OTHER]: { icon: "calendar", color: "#71717A", label: "Other" },
+  [EventCategories.CHORE]: { icon: "checkbox", color: "#06B6D4", labelKey: "calendar.chore" },
+  [EventCategories.MEETING]: { icon: "people", color: "#8B5CF6", labelKey: "calendar.meeting" },
+  [EventCategories.SOCIAL]: { icon: "wine", color: "#EC4899", labelKey: "calendar.social" },
+  [EventCategories.WORK]: { icon: "briefcase", color: "#F59E0B", labelKey: "calendar.work" },
+  [EventCategories.PERSONAL]: { icon: "person", color: "#10B981", labelKey: "calendar.personal" },
+  [EventCategories.REMINDER]: { icon: "notifications", color: "#F43F5E", labelKey: "calendar.reminder" },
+  [EventCategories.OTHER]: { icon: "calendar", color: "#71717A", labelKey: "calendar.other" },
 };
 
 // View types
@@ -807,7 +807,7 @@ const UnifiedCalendar = () => {
               styles.categoryChipText,
               eventForm.category === key && { color: "#FFF" },
             ]}>
-              {config.label}
+              {t(config.labelKey)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1374,7 +1374,7 @@ const UnifiedCalendar = () => {
                               </View>
                               <View style={styles.choreHistoryContent}>
                                 <Text style={styles.choreHistoryUser}>
-                                  {user?.username || "Unknown"} completed this task
+                                  {user?.username || t("calendar.unknown")} {t("calendar.completedThisTask")}
                                 </Text>
                                 <Text style={styles.choreHistoryDate}>
                                   {completionDate.toLocaleDateString("en-US", {
@@ -2298,7 +2298,7 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
                       <View style={styles.completedTaskContent}>
                         <Text style={styles.completedTaskTitle}>{item.task.title}</Text>
                         <Text style={styles.completedTaskRecurrence}>
-                          {item.task.recurrence.charAt(0).toUpperCase() + item.task.recurrence.slice(1)}
+                          {t(`calendar.${item.task.recurrence}`)}
                         </Text>
                         <View style={styles.completedTaskUser}>
                           <Ionicons 
