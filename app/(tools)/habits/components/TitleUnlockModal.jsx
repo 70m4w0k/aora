@@ -204,47 +204,6 @@ export default function TitleUnlockModal({
   );
 }
 
-  return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
-        <Animated.View
-          style={[
-            styles.titleUnlockModal,
-            {
-              transform: [{ scale: xpScale }],
-              opacity: xpAnim,
-            },
-          ]}
-        >
-          <View style={styles.titleUnlockContent}>
-            <Text style={styles.titleUnlockIcon}>
-              {title?.icon || '🎉'}
-            </Text>
-            <Text style={styles.titleUnlockTitle}>Title Unlocked!</Text>
-            <Text style={styles.titleUnlockName}>
-              {title?.name || 'New Title'}
-            </Text>
-            <Text style={styles.titleUnlockDescription}>
-              {title?.description || ''}
-            </Text>
-            <TouchableOpacity
-              style={styles.titleUnlockButton}
-              onPress={onClose}
-            >
-              <Text style={styles.titleUnlockButtonText}>Awesome!</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
