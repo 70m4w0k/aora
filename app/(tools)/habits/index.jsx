@@ -77,6 +77,16 @@ import StreakCalendarModal from './components/StreakCalendarModal';
 import TitlesAchievementsModal from './components/TitlesAchievementsModal';
 import XpNotification from './components/XpNotification';
 import Header from './components/Header';
+import FloatingActionButton from './components/FloatingActionButton';
+import FilterBar from './components/FilterBar';
+import TabSwitcher from './components/TabSwitcher';
+import { applyFiltersAndSort } from './utils/filters';
+import DashboardScreen from './screens/DashboardScreen';
+import QuestsScreen from './screens/QuestsScreen';
+import ArcsScreen from './screens/ArcsScreen';
+import ProgressScreen from './screens/ProgressScreen';
+import CharacterScreen from './screens/CharacterScreen';
+import { HabitsProvider } from './context/HabitsContext';
 
 
 const HabitsTracker = () => {
@@ -117,6 +127,17 @@ const HabitsTracker = () => {
   const [streakStatsModalVisible, setStreakStatsModalVisible] = useState(false);
   const [streakStatistics, setStreakStatistics] = useState(null); // Detailed streak statistics
   const [streakStatsLoading, setStreakStatsLoading] = useState(false);
+  
+  // Active Tab State
+  const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Filters
+  const [questFilters, setQuestFilters] = useState({
+    arcId: null,
+    status: null, // 'active', 'completed', 'missed'
+    rarity: null, // 'common', 'rare', 'epic', 'legendary'
+    sortBy: null, // 'streak', 'xp', 'name', 'date'
+  });
   
   // Arc Modal
   const [arcModalVisible, setArcModalVisible] = useState(false);
@@ -934,6 +955,27 @@ const HabitsTracker = () => {
     setQuestCompletions(completionsMap);
   };
 
+  // Handlers object for screens
+  const handlers = {
+    openQuestModal,
+    openArcModal,
+    openArcDetailModal,
+    openTierModal,
+    openTitlesModal: () => setTitlesAchievementsModalVisible(true),
+    openXpHistoryModal: () => setXpHistoryModalVisible(true),
+    openMissedQuestsModal: () => setMissedQuestsModalVisible(true),
+    openStreakStatsModal: () => setStreakStatsModalVisible(true),
+    openStreakCalendarModal: () => setStreakCalendarModalVisible(true),
+    handleCompleteQuest,
+    handleDeleteQuest,
+    handleDeleteArc,
+    handleDeleteTier,
+    handleCompleteTier,
+    overridePenalty,
+    showAlert,
+    setAlertModalVisible,
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -947,6 +989,93 @@ const HabitsTracker = () => {
       </SafeAreaView>
     );
   }
+
+  // Render active screen based on tab
+  const renderActiveScreen = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <DashboardScreen
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            todayQuests={todayQuests}
+            arcs={arcs}
+            questStreaks={questStreaks}
+            questCompletions={questCompletions}
+            questPenalties={questPenalties}
+            userProgress={userProgress}
+            notificationsEnabled={notificationsEnabled}
+            missedQuests={missedQuests}
+            user={user}
+            household={household}
+            unlockedTitles={unlockedTitles}
+            unlockedAchievements={unlockedAchievements}
+            xpBarPulse={xpBarPulse}
+            handlers={handlers}
+          />
+        );
+      case 'quests':
+        return (
+          <QuestsScreen
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            quests={quests}
+            arcs={arcs}
+            questStreaks={questStreaks}
+            questCompletions={questCompletions}
+            questPenalties={questPenalties}
+            userProgress={userProgress}
+            notificationsEnabled={notificationsEnabled}
+            missedQuests={missedQuests}
+            user={user}
+            household={household}
+            handlers={handlers}
+          />
+        );
+      case 'arcs':
+        return (
+          <ArcsScreen
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            arcs={arcs}
+            quests={quests}
+            userProgress={userProgress}
+            getArcProgress={getArcProgress}
+            handlers={handlers}
+          />
+        );
+      case 'progress':
+        return (
+          <ProgressScreen
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            statistics={statistics}
+            questStreaks={questStreaks}
+            handlers={handlers}
+          />
+        );
+      case 'character':
+        return (
+          <CharacterScreen
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            user={user}
+            userProgress={userProgress}
+            unlockedTitles={unlockedTitles}
+            unlockedAchievements={unlockedAchievements}
+            questStreaks={questStreaks}
+            arcs={arcs}
+            xpBarPulse={xpBarPulse}
+            tiers={tiers}
+            tierProgress={tierProgress}
+            tierCompletions={tierCompletions}
+            handlers={handlers}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -962,97 +1091,18 @@ const HabitsTracker = () => {
         onSettingsPress={() => setSettingsModalVisible(true)}
       />
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent.primary} />
-        }
-      >
-        {/* Character Profile Card */}
-        <CharacterProfileCard
-          user={user}
-          userProgress={userProgress}
-          unlockedTitles={unlockedTitles}
-          unlockedAchievements={unlockedAchievements}
-          questStreaks={questStreaks}
-          arcs={arcs}
-          xpBarPulse={xpBarPulse}
-          onPressTitles={() => setTitlesAchievementsModalVisible(true)}
-          onPressXpHistory={() => setXpHistoryModalVisible(true)}
-          onPressCharacter={() => setTitlesAchievementsModalVisible(true)}
-        />
+      {/* Tab Switcher */}
+      <TabSwitcher activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {/* Missed Quests Notification Banner */}
-        {notificationsEnabled && (
-          <MissedQuestsBanner
-            missedQuests={missedQuests}
-            onPress={() => setMissedQuestsModalVisible(true)}
-          />
-        )}
+      {/* Active Screen */}
+      {renderActiveScreen()}
 
-        {/* Arcs Section */}
-        <ArcsSection
-          arcs={arcs}
-          quests={quests}
-          userProgress={userProgress}
-          getArcProgress={getArcProgress}
-          onAddArc={() => openArcModal()}
-          onArcPress={(arc) => openArcDetailModal(arc)}
-          onArcLongPress={(arc) => handleDeleteArc(arc)}
-        />
-
-        {/* Today's Quest Board */}
-        <QuestBoard
-          todayQuests={todayQuests}
-          arcs={arcs}
-          questStreaks={questStreaks}
-          questCompletions={questCompletions}
-          questPenalties={questPenalties}
-          userProgress={userProgress}
-          notificationsEnabled={notificationsEnabled}
-          missedQuests={missedQuests}
-          onAddQuest={() => openQuestModal()}
-          onQuestPress={(quest) => openQuestModal(quest)}
-          onQuestLongPress={(quest) => handleDeleteQuest(quest)}
-          onCompleteQuest={handleCompleteQuest}
-          onOverridePenalty={overridePenalty}
-          showAlert={showAlert}
-          setAlertModalVisible={setAlertModalVisible}
-          user={user}
-          household={household}
-          fetchData={fetchData}
-          overridePenalty={overridePenalty}
-        />
-
-        {/* Streak Statistics Section */}
-        <StreakStatisticsSection
-          questStreaks={questStreaks}
-          onViewDetails={() => setStreakStatsModalVisible(true)}
-        />
-
-        {/* Streak Calendar Section */}
-        <StreakCalendarSection
-          onView={() => setStreakCalendarModalVisible(true)}
-        />
-
-        {/* Tiers Section */}
-        <TiersSection
-          tiers={tiers}
-          arcs={arcs}
-          tierProgress={tierProgress}
-          tierCompletions={tierCompletions}
-          onAddTier={() => openTierModal()}
-          onTierPress={(tier) => openTierModal(tier)}
-          onTierLongPress={(tier) => handleDeleteTier(tier)}
-          onCompleteTier={handleCompleteTier}
-        />
-
-        {/* Statistics Section */}
-        <StatisticsSection statistics={statistics} />
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      {/* Floating Action Button */}
+      <FloatingActionButton
+        onAddQuest={() => openQuestModal()}
+        onAddArc={() => openArcModal()}
+        onViewStats={() => setActiveTab('progress')}
+      />
 
       {/* Arc Management Modal */}
       <ArcModal
