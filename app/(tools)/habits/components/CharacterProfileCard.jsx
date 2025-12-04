@@ -116,7 +116,7 @@ export default function CharacterProfileCard({
           animated={true}
           showText={true}
           showMilestones={true}
-          height={10}
+          height={16}
         />
         </View>
 

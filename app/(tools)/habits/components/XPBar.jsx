@@ -110,7 +110,7 @@ export default function XPBar({
           {
             width: animatedWidth,
             height,
-            ...(animated ? createGlow(COLORS.glows.xp, 0.6) : {}),
+            ...(animated ? createGlow(COLORS.glows.xp, 0.8) : {}),
           },
         ]}
       >
@@ -119,6 +119,19 @@ export default function XPBar({
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={StyleSheet.absoluteFill}
+        />
+        {/* Inner glow effect */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.2)',
+          }}
         />
       </Animated.View>
 
@@ -155,17 +168,19 @@ export default function XPBar({
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    borderRadius: 4,
+    borderRadius: 8,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   background: {
     position: 'absolute',
     width: '100%',
-    backgroundColor: COLORS.elevated,
-    borderRadius: 4,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
   },
   fillContainer: {
-    borderRadius: 4,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   textContainer: {
@@ -177,9 +192,13 @@ const styles = StyleSheet.create({
   },
   text: {
     ...TYPOGRAPHY.label,
-    fontSize: 10,
-    color: COLORS.textSecondary,
+    fontSize: 11,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   milestonesContainer: {
     position: 'absolute',

@@ -117,9 +117,6 @@ export default function QuestCard({
           />
         )}
 
-        {/* Rarity indicator */}
-        <View style={[styles.rarityIndicator, { backgroundColor: rarityColor }]} />
-
         {/* Quest Content */}
         <View style={styles.content}>
           {/* Quest Header */}
@@ -246,13 +243,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 16,
-  },
-  rarityIndicator: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 4,
-    height: '100%',
   },
   content: {
     flex: 1,
