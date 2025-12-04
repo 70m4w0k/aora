@@ -5,6 +5,29 @@ import { COLORS, TYPOGRAPHY } from '../constants';
 import { createGlow } from '../utils/visualEffects';
 
 /**
+ * Animated XP Counter Component
+ */
+function XPCounter({ animatedValue, maxValue, suffix = '', style }) {
+  const [displayValue, setDisplayValue] = React.useState(0);
+
+  useEffect(() => {
+    const listener = animatedValue.addListener(({ value }) => {
+      setDisplayValue(Math.floor(value));
+    });
+
+    return () => {
+      animatedValue.removeListener(listener);
+    };
+  }, [animatedValue]);
+
+  return (
+    <Text style={style}>
+      {displayValue}{suffix}
+    </Text>
+  );
+}
+
+/**
  * Enhanced XP Bar Component
  * Displays XP progress with gradient fill and glow effects
  */
@@ -16,14 +39,22 @@ export default function XPBar({
   animated = true,
   showText = true,
   height = 8,
+  showMilestones = false,
   style,
 }) {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(1)).current;
+  const xpCounterAnim = useRef(new Animated.Value(0)).current;
 
   // Calculate progress percentage
   const xpInCurrentLevel = Math.max(0, currentXP - xpForCurrentLevel);
   const progressPercent = Math.min((xpInCurrentLevel / xpForNextLevel) * 100, 100);
+  
+  // Animated XP counter
+  const animatedXP = xpCounterAnim.interpolate({
+    inputRange: [0, xpInCurrentLevel],
+    outputRange: [0, xpInCurrentLevel],
+  });
 
   useEffect(() => {
     if (animated) {
@@ -31,6 +62,13 @@ export default function XPBar({
       Animated.timing(progressAnim, {
         toValue: progressPercent,
         duration: 800,
+        useNativeDriver: false,
+      }).start();
+
+      // Animate XP counter
+      Animated.timing(xpCounterAnim, {
+        toValue: xpInCurrentLevel,
+        duration: 1000,
         useNativeDriver: false,
       }).start();
 
@@ -51,8 +89,9 @@ export default function XPBar({
       ).start();
     } else {
       progressAnim.setValue(progressPercent);
+      xpCounterAnim.setValue(xpInCurrentLevel);
     }
-  }, [progressPercent, animated]);
+  }, [progressPercent, xpInCurrentLevel, animated]);
 
   const animatedWidth = progressAnim.interpolate({
     inputRange: [0, 100],
@@ -83,12 +122,30 @@ export default function XPBar({
         />
       </Animated.View>
 
+      {/* Milestone markers */}
+      {showMilestones && (
+        <View style={styles.milestonesContainer}>
+          {[25, 50, 75].map((milestone) => (
+            <View
+              key={milestone}
+              style={[
+                styles.milestoneMarker,
+                { left: `${milestone}%` },
+              ]}
+            />
+          ))}
+        </View>
+      )}
+
       {/* Text overlay */}
       {showText && (
         <View style={styles.textContainer}>
-          <Text style={styles.text}>
-            {Math.floor(xpInCurrentLevel)} / {xpForNextLevel} XP → Level {level + 1}
-          </Text>
+          <XPCounter
+            animatedValue={xpCounterAnim}
+            maxValue={xpInCurrentLevel}
+            suffix={` / ${xpForNextLevel} XP → Level ${level + 1}`}
+            style={styles.text}
+          />
         </View>
       )}
     </View>
@@ -123,6 +180,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.textSecondary,
     textAlign: 'center',
+  },
+  milestonesContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    flexDirection: 'row',
+  },
+  milestoneMarker: {
+    position: 'absolute',
+    width: 2,
+    height: '100%',
+    backgroundColor: COLORS.textTertiary,
+    opacity: 0.3,
   },
 });
 

@@ -108,15 +108,16 @@ export default function CharacterProfileCard({
 
         {/* XP Bar */}
         <View style={styles.xpBarContainer}>
-          <XPBar
-            currentXP={currentXP}
-            xpForNextLevel={xpForNextLevel}
-            xpForCurrentLevel={xpForCurrentLevel}
-            level={currentLevel}
-            animated={true}
-            showText={true}
-            height={10}
-          />
+        <XPBar
+          currentXP={currentXP}
+          xpForNextLevel={xpForNextLevel}
+          xpForCurrentLevel={xpForCurrentLevel}
+          level={currentLevel}
+          animated={true}
+          showText={true}
+          showMilestones={true}
+          height={10}
+        />
         </View>
 
         {/* Stats Grid */}

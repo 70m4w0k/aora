@@ -1,6 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
-import { COLORS } from '../constants';
+import { View, Text, StyleSheet, Animated, ScrollView } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, TYPOGRAPHY } from '../constants';
+import { createGlow, getArcGradient } from '../utils/visualEffects';
+import StatCard from './StatCard';
+import CircularProgress from './CircularProgress';
 
 export default function StatisticsSection({ statistics }) {
   if (!statistics) return null;
@@ -8,55 +13,47 @@ export default function StatisticsSection({ statistics }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>STATISTICS</Text>
+        <View style={styles.headerLeft}>
+          <Ionicons name="stats-chart" size={20} color={COLORS.accent.primary} />
+          <Text style={styles.sectionTitle}>STATISTICS</Text>
+        </View>
       </View>
       
-      {/* Weekly Summary */}
-      <View style={styles.statCard}>
-        <Text style={styles.statCardTitle}>This Week</Text>
-        <View style={styles.statRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{statistics.weeklySummary.completions}</Text>
-            <Text style={styles.statLabel}>Completions</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[
-              styles.statValue,
-              statistics.weeklySummary.change >= 0 ? { color: COLORS.accent.success } : { color: COLORS.accent.danger }
-            ]}>
-              {statistics.weeklySummary.change >= 0 ? '+' : ''}{statistics.weeklySummary.change.toFixed(0)}%
-            </Text>
-            <Text style={styles.statLabel}>vs Last Week</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Monthly Summary */}
-      <View style={styles.statCard}>
-        <Text style={styles.statCardTitle}>This Month</Text>
-        <View style={styles.statRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{statistics.monthlySummary.completions}</Text>
-            <Text style={styles.statLabel}>Completions</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[
-              styles.statValue,
-              statistics.monthlySummary.change >= 0 ? { color: COLORS.accent.success } : { color: COLORS.accent.danger }
-            ]}>
-              {statistics.monthlySummary.change >= 0 ? '+' : ''}{statistics.monthlySummary.change.toFixed(0)}%
-            </Text>
-            <Text style={styles.statLabel}>vs Last Month</Text>
-          </View>
-        </View>
+      {/* Summary Cards Grid */}
+      <View style={styles.summaryGrid}>
+        <StatCard
+          title="This Week"
+          value={statistics.weeklySummary.completions}
+          label="Completions"
+          icon="calendar"
+          iconColor={COLORS.accent.primary}
+          trend={{
+            value: statistics.weeklySummary.change.toFixed(0),
+            isPositive: statistics.weeklySummary.change >= 0,
+          }}
+        />
+        <StatCard
+          title="This Month"
+          value={statistics.monthlySummary.completions}
+          label="Completions"
+          icon="calendar-outline"
+          iconColor={COLORS.accent.success}
+          trend={{
+            value: statistics.monthlySummary.change.toFixed(0),
+            isPositive: statistics.monthlySummary.change >= 0,
+          }}
+        />
       </View>
 
       {/* Progress Trends - Enhanced Bar Chart */}
-      <View style={styles.statCard}>
-        <Text style={styles.statCardTitle}>4-Week Completion Trend</Text>
+      <View style={[styles.statCard, styles.chartCard]}>
+        <View style={styles.cardHeader}>
+          <Ionicons name="trending-up" size={18} color={COLORS.accent.primary} />
+          <Text style={styles.statCardTitle}>4-Week Completion Trend</Text>
+        </View>
         <View style={styles.chartContainer}>
           <View style={styles.barChart}>
-            {statistics.trends.map((trend, index) => {
+              {statistics.trends.map((trend, index) => {
               const maxCompletions = Math.max(...statistics.trends.map(t => t.completions), 1);
               const barHeight = maxCompletions > 0 ? (trend.completions / maxCompletions) * 100 : 0;
               const isCurrentWeek = index === statistics.trends.length - 1;
@@ -64,14 +61,20 @@ export default function StatisticsSection({ statistics }) {
               return (
                 <View key={index} style={styles.barChartItem}>
                   <View style={styles.barChartBarContainer}>
-                    <Animated.View
+                    <LinearGradient
+                      colors={isCurrentWeek 
+                        ? COLORS.gradients.xp 
+                        : [COLORS.accent.primary + '80', COLORS.accent.primary + '60']
+                      }
+                      start={{ x: 0, y: 1 }}
+                      end={{ x: 0, y: 0 }}
                       style={[
                         styles.barChartBar,
                         {
                           height: `${barHeight}%`,
-                          backgroundColor: isCurrentWeek ? COLORS.accent.primary : COLORS.accent.primary + '80',
-                          borderColor: isCurrentWeek ? COLORS.accent.primary : 'transparent',
-                        }
+                          borderWidth: isCurrentWeek ? 2 : 0,
+                          borderColor: COLORS.accent.primary,
+                        },
                       ]}
                     />
                   </View>
@@ -91,8 +94,11 @@ export default function StatisticsSection({ statistics }) {
       </View>
 
       {/* Arc Completion Rates - Enhanced Horizontal Bar Chart */}
-      <View style={styles.statCard}>
-        <Text style={styles.statCardTitle}>Completion Rates by Arc</Text>
+      <View style={[styles.statCard, styles.chartCard]}>
+        <View style={styles.cardHeader}>
+          <Ionicons name="pie-chart" size={18} color={COLORS.accent.primary} />
+          <Text style={styles.statCardTitle}>Completion Rates by Arc</Text>
+        </View>
         <View style={styles.horizontalBarChart}>
           {statistics.arcStats.map((arcStat) => {
             const maxRate = Math.max(...statistics.arcStats.map(a => a.completionRate), 100);
@@ -112,13 +118,15 @@ export default function StatisticsSection({ statistics }) {
                   </Text>
                 </View>
                 <View style={styles.horizontalBarChartBarContainer}>
-                  <Animated.View
+                  <LinearGradient
+                    colors={getArcGradient(arcStat.arcName)}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
                     style={[
                       styles.horizontalBarChartBar,
                       {
                         width: `${barWidth}%`,
-                        backgroundColor: arcStat.arcColor || COLORS.accent.primary,
-                      }
+                      },
                     ]}
                   />
                 </View>
@@ -135,8 +143,11 @@ export default function StatisticsSection({ statistics }) {
 
       {/* Arc Comparison Chart */}
       {statistics.arcStats.length > 1 && (
-        <View style={styles.statCard}>
-          <Text style={styles.statCardTitle}>Arc Comparison</Text>
+        <View style={[styles.statCard, styles.chartCard]}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="bar-chart" size={18} color={COLORS.accent.primary} />
+            <Text style={styles.statCardTitle}>Arc Comparison</Text>
+          </View>
           <View style={styles.comparisonChart}>
             <View style={styles.comparisonChartBars}>
               {statistics.arcStats.map((arcStat) => {
@@ -146,13 +157,15 @@ export default function StatisticsSection({ statistics }) {
                 return (
                   <View key={arcStat.arcId} style={styles.comparisonChartItem}>
                     <View style={styles.comparisonChartBarContainer}>
-                      <Animated.View
+                      <LinearGradient
+                        colors={getArcGradient(arcStat.arcName)}
+                        start={{ x: 0, y: 1 }}
+                        end={{ x: 0, y: 0 }}
                         style={[
                           styles.comparisonChartBar,
                           {
                             height: `${barHeight}%`,
-                            backgroundColor: arcStat.arcColor || COLORS.accent.primary,
-                          }
+                          },
                         ]}
                       />
                     </View>
@@ -183,22 +196,42 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    ...TYPOGRAPHY.title,
+    fontSize: 18,
+    color: COLORS.textPrimary,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
   },
   statCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...createGlow(COLORS.glows.primary, 0.2),
+  },
+  chartCard: {
+    padding: 20,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
   },
   statCardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...TYPOGRAPHY.subtitle,
+    fontSize: 16,
     color: COLORS.textPrimary,
-    marginBottom: 12,
   },
   statRow: {
     flexDirection: 'row',

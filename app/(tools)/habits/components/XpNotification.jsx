@@ -1,7 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../constants';
+import { COLORS, TYPOGRAPHY } from '../constants';
+import { createGlow } from '../utils/visualEffects';
+import { hapticQuestComplete } from '../utils/haptics';
 
 export default function XpNotification({ xpNotification, onAnimationComplete }) {
   const xpAnim = useRef(new Animated.Value(0)).current;
@@ -9,11 +12,14 @@ export default function XpNotification({ xpNotification, onAnimationComplete }) 
 
   useEffect(() => {
     if (xpNotification) {
+      // Haptic feedback
+      hapticQuestComplete();
+      
       // Reset animations
       xpAnim.setValue(0);
       xpScale.setValue(0);
       
-      // Animate scale (pop in)
+      // Animate scale (pop in with bounce)
       Animated.spring(xpScale, {
         toValue: 1,
         tension: 100,
@@ -25,14 +31,14 @@ export default function XpNotification({ xpNotification, onAnimationComplete }) 
       Animated.parallel([
         Animated.timing(xpAnim, {
           toValue: 1,
-          duration: 2000,
+          duration: 2500,
           useNativeDriver: true,
         }),
         Animated.sequence([
-          Animated.delay(300),
+          Animated.delay(400),
           Animated.timing(xpScale, {
-            toValue: 0.8,
-            duration: 1700,
+            toValue: 0.7,
+            duration: 2100,
             useNativeDriver: true,
           }),
         ]),
@@ -76,18 +82,23 @@ export default function XpNotification({ xpNotification, onAnimationComplete }) 
       ]}
       pointerEvents="none"
     >
-      <View style={[
-        styles.xpNotificationContent,
-        xpNotification.arcColor && { borderColor: xpNotification.arcColor },
-      ]}>
-        <Ionicons name="star" size={20} color={xpNotification.arcColor || COLORS.accent.primary} />
-        <Text style={[
-          styles.xpNotificationText,
-          xpNotification.arcColor && { color: xpNotification.arcColor },
-        ]}>
+      <LinearGradient
+        colors={xpNotification.arcColor 
+          ? [xpNotification.arcColor, COLORS.accent.primary]
+          : COLORS.gradients.xp
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[
+          styles.xpNotificationContent,
+          xpNotification.arcColor && { borderColor: xpNotification.arcColor },
+        ]}
+      >
+        <Ionicons name="star" size={24} color={COLORS.textPrimary} />
+        <Text style={styles.xpNotificationText}>
           +{xpNotification.xp} XP
         </Text>
-      </View>
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -107,23 +118,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.card,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 28,
     borderWidth: 2,
     borderColor: COLORS.accent.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    gap: 8,
+    ...createGlow(COLORS.glows.xp, 0.8),
+    gap: 10,
   },
   xpNotificationText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.accent.primary,
-    letterSpacing: 0.5,
+    ...TYPOGRAPHY.title,
+    fontSize: 20,
+    color: COLORS.textPrimary,
+    letterSpacing: 1,
   },
 });
 

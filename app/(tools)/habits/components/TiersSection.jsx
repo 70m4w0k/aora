@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../constants';
+import { COLORS, TYPOGRAPHY } from '../constants';
 import { TargetTypes } from '../../../../lib/appwrite';
+import TierCard from './TierCard';
 
 export default function TiersSection({ 
   tiers,
@@ -45,57 +46,16 @@ export default function TiersSection({
             const isCompleted = tierCompletions[tier.$id] !== null && tierCompletions[tier.$id] !== undefined;
             
             return (
-              <TouchableOpacity
+              <TierCard
                 key={tier.$id}
-                style={styles.tierCard}
-                activeOpacity={0.7}
+                tier={tier}
+                arc={arc}
+                progress={progress}
+                isCompleted={isCompleted}
                 onPress={() => onTierPress(tier)}
                 onLongPress={() => onTierLongPress(tier)}
-              >
-                <View style={[styles.tierIndicator, { backgroundColor: arc?.color || COLORS.accent.primary }]} />
-                <View style={styles.tierContent}>
-                  <View style={styles.tierHeader}>
-                    <Text style={styles.tierName}>{tier.name}</Text>
-                    {isCompleted && (
-                      <Ionicons name="checkmark-circle" size={20} color={COLORS.accent.success} />
-                    )}
-                  </View>
-                  <View style={styles.tierMeta}>
-                    <Text style={styles.tierArc}>{arc?.name || 'Unassigned'}</Text>
-                    <Text style={styles.tierXP}>+{tier.xpReward || 100} XP</Text>
-                  </View>
-                  <View style={styles.tierProgressContainer}>
-                    <View style={styles.tierProgressBar}>
-                      <View 
-                        style={[
-                          styles.tierProgressFill,
-                          {
-                            width: `${isCompleted ? 100 : progress.percentage}%`,
-                            backgroundColor: arc?.color || COLORS.accent.primary,
-                          }
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.tierProgressText}>
-                      {isCompleted 
-                        ? 'Completed!' 
-                        : `${Math.floor(progress.current)} / ${progress.target} ${tier.targetType === TargetTypes.DAYS ? 'days' : tier.targetType === TargetTypes.COUNT ? 'completions' : 'items'}`
-                      }
-                    </Text>
-                  </View>
-                </View>
-                {!isCompleted && (
-                  <TouchableOpacity
-                    style={styles.tierCompleteButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      onCompleteTier(tier);
-                    }}
-                  >
-                    <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.accent.success} />
-                  </TouchableOpacity>
-                )}
-              </TouchableOpacity>
+                onComplete={() => onCompleteTier(tier)}
+              />
             );
           })}
         </View>
@@ -116,10 +76,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    ...TYPOGRAPHY.title,
+    fontSize: 18,
+    color: COLORS.textPrimary,
   },
   questHeaderRight: {
     flexDirection: 'row',

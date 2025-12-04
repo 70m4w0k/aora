@@ -57,6 +57,7 @@ import CharacterProfileCard from './components/CharacterProfileCard';
 import MissedQuestsBanner from './components/MissedQuestsBanner';
 import ArcsSection from './components/ArcsSection';
 import TodaysQuestsSection from './components/TodaysQuestsSection';
+import QuestBoard from './components/QuestBoard';
 import TiersSection from './components/TiersSection';
 import StatisticsSection from './components/StatisticsSection';
 import StreakStatisticsSection from './components/StreakStatisticsSection';
@@ -1001,8 +1002,8 @@ const HabitsTracker = () => {
           onArcLongPress={(arc) => handleDeleteArc(arc)}
         />
 
-        {/* Today's Quests Section */}
-        <TodaysQuestsSection
+        {/* Today's Quest Board */}
+        <QuestBoard
           todayQuests={todayQuests}
           arcs={arcs}
           questStreaks={questStreaks}
@@ -1021,6 +1022,7 @@ const HabitsTracker = () => {
           user={user}
           household={household}
           fetchData={fetchData}
+          overridePenalty={overridePenalty}
         />
 
         {/* Streak Statistics Section */}

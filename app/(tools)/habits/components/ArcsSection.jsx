@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../constants';
-import { getXPForNextLevel, getTotalXPForLevel } from '../../../../lib/appwrite';
+import { COLORS, TYPOGRAPHY } from '../constants';
+import ArcCard from './ArcCard';
 
 export default function ArcsSection({ 
   arcs, 
@@ -34,57 +34,14 @@ export default function ArcsSection({
             const progress = getArcProgress(arc.$id);
             
             return (
-              <TouchableOpacity
+              <ArcCard
                 key={arc.$id}
-                style={[styles.arcCard, { borderLeftColor: arc.color || COLORS.accent.primary }]}
-                activeOpacity={0.8}
+                arc={arc}
+                progress={progress}
+                userProgress={userProgress}
                 onPress={() => onArcPress(arc)}
                 onLongPress={() => onArcLongPress(arc)}
-              >
-                <View style={styles.arcCardHeader}>
-                  <View style={styles.arcIconContainer}>
-                    {arc.icon ? (
-                      <Ionicons name={arc.icon} size={24} color={arc.color || COLORS.accent.primary} />
-                    ) : (
-                      <View style={[styles.arcIconPlaceholder, { backgroundColor: `${arc.color || COLORS.accent.primary}20` }]}>
-                        <Text style={[styles.arcIconText, { color: arc.color || COLORS.accent.primary }]}>
-                          {arc.name?.[0]?.toUpperCase() || 'A'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.arcInfo}>
-                    <Text style={styles.arcName}>{arc.name}</Text>
-                    <Text style={styles.arcStats}>
-                      Level {progress.level || 1} • {progress.questsCompleted || 0} quests • {progress.tiersCompleted || 0} tiers
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.arcProgressBar}>
-                  {(() => {
-                    const progressionType = userProgress?.progressionType || 'progressive';
-                    const arcLevel = progress.level || 1;
-                    const arcXP = progress.totalXP || 0;
-                    const xpForNextLevel = getXPForNextLevel(arcLevel, progressionType);
-                    const xpForCurrentLevel = getTotalXPForLevel(arcLevel, progressionType);
-                    const xpInCurrentLevel = Math.max(0, arcXP - xpForCurrentLevel);
-                    const progressPercent = Math.min((xpInCurrentLevel / xpForNextLevel) * 100, 100);
-                    
-                    return (
-                      <View 
-                        style={[
-                          styles.arcProgressFill, 
-                          { 
-                            width: `${progressPercent}%`,
-                            backgroundColor: arc.color || COLORS.accent.primary,
-                          }
-                        ]} 
-                      />
-                    );
-                  })()}
-                </View>
-                <Text style={styles.arcXP}>{progress.totalXP || 0} XP • Level {progress.level || 1}</Text>
-              </TouchableOpacity>
+              />
             );
           })}
         </View>
@@ -105,10 +62,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textTertiary,
-    letterSpacing: 0.5,
+    ...TYPOGRAPHY.title,
+    fontSize: 18,
+    color: COLORS.textPrimary,
   },
   addButton: {
     width: 32,
