@@ -30,6 +30,7 @@ import {
   togglePenaltySystem,
   overridePenalty,
   getXpHistory,
+  importExampleData,
 } from '../../../lib/appwrite';
 
 // Import constants, components, and utilities
@@ -735,6 +736,68 @@ const HabitsTracker = () => {
     );
   };
 
+  // Import Examples Handler
+  const handleImportExamples = async () => {
+    if (!user?.$id || !household?.$id) {
+      showAlert('Erreur', 'Utilisateur ou foyer non trouvé', [
+        { text: 'OK', onPress: () => setAlertModalVisible(false) }
+      ]);
+      return;
+    }
+
+    showAlert(
+      'Importer les exemples ?',
+      'Cela va créer 8 arcs, 32 quêtes et 24 paliers dans votre système. Continuer ?',
+      [
+        {
+          text: 'Annuler',
+          onPress: () => setAlertModalVisible(false),
+        },
+        {
+          text: 'Importer',
+          onPress: async () => {
+            setAlertModalVisible(false);
+            try {
+              const result = await importExampleData(user.$id, household.$id);
+              
+              if (result.success) {
+                showAlert(
+                  'Succès !',
+                  `${result.summary.arcsCreated} arcs, ${result.summary.questsCreated} quêtes et ${result.summary.tiersCreated} paliers créés avec succès !`,
+                  [
+                    {
+                      text: 'OK',
+                      onPress: async () => {
+                        setAlertModalVisible(false);
+                        await fetchData(); // Rafraîchir les données
+                      },
+                    },
+                  ]
+                );
+              } else {
+                const errorMessage = result.summary.errors.length > 0 
+                  ? `\n\nErreurs :\n${result.summary.errors.slice(0, 5).join('\n')}${result.summary.errors.length > 5 ? `\n... et ${result.summary.errors.length - 5} autres` : ''}`
+                  : '';
+                showAlert(
+                  'Import partiel',
+                  `Créé : ${result.summary.arcsCreated} arcs, ${result.summary.questsCreated} quêtes, ${result.summary.tiersCreated} paliers.${errorMessage}`,
+                  [{ text: 'OK', onPress: () => setAlertModalVisible(false) }]
+                );
+                // Rafraîchir quand même les données même en cas d'erreurs partielles
+                await fetchData();
+              }
+            } catch (error) {
+              console.error('Error importing examples:', error);
+              showAlert('Erreur', `Erreur lors de l'import : ${error.message}`, [
+                { text: 'OK', onPress: () => setAlertModalVisible(false) }
+              ]);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Tier Management
   const openTierModal = (tier = null) => {
     if (tier) {
@@ -1209,6 +1272,7 @@ const HabitsTracker = () => {
         showAlert={showAlert}
         setAlertModalVisible={setAlertModalVisible}
         fetchData={fetchData}
+        onImportExamples={handleImportExamples}
       />
 
       {/* Missed Quests Modal */}

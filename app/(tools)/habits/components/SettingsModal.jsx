@@ -26,6 +26,7 @@ export default function SettingsModal({
   showAlert,
   setAlertModalVisible,
   fetchData,
+  onImportExamples,
 }) {
   return (
     <Modal
@@ -188,6 +189,22 @@ export default function SettingsModal({
               )}
             </View>
 
+            {/* Examples Section */}
+            <View style={styles.settingsSection}>
+              <Text style={[styles.inputLabel, { marginTop: 24 }]}>Exemples</Text>
+              <Text style={styles.inputHint}>
+                Importe des arcs, quêtes et paliers pré-définis pour démarrer rapidement
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.exampleButton}
+                onPress={onImportExamples}
+              >
+                <Ionicons name="download" size={20} color={COLORS.accent.primary} />
+                <Text style={styles.exampleButtonText}>Charger les exemples</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={{ height: 40 }} />
           </ScrollView>
         </View>
@@ -340,6 +357,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
     flex: 1,
+  },
+  exampleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.elevated,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginTop: 12,
+  },
+  exampleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.accent.primary,
   },
 });
 
