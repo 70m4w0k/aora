@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 import {
   ShoppingCategories,
   getHouseholdShoppingItems,
@@ -29,17 +30,19 @@ import {
   getHouseholdMembers,
 } from "../../lib/appwrite";
 
-// Shopping Categories with icons and colors (matching expense style)
-const SHOPPING_CATEGORIES_CONFIG = {
-  groceries: { icon: "cart", label: "Groceries", color: "#22C55E" },
-  household: { icon: "home", label: "Household", color: "#8B5CF6" },
-  personal: { icon: "person", label: "Personal", color: "#EC4899" },
-  other: { icon: "apps", label: "Other", color: "#71717A" },
-};
 import EmptyState from "../../components/EmptyState";
 
 const ShoppingScreen = () => {
   const { user, household } = useGlobalContext();
+  const t = useTranslation();
+  
+  // Shopping Categories with icons and colors (matching expense style)
+  const SHOPPING_CATEGORIES_CONFIG = {
+    groceries: { icon: "cart", label: t("shopping.groceries"), color: "#22C55E" },
+    household: { icon: "home", label: t("shopping.household"), color: "#8B5CF6" },
+    personal: { icon: "person", label: t("shopping.personal"), color: "#EC4899" },
+    other: { icon: "apps", label: t("shopping.other"), color: "#71717A" },
+  };
   const [items, setItems] = useState([]);
   const [users, setUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -112,7 +115,7 @@ const ShoppingScreen = () => {
   // Handle add item
   const handleAddItem = async () => {
     if (addForm.name.trim() === "") {
-      Alert.alert("Error", "Please provide an item name");
+      Alert.alert(t("common.error"), t("shopping.addItem"));
       return;
     }
 
@@ -134,7 +137,7 @@ const ShoppingScreen = () => {
         assignedTo: "",
       });
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("common.error"), error.message);
     }
   };
 
@@ -190,7 +193,7 @@ const ShoppingScreen = () => {
   // Handle edit item submission
   const handleEditSubmit = async () => {
     if (editForm.name.trim() === "") {
-      return Alert.alert("Error", "Please provide an item name");
+      return Alert.alert(t("common.error"), t("shopping.addItem"));
     }
 
     try {
@@ -211,7 +214,7 @@ const ShoppingScreen = () => {
       });
       setEditingItem(null);
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("common.error"), error.message);
     }
   };
 
@@ -228,7 +231,7 @@ const ShoppingScreen = () => {
       }
     } catch (error) {
       console.error("Error updating item:", error);
-      Alert.alert("Error", "Could not update item status");
+      Alert.alert(t("common.error"), t("shopping.couldNotUpdateStatus"));
     }
   };
 
@@ -239,10 +242,10 @@ const ShoppingScreen = () => {
       });
       await fetchItems();
       await fetchHistoryItems();
-      Alert.alert("Success", `${item.name} has been restored to your shopping list`);
+      Alert.alert(t("common.success"), t("shopping.itemRestored").replace("{{name}}", item.name));
     } catch (error) {
       console.error("Error restoring item:", error);
-      Alert.alert("Error", "Could not restore item");
+      Alert.alert(t("common.error"), t("shopping.couldNotRestore"));
     }
   };
 
@@ -291,11 +294,11 @@ const ShoppingScreen = () => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      return "Today";
+      return t("shopping.today");
     } else if (diffDays === 1) {
-      return "Yesterday";
+      return t("shopping.yesterday");
     } else if (diffDays <= 7) {
-      return `${diffDays} days ago`;
+      return t("shopping.daysAgo").replace("{{days}}", diffDays.toString());
     } else {
       return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
     }
@@ -312,12 +315,12 @@ const ShoppingScreen = () => {
 
   const confirmDelete = (item) => {
     Alert.alert(
-      "Delete Item",
-      `Are you sure you want to delete "${item.name}"?`,
+      t("shopping.deleteItem"),
+      t("shopping.deleteConfirm").replace("{{name}}", item.name),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           onPress: () => handleDeleteItem(item.$id),
           style: "destructive",
         },
@@ -356,9 +359,9 @@ const ShoppingScreen = () => {
   };
 
   const getAssignedUserName = (userId) => {
-    if (!userId) return "Unassigned";
+    if (!userId) return t("shopping.unassigned");
     const assignedUser = users.find((u) => u.$id === userId);
-    return assignedUser ? assignedUser.username : "Unknown";
+    return assignedUser ? assignedUser.username : t("shopping.unknown");
   };
 
   const filteredItems = items.filter((item) => {
@@ -415,7 +418,7 @@ const ShoppingScreen = () => {
             )}
             <Text style={styles.itemCategory}>{category.label}</Text>
             {item.quantity && parseInt(item.quantity) > 1 && (
-              <Text style={styles.itemQuantity}> • Qty: {item.quantity}</Text>
+              <Text style={styles.itemQuantity}> • {t("shopping.quantity")}: {item.quantity}</Text>
             )}
           </View>
         </View>
@@ -459,11 +462,11 @@ const ShoppingScreen = () => {
 
   const renderCategoryTabs = () => {
     const categories = [
-      { id: "all", label: "All", icon: "grid" },
-      { id: ShoppingCategories.GROCERIES, label: "Groceries", icon: SHOPPING_CATEGORIES_CONFIG.groceries.icon },
-      { id: ShoppingCategories.HOUSEHOLD, label: "Household", icon: SHOPPING_CATEGORIES_CONFIG.household.icon },
-      { id: ShoppingCategories.PERSONAL, label: "Personal", icon: SHOPPING_CATEGORIES_CONFIG.personal.icon },
-      { id: ShoppingCategories.OTHER, label: "Other", icon: SHOPPING_CATEGORIES_CONFIG.other.icon },
+      { id: "all", label: t("common.all"), icon: "grid" },
+      { id: ShoppingCategories.GROCERIES, label: t("shopping.groceries"), icon: SHOPPING_CATEGORIES_CONFIG.groceries.icon },
+      { id: ShoppingCategories.HOUSEHOLD, label: t("shopping.household"), icon: SHOPPING_CATEGORIES_CONFIG.household.icon },
+      { id: ShoppingCategories.PERSONAL, label: t("shopping.personal"), icon: SHOPPING_CATEGORIES_CONFIG.personal.icon },
+      { id: ShoppingCategories.OTHER, label: t("shopping.other"), icon: SHOPPING_CATEGORIES_CONFIG.other.icon },
     ];
 
     return (
@@ -527,7 +530,7 @@ const ShoppingScreen = () => {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <Text style={styles.title}>Shopping List</Text>
+            <Text style={styles.title}>{t("shopping.title")}</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity 
                 style={styles.headerButton}
@@ -567,8 +570,8 @@ const ShoppingScreen = () => {
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Ionicons name="cart-outline" size={64} color="#3F3F46" />
-              <Text style={styles.emptyTitle}>No items yet</Text>
-              <Text style={styles.emptySubtitle}>Tap the + button to add items</Text>
+              <Text style={styles.emptyTitle}>{t("shopping.noItems")}</Text>
+              <Text style={styles.emptySubtitle}>{t("shopping.addFirstItem")}</Text>
             </View>
           }
           // Performance optimizations
@@ -605,25 +608,25 @@ const ShoppingScreen = () => {
               <TouchableOpacity onPress={() => setAddModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Add Shopping Item</Text>
+              <Text style={styles.modalTitle}>{t("shopping.addItem")}</Text>
               <TouchableOpacity onPress={handleAddItem}>
-                <Text style={styles.modalSaveText}>Save</Text>
+                <Text style={styles.modalSaveText}>{t("common.save")}</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Item Name */}
-              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Item Name</Text>
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>{t("shopping.itemName")}</Text>
               <TextInput
                 style={styles.input}
                 value={addForm.name}
                 onChangeText={(text) => setAddForm({ ...addForm, name: text })}
-                placeholder="What do you need?"
+                placeholder={t("shopping.itemNamePlaceholder")}
                 placeholderTextColor="#71717A"
               />
 
               {/* Quantity with +/- buttons */}
-              <Text style={styles.inputLabel}>Quantity</Text>
+              <Text style={styles.inputLabel}>{t("shopping.quantity")}</Text>
               <View style={styles.quantityContainer}>
                 <TouchableOpacity
                   style={styles.quantityButton}
@@ -710,7 +713,7 @@ const ShoppingScreen = () => {
                     styles.userChipText,
                     !addForm.assignedTo && styles.userChipTextSelected,
                   ]}>
-                    Unassigned
+                    {t("shopping.unassigned")}
                   </Text>
                 </TouchableOpacity>
                 {users.map((u) => (
@@ -765,25 +768,25 @@ const ShoppingScreen = () => {
               >
                 <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Edit Shopping Item</Text>
+              <Text style={styles.modalTitle}>{t("shopping.editItem")}</Text>
               <TouchableOpacity onPress={handleEditSubmit}>
-                <Text style={styles.modalSaveText}>Update</Text>
+                <Text style={styles.modalSaveText}>{t("common.save")}</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Item Name */}
-              <Text style={[styles.inputLabel, { marginTop: 0 }]}>Item Name</Text>
+              <Text style={[styles.inputLabel, { marginTop: 0 }]}>{t("shopping.itemName")}</Text>
               <TextInput
                 style={styles.input}
                 value={editForm.name}
                 onChangeText={(text) => setEditForm({ ...editForm, name: text })}
-                placeholder="What do you need?"
+                placeholder={t("shopping.itemNamePlaceholder")}
                 placeholderTextColor="#71717A"
               />
 
               {/* Quantity with +/- buttons */}
-              <Text style={styles.inputLabel}>Quantity</Text>
+              <Text style={styles.inputLabel}>{t("shopping.quantity")}</Text>
               <View style={styles.quantityContainer}>
                 <TouchableOpacity
                   style={styles.quantityButton}
@@ -818,7 +821,7 @@ const ShoppingScreen = () => {
               </View>
 
               {/* Category - Horizontal scroll chips */}
-              <Text style={styles.inputLabel}>Category</Text>
+              <Text style={styles.inputLabel}>{t("shopping.category")}</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false}
@@ -850,7 +853,7 @@ const ShoppingScreen = () => {
               </ScrollView>
 
               {/* Assign To - Horizontal scroll user chips */}
-              <Text style={styles.inputLabel}>Assign To</Text>
+              <Text style={styles.inputLabel}>{t("shopping.assignTo")}</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
@@ -870,7 +873,7 @@ const ShoppingScreen = () => {
                     styles.userChipText,
                     !editForm.assignedTo && styles.userChipTextSelected,
                   ]}>
-                    Unassigned
+                    {t("shopping.unassigned")}
                   </Text>
                 </TouchableOpacity>
                 {users.map((u) => (
@@ -917,7 +920,7 @@ const ShoppingScreen = () => {
               <TouchableOpacity onPress={() => setHistoryModalVisible(false)}>
                 <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Shopping History</Text>
+              <Text style={styles.modalTitle}>{t("shopping.history")}</Text>
               <View style={{ width: 24 }} />
             </View>
 
@@ -925,17 +928,17 @@ const ShoppingScreen = () => {
               {historyItems.length === 0 ? (
                 <View style={styles.emptyHistoryState}>
                   <Ionicons name="time-outline" size={64} color="#3F3F46" />
-                  <Text style={styles.emptyHistoryTitle}>No history yet</Text>
-                  <Text style={styles.emptyHistorySubtitle}>Completed items will appear here</Text>
+                  <Text style={styles.emptyHistoryTitle}>{t("shopping.noHistory")}</Text>
+                  <Text style={styles.emptyHistorySubtitle}>{t("shopping.completedItemsAppear")}</Text>
                 </View>
               ) : (
                 (() => {
                   const grouped = groupHistoryByDate(historyItems);
                   const sections = [
-                    { key: "today", title: "Today", items: grouped.today },
-                    { key: "yesterday", title: "Yesterday", items: grouped.yesterday },
-                    { key: "thisWeek", title: "This Week", items: grouped.thisWeek },
-                    { key: "older", title: "Older", items: grouped.older },
+                    { key: "today", title: t("shopping.today"), items: grouped.today },
+                    { key: "yesterday", title: t("shopping.yesterday"), items: grouped.yesterday },
+                    { key: "thisWeek", title: t("shopping.thisWeek"), items: grouped.thisWeek },
+                    { key: "older", title: t("shopping.older"), items: grouped.older },
                   ].filter(section => section.items.length > 0);
 
                   return sections.map((section) => (
@@ -961,7 +964,7 @@ const ShoppingScreen = () => {
                                 )}
                                 <Text style={styles.historyItemMetaText}>
                                   {category.label}
-                                  {item.quantity && parseInt(item.quantity) > 1 && ` • Qty: ${item.quantity}`}
+                                  {item.quantity && parseInt(item.quantity) > 1 && ` • ${t("shopping.quantity")}: ${item.quantity}`}
                                 </Text>
                               </View>
                               <Text style={styles.historyItemDate}>{completedDate}</Text>

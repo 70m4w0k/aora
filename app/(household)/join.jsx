@@ -17,9 +17,11 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { joinHousehold } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 
 const JoinHousehold = () => {
   const { user, loading, refreshUser } = useGlobalContext();
+  const t = useTranslation();
   const [inviteCode, setInviteCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -29,7 +31,7 @@ const JoinHousehold = () => {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4F86C6" />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={styles.loadingText}>{t("common.loading")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -37,7 +39,7 @@ const JoinHousehold = () => {
 
   const handleJoin = async () => {
     if (inviteCode.trim().length !== 6) {
-      return Alert.alert("Error", "Please enter a valid 6-character invite code");
+      return Alert.alert(t("common.error"), t("household.enterValidCode"));
     }
 
     setIsSubmitting(true);
@@ -49,17 +51,17 @@ const JoinHousehold = () => {
       await refreshUser();
       
       Alert.alert(
-        "Welcome! 🎉",
-        `You've joined "${household.name}"!\n\nYou can now see shared shopping lists, expenses, and chores with your household members.`,
+        t("household.welcomeTitle"),
+        t("household.joinMessage").replace("{{name}}", household.name),
         [
           {
-            text: "Let's go!",
+            text: t("household.letsGo"),
             onPress: () => router.replace("/(tabs)/home"),
           },
         ]
       );
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("common.error"), error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -89,14 +91,14 @@ const JoinHousehold = () => {
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons name="account-group" size={48} color="#3B82F6" />
             </View>
-            <Text style={styles.title}>Join a Household</Text>
+            <Text style={styles.title}>{t("household.joinTitle")}</Text>
             <Text style={styles.subtitle}>
-              Enter the 6-character invite code shared by your housemate
+              {t("household.joinSubtitle")}
             </Text>
           </View>
 
           <View style={styles.form}>
-            <Text style={styles.inputLabel}>Invite Code</Text>
+            <Text style={styles.inputLabel}>{t("household.inviteCode")}</Text>
             <TextInput
               style={styles.codeInput}
               value={inviteCode}
@@ -108,13 +110,13 @@ const JoinHousehold = () => {
               autoCorrect={false}
             />
             <Text style={styles.helperText}>
-              {inviteCode.length}/6 characters
+              {inviteCode.length}/6 {t("household.characters")}
             </Text>
 
             <View style={styles.infoBox}>
               <MaterialCommunityIcons name="help-circle-outline" size={20} color="#F59E0B" />
               <Text style={styles.infoText}>
-                Don't have a code? Ask your housemate to share their household's invite code from their Profile settings.
+                {t("household.joinInfo")}
               </Text>
             </View>
           </View>
@@ -128,7 +130,7 @@ const JoinHousehold = () => {
             disabled={isSubmitting || inviteCode.length !== 6}
           >
             <Text style={styles.joinButtonText}>
-              {isSubmitting ? "Joining..." : "Join Household"}
+              {isSubmitting ? t("household.joining") : t("household.joinHousehold")}
             </Text>
           </TouchableOpacity>
         </ScrollView>

@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import Loader from "../../components/Loader";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 import { icons } from "../../constants";
 
 // Dark theme colors
@@ -27,16 +28,14 @@ const COLORS = {
   },
 };
 
-// Tab configuration
-const TAB_CONFIG = {
-  home: { icon: 'home', label: 'Home', color: COLORS.accent.home, useCustomIcon: true },
-  calendar: { icon: 'calendar', label: 'Calendar', color: COLORS.accent.chores },
-  shopping: { icon: 'cart', label: 'Shopping', color: COLORS.accent.shopping },
-  expenses: { icon: 'wallet', label: 'Expenses', color: COLORS.accent.expenses },
-  profile: { icon: 'person', label: 'Profile', color: COLORS.accent.profile },
-};
-
-const TabIcon = ({ name, focused, focusAnim }) => {
+const TabIcon = ({ name, focused, focusAnim, t }) => {
+  const TAB_CONFIG = {
+    home: { icon: 'home', label: t("navbar.home"), color: COLORS.accent.home, useCustomIcon: true },
+    calendar: { icon: 'calendar', label: t("navbar.calendar"), color: COLORS.accent.chores },
+    shopping: { icon: 'cart', label: t("navbar.shopping"), color: COLORS.accent.shopping },
+    expenses: { icon: 'wallet', label: t("navbar.expenses"), color: COLORS.accent.expenses },
+    profile: { icon: 'person', label: t("navbar.profile"), color: COLORS.accent.profile },
+  };
   const config = TAB_CONFIG[name];
   const flashAnim = useRef(new Animated.Value(0)).current;
   
@@ -91,6 +90,7 @@ const TabIcon = ({ name, focused, focusAnim }) => {
 
 const TabLayout = () => {
   const { loading, isLogged, user, hasHousehold } = useGlobalContext();
+  const t = useTranslation();
   const [activeTab, setActiveTab] = useState('home');
   
   const focusAnims = {
@@ -143,43 +143,43 @@ const TabLayout = () => {
           options={{
             title: "Home",
             tabBarIcon: ({ focused }) => (
-              <TabIcon name="home" focused={focused} focusAnim={focusAnims.home} />
+              <TabIcon name="home" focused={focused} focusAnim={focusAnims.home} t={t} />
             ),
           }}
         />
         <Tabs.Screen
           name="calendar"
           options={{
-            title: "Calendar",
+            title: t("navbar.calendar"),
             tabBarIcon: ({ focused }) => (
-              <TabIcon name="calendar" focused={focused} focusAnim={focusAnims.calendar} />
+              <TabIcon name="calendar" focused={focused} focusAnim={focusAnims.calendar} t={t} />
             ),
           }}
         />
         <Tabs.Screen
           name="shopping"
           options={{
-            title: "Shopping",
+            title: t("navbar.shopping"),
             tabBarIcon: ({ focused }) => (
-              <TabIcon name="shopping" focused={focused} focusAnim={focusAnims.shopping} />
+              <TabIcon name="shopping" focused={focused} focusAnim={focusAnims.shopping} t={t} />
             ),
           }}
         />
         <Tabs.Screen
           name="expenses"
           options={{
-            title: "Expenses",
+            title: t("navbar.expenses"),
             tabBarIcon: ({ focused }) => (
-              <TabIcon name="expenses" focused={focused} focusAnim={focusAnims.expenses} />
+              <TabIcon name="expenses" focused={focused} focusAnim={focusAnims.expenses} t={t} />
             ),
           }}
         />
         <Tabs.Screen
           name="profile"
           options={{
-            title: "Profile",
+            title: t("navbar.profile"),
             tabBarIcon: ({ focused }) => (
-              <TabIcon name="profile" focused={focused} focusAnim={focusAnims.profile} />
+              <TabIcon name="profile" focused={focused} focusAnim={focusAnims.profile} t={t} />
             ),
           }}
         />

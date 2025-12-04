@@ -17,9 +17,11 @@ import {
 import { images, icons } from "../../constants";
 import { getCurrentUser, signIn } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 
 const SignIn = () => {
   const { refreshUser, setIsLogged } = useGlobalContext();
+  const t = useTranslation();
   const [isSubmitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
@@ -29,7 +31,7 @@ const SignIn = () => {
 
   const submit = async () => {
     if (form.email === "" || form.password === "") {
-      return Alert.alert("Error", "Please fill in all fields");
+      return Alert.alert(t("common.error"), t("auth.signIn.fillAllFields"));
     }
 
     setSubmitting(true);
@@ -39,10 +41,10 @@ const SignIn = () => {
       setIsLogged(true);
       await refreshUser(); // This will fetch user data and household if exists
 
-      Alert.alert("Success", "User signed in successfully");
+      Alert.alert(t("common.success"), t("auth.signIn.signInSuccess"));
       router.replace("/home");
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("common.error"), error.message);
     } finally {
       setSubmitting(false);
     }
@@ -64,16 +66,16 @@ const SignIn = () => {
           </View>
           
           <View style={styles.formContainer}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to your account to continue</Text>
+            <Text style={styles.title}>{t("auth.signIn.title")}</Text>
+            <Text style={styles.subtitle}>{t("auth.signIn.subtitle")}</Text>
             
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email</Text>
+              <Text style={styles.inputLabel}>{t("auth.signIn.email")}</Text>
               <TextInput
                 style={styles.input}
                 value={form.email}
                 onChangeText={(text) => setForm({ ...form, email: text })}
-                placeholder="Enter your email"
+                placeholder={t("auth.signIn.emailPlaceholder")}
                 placeholderTextColor="#999999"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -81,13 +83,13 @@ const SignIn = () => {
             </View>
             
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
+              <Text style={styles.inputLabel}>{t("auth.signIn.password")}</Text>
               <View style={styles.passwordContainer}>
                 <TextInput
                   style={styles.passwordInput}
                   value={form.password}
                   onChangeText={(text) => setForm({ ...form, password: text })}
-                  placeholder="Enter your password"
+                  placeholder={t("auth.signIn.passwordPlaceholder")}
                   placeholderTextColor="#999999"
                   secureTextEntry={!showPassword}
                 />
@@ -112,15 +114,15 @@ const SignIn = () => {
               disabled={isSubmitting}
             >
               <Text style={styles.signInButtonText}>
-                {isSubmitting ? "Signing in..." : "Sign In"}
+                {isSubmitting ? t("auth.signIn.signingIn") : t("auth.signIn.signIn")}
               </Text>
             </TouchableOpacity>
             
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account?</Text>
+              <Text style={styles.footerText}>{t("auth.signIn.noAccount")}</Text>
               <Link href="/sign-up" asChild>
                 <TouchableOpacity>
-                  <Text style={styles.signUpLink}>Sign Up</Text>
+                  <Text style={styles.signUpLink}>{t("auth.signIn.signUp")}</Text>
                 </TouchableOpacity>
               </Link>
             </View>

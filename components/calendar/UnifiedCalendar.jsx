@@ -18,6 +18,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 import {
   getHouseholdEvents,
   createEvent,
@@ -63,6 +64,7 @@ const VIEW_TYPES = {
 
 const UnifiedCalendar = () => {
   const { user, household } = useGlobalContext();
+  const t = useTranslation();
   const [currentView, setCurrentView] = useState(VIEW_TYPES.MONTHLY);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
@@ -285,26 +287,44 @@ const UnifiedCalendar = () => {
   };
 
   const formatDateHeader = () => {
+    const locale = t("common.locale") || "en-US";
+    const monthNames = {
+      en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+      fr: ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+    };
+    const weekdayNames = {
+      en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      fr: ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
+    };
+    const monthNamesShort = {
+      en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+      fr: ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"]
+    };
+    const lang = locale.startsWith("fr") ? "fr" : "en";
+    
     switch (currentView) {
       case VIEW_TYPES.DAILY:
-        return currentDate.toLocaleDateString("en-US", { 
-          weekday: "long", 
-          year: "numeric", 
-          month: "long", 
-          day: "numeric" 
-        });
+        const weekday = weekdayNames[lang][currentDate.getDay()];
+        const month = monthNames[lang][currentDate.getMonth()];
+        return `${weekday}, ${month} ${currentDate.getDate()}, ${currentDate.getFullYear()}`;
       case VIEW_TYPES.WEEKLY:
         const weekStart = new Date(currentDate);
         const day = weekStart.getDay();
         const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
         weekStart.setDate(diff);
         const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        return `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        const startMonth = monthNamesShort[lang][weekStart.getMonth()];
+        const endMonth = monthNamesShort[lang][weekEnd.getMonth()];
+        const year = weekStart.getFullYear() !== weekEnd.getFullYear() ? ` ${weekEnd.getFullYear()}` : "";
+        return `${startMonth} ${weekStart.getDate()} - ${endMonth} ${weekEnd.getDate()}${year}`;
       case VIEW_TYPES.MONTHLY:
-        return currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+        const monthName = monthNames[lang][currentDate.getMonth()];
+        return `${monthName} ${currentDate.getFullYear()}`;
       case VIEW_TYPES.ANNUAL:
         return currentDate.getFullYear().toString();
+      default:
+        return "";
     }
   };
 
@@ -372,6 +392,13 @@ const UnifiedCalendar = () => {
   }, [events, tasks, currentDate]);
 
   const renderViewSwitcher = () => {
+    const viewLabels = {
+      [VIEW_TYPES.DAILY]: t("calendar.daily"),
+      [VIEW_TYPES.WEEKLY]: t("calendar.weekly"),
+      [VIEW_TYPES.MONTHLY]: t("calendar.monthly"),
+      [VIEW_TYPES.ANNUAL]: t("calendar.annual"),
+    };
+    
     return (
       <View style={styles.viewSwitcher}>
         {Object.entries(VIEW_TYPES).map(([key, value]) => (
@@ -389,7 +416,7 @@ const UnifiedCalendar = () => {
                 currentView === value && styles.viewButtonTextActive,
               ]}
             >
-              {key.charAt(0) + key.slice(1).toLowerCase()}
+              {viewLabels[value]}
             </Text>
           </TouchableOpacity>
         ))}
@@ -407,7 +434,7 @@ const UnifiedCalendar = () => {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>{formatDateHeader()}</Text>
           <TouchableOpacity style={styles.todayButton} onPress={goToToday}>
-            <Text style={styles.todayButtonText}>Today</Text>
+            <Text style={styles.todayButtonText}>{t("calendar.today")}</Text>
           </TouchableOpacity>
         </View>
         
@@ -509,12 +536,12 @@ const UnifiedCalendar = () => {
 
   const handleSaveEvent = async () => {
     if (!eventForm.title.trim()) {
-      Alert.alert("Error", "Please enter an event title");
+      Alert.alert(t("common.error"), t("calendar.enterEventTitle"));
       return;
     }
 
     if (!household?.$id || !user?.$id) {
-      Alert.alert("Error", "Missing household or user information");
+      Alert.alert(t("common.error"), t("calendar.missingInfo"));
       return;
     }
 
@@ -539,7 +566,7 @@ const UnifiedCalendar = () => {
           assignedTo: eventForm.assignedTo || null,
           color: eventForm.color || null,
         });
-        Alert.alert("Success", "Event updated!");
+        Alert.alert(t("common.success"), t("calendar.eventUpdated"));
       } else {
         // Create new event
         await createEvent({
@@ -554,7 +581,7 @@ const UnifiedCalendar = () => {
           householdId: household.$id,
           userId: user.$id,
         });
-        Alert.alert("Success", "Event created!");
+        Alert.alert(t("common.success"), t("calendar.eventCreated"));
       }
 
       await fetchData();
@@ -567,12 +594,12 @@ const UnifiedCalendar = () => {
 
   const handleSaveChore = async () => {
     if (!choreForm.title.trim()) {
-      Alert.alert("Error", "Please enter a chore title");
+      Alert.alert(t("common.error"), t("calendar.enterChoreTitle"));
       return;
     }
 
     if (!household?.$id) {
-      Alert.alert("Error", "Missing household information");
+      Alert.alert(t("common.error"), t("calendar.missingHouseholdInfo"));
       return;
     }
 
@@ -583,7 +610,7 @@ const UnifiedCalendar = () => {
           title: choreForm.title.trim(),
           recurrence: choreForm.recurrence,
         });
-        Alert.alert("Success", "Chore updated!");
+        Alert.alert(t("common.success"), t("calendar.choreUpdated"));
       } else {
         // Create new chore
         await createTask({
@@ -591,7 +618,7 @@ const UnifiedCalendar = () => {
           recurrence: choreForm.recurrence,
           householdId: household.$id,
         });
-        Alert.alert("Success", "Chore created!");
+        Alert.alert(t("common.success"), t("calendar.choreCreated"));
       }
 
       await fetchData();
@@ -604,17 +631,17 @@ const UnifiedCalendar = () => {
 
   const handleDeleteEvent = (event) => {
     Alert.alert(
-      "Delete Event",
-      `Are you sure you want to delete "${event.title}"?`,
+      t("calendar.deleteEvent"),
+      t("calendar.deleteEventConfirm").replace("{{title}}", event.title),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteEvent(event.$id);
-              Alert.alert("Success", "Event deleted!");
+              Alert.alert(t("common.success"), t("calendar.eventDeleted"));
               await fetchData();
             } catch (error) {
               handleError(error, 'deleteEvent', true);
@@ -627,20 +654,20 @@ const UnifiedCalendar = () => {
 
   const handleDeleteChore = (chore) => {
     Alert.alert(
-      "Delete Chore",
-      `Are you sure you want to delete "${chore.title}"?`,
+      t("calendar.deleteChore"),
+      t("calendar.deleteChoreConfirm").replace("{{title}}", chore.title),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteTask(chore.$id);
-              Alert.alert("Success", "Chore deleted!");
+              Alert.alert(t("common.success"), t("calendar.choreDeleted"));
               await fetchData();
             } catch (error) {
-              Alert.alert("Error", "Could not delete chore");
+              Alert.alert(t("common.error"), t("calendar.couldNotDeleteChore"));
             }
           },
         },
@@ -650,7 +677,7 @@ const UnifiedCalendar = () => {
 
   const handleCompleteChore = async () => {
     if (!editingChore || !user?.$id || !household?.$id) {
-      Alert.alert("Error", "Missing information");
+      Alert.alert(t("common.error"), t("calendar.missingInfo"));
       return;
     }
 
@@ -672,7 +699,7 @@ const UnifiedCalendar = () => {
       await fetchData();
     } catch (error) {
       console.error("Error completing chore:", error);
-      Alert.alert("Error", "Could not complete chore. " + (error.message || ""));
+      Alert.alert(t("common.error"), t("calendar.couldNotCompleteChore") + (error.message || ""));
     }
   };
 
@@ -707,7 +734,7 @@ const UnifiedCalendar = () => {
     const daysSince = getDaysSinceLastCompletion(chore);
     
     if (daysSince === null) {
-      return { color: "#EF4444", emoji: "🔴", text: "Never completed" };
+      return { color: "#EF4444", emoji: "🔴", text: t("calendar.neverCompleted") };
     }
     
     const recurrenceDays = {
@@ -719,15 +746,19 @@ const UnifiedCalendar = () => {
     const expectedDays = recurrenceDays[chore.recurrence] || 7;
     const ratio = daysSince / expectedDays;
     
+    const daysAgoText = daysSince === 1 
+      ? t("calendar.daysAgo").replace("{{days}}", daysSince)
+      : t("calendar.daysAgoPlural").replace("{{days}}", daysSince);
+    
     if (ratio < 0.8) {
       // Green: less than 80% of expected time
-      return { color: "#22C55E", emoji: "🟢", text: `${daysSince} day${daysSince !== 1 ? 's' : ''} ago` };
+      return { color: "#22C55E", emoji: "🟢", text: daysAgoText };
     } else if (ratio <= 1.2) {
       // Orange: 80-120% of expected time
-      return { color: "#F59E0B", emoji: "🟠", text: `${daysSince} day${daysSince !== 1 ? 's' : ''} ago` };
+      return { color: "#F59E0B", emoji: "🟠", text: daysAgoText };
     } else {
       // Red: more than 120% of expected time
-      return { color: "#EF4444", emoji: "🔴", text: `${daysSince} day${daysSince !== 1 ? 's' : ''} ago` };
+      return { color: "#EF4444", emoji: "🔴", text: daysAgoText };
     }
   };
 
@@ -911,7 +942,7 @@ const UnifiedCalendar = () => {
         <View style={styles.choresListOverlay}>
           <View style={styles.choresListContent}>
             <View style={styles.choresListHeader}>
-              <Text style={styles.choresListTitle}>All Chores</Text>
+              <Text style={styles.choresListTitle}>{t("calendar.allChores")}</Text>
               <TouchableOpacity onPress={() => setShowChoresList(false)}>
                 <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
@@ -942,7 +973,7 @@ const UnifiedCalendar = () => {
                         </View>
                       </View>
                       <Text style={styles.choreListItemRecurrence}>
-                        Recurrence: {item.recurrence.charAt(0).toUpperCase() + item.recurrence.slice(1)}
+                        {t("calendar.recurrence")}: {t(`calendar.${item.recurrence}`)}
                       </Text>
                     </View>
                     <View style={styles.choreListItemActions}>
@@ -962,8 +993,8 @@ const UnifiedCalendar = () => {
               ListEmptyComponent={
                 <View style={styles.choresListEmpty}>
                   <Ionicons name="checkbox-outline" size={64} color="#3F3F46" />
-                  <Text style={styles.choresListEmptyText}>No chores yet</Text>
-                  <Text style={styles.choresListEmptySubtext}>Create your first chore</Text>
+                  <Text style={styles.choresListEmptyText}>{t("calendar.noChoresYet")}</Text>
+                  <Text style={styles.choresListEmptySubtext}>{t("calendar.createFirstChore")}</Text>
                 </View>
               }
               contentContainerStyle={styles.choresListContentContainer}
@@ -977,7 +1008,7 @@ const UnifiedCalendar = () => {
               }}
             >
               <Ionicons name="add" size={20} color="#FFF" />
-              <Text style={styles.choresListAddButtonText}>Add Chore</Text>
+              <Text style={styles.choresListAddButtonText}>{t("calendar.addChore")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1001,15 +1032,15 @@ const UnifiedCalendar = () => {
               </TouchableOpacity>
               <Text style={styles.modalTitle}>
                 {modalType === "event" 
-                  ? (editingEvent ? "Edit Event" : "Add Event")
-                  : (editingChore ? "Edit Chore" : "Add Chore")
+                  ? (editingEvent ? t("calendar.editEvent") : t("calendar.addEvent"))
+                  : (editingChore ? t("calendar.editChore") : t("calendar.addChore"))
                 }
               </Text>
               <TouchableOpacity onPress={modalType === "event" ? handleSaveEvent : handleSaveChore}>
                 <Text style={styles.modalSaveText}>
                   {modalType === "event" 
-                    ? (editingEvent ? "Update" : "Save")
-                    : (editingChore ? "Update" : "Save")
+                    ? (editingEvent ? t("common.save") : t("common.save"))
+                    : (editingChore ? t("common.save") : t("common.save"))
                   }
                 </Text>
               </TouchableOpacity>
@@ -1030,7 +1061,7 @@ const UnifiedCalendar = () => {
                   styles.modalTypeButtonText,
                   modalType === "event" && styles.modalTypeButtonTextActive
                 ]}>
-                  Event
+                  {t("calendar.event")}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1046,7 +1077,7 @@ const UnifiedCalendar = () => {
                   styles.modalTypeButtonText,
                   modalType === "chore" && styles.modalTypeButtonTextActive
                 ]}>
-                  Chore
+                  {t("calendar.chore")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1056,18 +1087,18 @@ const UnifiedCalendar = () => {
                 <>
                   {/* Event Form */}
                   {/* Title */}
-                  <Text style={[styles.inputLabel, { marginTop: 0 }]}>Title *</Text>
+                  <Text style={[styles.inputLabel, { marginTop: 0 }]}>{t("calendar.title")} *</Text>
                   <TextInput
                     style={styles.input}
                     value={eventForm.title}
                     onChangeText={(text) => setEventForm(prev => ({ ...prev, title: text }))}
-                    placeholder="Event title"
+                    placeholder={t("calendar.eventTitlePlaceholder")}
                     placeholderTextColor="#71717A"
                   />
 
               {/* All Day Toggle */}
               <View style={styles.allDayContainer}>
-                <Text style={styles.inputLabel}>All Day</Text>
+                <Text style={styles.inputLabel}>{t("calendar.allDay")}</Text>
                 <TouchableOpacity
                   style={[
                     styles.toggle,
@@ -1083,7 +1114,7 @@ const UnifiedCalendar = () => {
               </View>
 
               {/* Start Date/Time */}
-              <Text style={styles.inputLabel}>Start {eventForm.allDay ? "Date" : "Date & Time"}</Text>
+              <Text style={styles.inputLabel}>{t("calendar.start")} {eventForm.allDay ? t("calendar.date") : t("calendar.dateTime")}</Text>
               <TouchableOpacity
                 style={styles.dateTimeButton}
                 onPress={() => setShowStartDatePicker(true)}
@@ -1109,7 +1140,7 @@ const UnifiedCalendar = () => {
               )}
 
               {/* End Date/Time */}
-              <Text style={styles.inputLabel}>End {eventForm.allDay ? "Date" : "Date & Time"}</Text>
+              <Text style={styles.inputLabel}>{t("calendar.end")} {eventForm.allDay ? t("calendar.date") : t("calendar.dateTime")}</Text>
               <TouchableOpacity
                 style={styles.dateTimeButton}
                 onPress={() => setShowEndDatePicker(true)}
@@ -1135,11 +1166,11 @@ const UnifiedCalendar = () => {
               )}
 
               {/* Category */}
-              <Text style={styles.inputLabel}>Category</Text>
+              <Text style={styles.inputLabel}>{t("calendar.category")}</Text>
               {renderCategorySelector()}
 
               {/* Assigned To */}
-              <Text style={styles.inputLabel}>Assign To (optional)</Text>
+              <Text style={styles.inputLabel}>{t("calendar.assignToOptional")}</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
@@ -1160,7 +1191,7 @@ const UnifiedCalendar = () => {
                     styles.userChipText,
                     !eventForm.assignedTo && styles.userChipTextSelected,
                   ]}>
-                    Unassigned
+                    {t("calendar.unassigned")}
                   </Text>
                 </TouchableOpacity>
                 {users.map((u) => (
@@ -1188,12 +1219,12 @@ const UnifiedCalendar = () => {
               </ScrollView>
 
               {/* Description */}
-              <Text style={styles.inputLabel}>Description (optional)</Text>
+              <Text style={styles.inputLabel}>{t("calendar.descriptionOptional")}</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={eventForm.description}
                 onChangeText={(text) => setEventForm(prev => ({ ...prev, description: text }))}
-                placeholder="Add notes or details..."
+                placeholder={t("calendar.descriptionPlaceholder")}
                 placeholderTextColor="#71717A"
                 multiline
                 numberOfLines={4}
@@ -1209,7 +1240,7 @@ const UnifiedCalendar = () => {
                   }}
                 >
                   <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                  <Text style={styles.deleteEventButtonText}>Delete Event</Text>
+                  <Text style={styles.deleteEventButtonText}>{t("calendar.deleteEvent")}</Text>
                 </TouchableOpacity>
               )}
                 </>
@@ -1236,7 +1267,7 @@ const UnifiedCalendar = () => {
                             styles.choreEditTabText,
                             choreEditTab === "edit" && styles.choreEditTabTextActive,
                           ]}>
-                            Edit
+                            {t("common.edit")}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -1255,7 +1286,7 @@ const UnifiedCalendar = () => {
                             styles.choreEditTabText,
                             choreEditTab === "history" && styles.choreEditTabTextActive,
                           ]}>
-                            History
+                            {t("calendar.history")}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -1265,17 +1296,17 @@ const UnifiedCalendar = () => {
                   {choreEditTab === "edit" ? (
                     <>
                       {/* Title */}
-                      <Text style={[styles.inputLabel, { marginTop: 0 }]}>Title *</Text>
+                      <Text style={[styles.inputLabel, { marginTop: 0 }]}>{t("calendar.title")} *</Text>
                       <TextInput
                         style={styles.input}
                         value={choreForm.title}
                         onChangeText={(text) => setChoreForm(prev => ({ ...prev, title: text }))}
-                        placeholder="Chore title"
+                        placeholder={t("calendar.choreTitlePlaceholder")}
                         placeholderTextColor="#71717A"
                       />
 
                       {/* Recurrence */}
-                      <Text style={styles.inputLabel}>Recurrence</Text>
+                      <Text style={styles.inputLabel}>{t("calendar.recurrence")}</Text>
                       <View style={styles.recurrenceContainer}>
                         {["daily", "weekly", "monthly"].map((recurrence) => (
                           <TouchableOpacity
@@ -1303,7 +1334,7 @@ const UnifiedCalendar = () => {
                           onPress={handleCompleteChore}
                         >
                           <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-                          <Text style={styles.completeChoreButtonText}>Complete Task</Text>
+                          <Text style={styles.completeChoreButtonText}>{t("calendar.completeTask")}</Text>
                         </TouchableOpacity>
                       )}
 
@@ -1317,7 +1348,7 @@ const UnifiedCalendar = () => {
                           }}
                         >
                           <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                          <Text style={styles.deleteEventButtonText}>Delete Chore</Text>
+                          <Text style={styles.deleteEventButtonText}>{t("calendar.deleteChore")}</Text>
                         </TouchableOpacity>
                       )}
                     </>
@@ -1362,9 +1393,9 @@ const UnifiedCalendar = () => {
                       ) : (
                         <View style={styles.choreHistoryEmpty}>
                           <Ionicons name="time-outline" size={48} color="#3F3F46" />
-                          <Text style={styles.choreHistoryEmptyText}>No completion history</Text>
+                          <Text style={styles.choreHistoryEmptyText}>{t("calendar.noCompletionHistory")}</Text>
                           <Text style={styles.choreHistoryEmptySubtext}>
-                            Complete this task to see history
+                            {t("calendar.completeTaskToSeeHistory")}
                           </Text>
                         </View>
                       )}
@@ -1567,7 +1598,7 @@ const DailyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreateE
         <View style={styles.allDaySection}>
           <View style={styles.allDayHeader}>
             <Ionicons name="time-outline" size={16} color="#71717A" />
-            <Text style={styles.allDayHeaderText}>All Day</Text>
+            <Text style={styles.allDayHeaderText}>{t("calendar.allDay")}</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.allDayEvents}>
             {allDayEvents.map((event) => (
@@ -1589,14 +1620,14 @@ const DailyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreateE
         <View style={styles.completedTasksSection}>
           <View style={styles.completedTasksHeader}>
             <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
-            <Text style={styles.completedTasksHeaderText}>Completed Tasks</Text>
+            <Text style={styles.completedTasksHeaderText}>{t("calendar.completedTasks")}</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.completedTasksList}>
             {completedTasks.map((item) => (
               <View key={item.id} style={styles.completedTaskChip}>
                 <Text style={styles.completedTaskChipText}>{item.task.title}</Text>
                 <Text style={styles.completedTaskChipUser}>
-                  by {item.completedBy?.username || "Unknown"}
+                  {t("calendar.by")} {item.completedBy?.username || t("calendar.unknown")}
                 </Text>
               </View>
             ))}
@@ -1897,7 +1928,7 @@ const WeeklyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreate
                         onPress={() => onCreateEvent(dayDate)}
                       >
                         <Ionicons name="add" size={16} color="#FFF" />
-                        <Text style={styles.addEventButtonText}>Add Event</Text>
+                        <Text style={styles.addEventButtonText}>{t("calendar.addEvent")}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1920,7 +1951,7 @@ const WeeklyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreate
                                   color={item.completedBy?.color || "#22C55E"} 
                                 />
                                 <Text style={styles.completedTaskUserText}>
-                                  completed by {item.completedBy?.username || "Unknown"}
+                                  {t("calendar.completedBy")} {item.completedBy?.username || t("calendar.unknown")}
                                 </Text>
                               </View>
                             </View>
@@ -2095,7 +2126,8 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
     });
   };
   
-  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const t = useTranslation();
+  const weekDays = t("calendar.weekDays").split(",").map(d => d.trim());
   
   const renderDayCell = (dayIndex) => {
     const dayNumber = getDayNumber(dayIndex);
@@ -2208,11 +2240,21 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
         <View style={styles.selectedDayDetails}>
           <View style={styles.selectedDayHeader}>
             <Text style={styles.selectedDayTitle}>
-              {selectedDate.toLocaleDateString("en-US", { 
-                weekday: "long", 
-                month: "long", 
-                day: "numeric" 
-              })}
+              {(() => {
+                const locale = t("common.locale") || "en-US";
+                const weekdayNames = {
+                  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+                  fr: ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
+                };
+                const monthNames = {
+                  en: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+                  fr: ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+                };
+                const lang = locale.startsWith("fr") ? "fr" : "en";
+                const weekday = weekdayNames[lang][selectedDate.getDay()];
+                const month = monthNames[lang][selectedDate.getMonth()];
+                return `${weekday}, ${month} ${selectedDate.getDate()}`;
+              })()}
             </Text>
             <TouchableOpacity onPress={() => setSelectedDate(null)}>
               <Ionicons name="close" size={20} color="#71717A" />
@@ -2234,14 +2276,14 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
                 return (
                   <View style={styles.noEventsContainer}>
                     <Ionicons name="calendar-outline" size={32} color="#3F3F46" />
-                    <Text style={styles.noEventsText}>No events on this day</Text>
+                    <Text style={styles.noEventsText}>{t("calendar.noEventsThisDay")}</Text>
                     {onCreateEvent && (
                       <TouchableOpacity 
                         style={styles.addEventButton}
                         onPress={() => onCreateEvent(selectedDate)}
                       >
                         <Ionicons name="add" size={16} color="#FFF" />
-                        <Text style={styles.addEventButtonText}>Add Event</Text>
+                        <Text style={styles.addEventButtonText}>{t("calendar.addEvent")}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -2265,7 +2307,7 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
                             color={item.completedBy?.color || "#22C55E"} 
                           />
                           <Text style={styles.completedTaskUserText}>
-                            completed by {item.completedBy?.username || "Unknown"}
+                            {t("calendar.completedBy")} {item.completedBy?.username || t("calendar.unknown")}
                           </Text>
                         </View>
                       </View>
@@ -2314,6 +2356,7 @@ const MonthlyView = ({ date, items, tasks, tasksDone, users, onDayPress, onCreat
 };
 
 const AnnualView = ({ date, tasks, tasksDone, users }) => {
+  const t = useTranslation();
   const heatmapScrollRef = useRef(null);
   const currentWeekNumber = getWeekNumberByDate(new Date());
   
@@ -2405,8 +2448,8 @@ const AnnualView = ({ date, tasks, tasksDone, users }) => {
       showsVerticalScrollIndicator={false} 
       contentContainerStyle={styles.annualContent}
     >
-      <Text style={styles.annualTitle}>📊 Yearly Activity</Text>
-      <Text style={styles.annualSubtitle}>Tasks completed per week • Scroll → to see full year</Text>
+      <Text style={styles.annualTitle}>📊 {t("calendar.yearlyActivity")}</Text>
+      <Text style={styles.annualSubtitle}>{t("calendar.yearlyActivitySubtitle")}</Text>
 
       {/* Stacked Heatmap Grid */}
       <View style={styles.stackedHeatmapCard}>
@@ -2460,8 +2503,8 @@ const AnnualView = ({ date, tasks, tasksDone, users }) => {
                       ]}
                       onPress={() => {
                         Alert.alert(
-                          `${userData.username} • Week ${weekIndex + 1}`,
-                          count > 0 ? `${count} task${count > 1 ? 's' : ''} completed` : "No tasks this week"
+                          `${userData.username} • ${t("calendar.week")} ${weekIndex + 1}`,
+                          count > 0 ? `${count} ${count > 1 ? t("calendar.tasksCompleted") : t("calendar.taskCompleted")}` : t("calendar.noTasksThisWeek")
                         );
                       }}
                     />
@@ -2475,7 +2518,7 @@ const AnnualView = ({ date, tasks, tasksDone, users }) => {
               <View style={[styles.rowLabel, { width: LABEL_WIDTH }]}>
                 <Ionicons name="home" size={14} color="#06B6D4" />
                 <Text style={[styles.rowLabelText, { color: '#06B6D4', marginLeft: 6, fontWeight: '600' }]}>
-                  Total
+                  {t("calendar.total")}
                 </Text>
               </View>
               
@@ -2495,8 +2538,8 @@ const AnnualView = ({ date, tasks, tasksDone, users }) => {
                     ]}
                     onPress={() => {
                       Alert.alert(
-                        `Household • Week ${weekIndex + 1}`,
-                        count > 0 ? `${count} task${count > 1 ? 's' : ''} completed` : "No tasks this week"
+                        `${t("calendar.household")} • ${t("calendar.week")} ${weekIndex + 1}`,
+                        count > 0 ? `${count} ${count > 1 ? t("calendar.tasksCompleted") : t("calendar.taskCompleted")}` : t("calendar.noTasksThisWeek")
                       );
                     }}
                   />
@@ -2520,7 +2563,7 @@ const AnnualView = ({ date, tasks, tasksDone, users }) => {
           {/* Household Total */}
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: "#06B6D4" }]} />
-            <Text style={[styles.legendUsername, { color: "#06B6D4" }]}>Total</Text>
+            <Text style={[styles.legendUsername, { color: "#06B6D4" }]}>{t("calendar.total")}</Text>
             <Text style={[styles.legendCount, { color: "#06B6D4" }]}>{(tasksDone || []).length}</Text>
           </View>
         </View>
@@ -2528,18 +2571,18 @@ const AnnualView = ({ date, tasks, tasksDone, users }) => {
 
       {/* Week indicator */}
       <Text style={styles.heatmapWeekIndicator}>
-        📍 Current: Week {currentWeekNumber} of {WEEKS_IN_YEAR}
+        📍 {t("calendar.currentWeek")}: {t("calendar.week")} {currentWeekNumber} {t("calendar.of")} {WEEKS_IN_YEAR}
       </Text>
 
       {/* Stats summary */}
       <View style={styles.heatmapStats}>
         <View style={styles.heatmapStatItem}>
           <Text style={styles.heatmapStatValue}>{(tasksDone || []).length}</Text>
-          <Text style={styles.heatmapStatLabel}>Total Completions</Text>
+          <Text style={styles.heatmapStatLabel}>{t("calendar.totalCompletions")}</Text>
         </View>
         <View style={styles.heatmapStatItem}>
           <Text style={styles.heatmapStatValue}>{weeklyActivity.filter(w => w > 0).length}</Text>
-          <Text style={styles.heatmapStatLabel}>Active Weeks</Text>
+          <Text style={styles.heatmapStatLabel}>{t("calendar.activeWeeks")}</Text>
         </View>
       </View>
     </ScrollView>

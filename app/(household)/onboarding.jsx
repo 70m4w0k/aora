@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 import Loader from "../../components/Loader";
 import { images } from "../../constants";
 
@@ -30,6 +31,7 @@ const COLORS = {
 
 const HouseholdOnboarding = () => {
   const { user, loading } = useGlobalContext();
+  const t = useTranslation();
   
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -115,10 +117,10 @@ const HouseholdOnboarding = () => {
             resizeMode="cover"
           />
           
-          <Text style={styles.greeting}>Hey, {user.username}! 👋</Text>
-          <Text style={styles.title}>Let's set up your home</Text>
+          <Text style={styles.greeting}>{t("household.greeting").replace("{{username}}", user.username)} 👋</Text>
+          <Text style={styles.title}>{t("household.setupTitle")}</Text>
           <Text style={styles.subtitle}>
-            Create a new household or join an existing one with an invite code
+            {t("household.setupSubtitle")}
           </Text>
         </Animated.View>
 
@@ -138,9 +140,9 @@ const HouseholdOnboarding = () => {
                 <Ionicons name="home" size={28} color={COLORS.green} />
               </View>
               <View style={styles.cardContent}>
-                <Text style={styles.optionTitle}>Create a Household</Text>
+                <Text style={styles.optionTitle}>{t("household.createTitle")}</Text>
                 <Text style={styles.optionDescription}>
-                  Start fresh and invite your housemates
+                  {t("household.createDescription")}
                 </Text>
               </View>
               <View style={styles.arrowContainer}>
@@ -163,9 +165,9 @@ const HouseholdOnboarding = () => {
                 <Ionicons name="people" size={28} color={COLORS.blue} />
               </View>
               <View style={styles.cardContent}>
-                <Text style={styles.optionTitle}>Join a Household</Text>
+                <Text style={styles.optionTitle}>{t("household.joinTitle")}</Text>
                 <Text style={styles.optionDescription}>
-                  Enter an invite code from your housemate
+                  {t("household.joinDescription")}
                 </Text>
               </View>
               <View style={styles.arrowContainer}>
@@ -179,7 +181,7 @@ const HouseholdOnboarding = () => {
         <Animated.View style={[styles.footer, { opacity: fadeAnim }]}>
           <Ionicons name="information-circle-outline" size={16} color={COLORS.textMuted} />
           <Text style={styles.footerText}>
-            You can always change or leave your household later
+            {t("household.footerHint")}
           </Text>
         </Animated.View>
       </View>

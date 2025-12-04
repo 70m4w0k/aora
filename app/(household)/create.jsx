@@ -17,9 +17,11 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { createHousehold } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 
 const CreateHousehold = () => {
   const { user, loading, refreshUser } = useGlobalContext();
+  const t = useTranslation();
   const [householdName, setHouseholdName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -29,7 +31,7 @@ const CreateHousehold = () => {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4F86C6" />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={styles.loadingText}>{t("common.loading")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -37,7 +39,7 @@ const CreateHousehold = () => {
 
   const handleCreate = async () => {
     if (householdName.trim() === "") {
-      return Alert.alert("Error", "Please enter a household name");
+      return Alert.alert(t("common.error"), t("household.enterName"));
     }
 
     setIsSubmitting(true);
@@ -49,17 +51,17 @@ const CreateHousehold = () => {
       await refreshUser();
       
       Alert.alert(
-        "Household Created! 🏠",
-        `Your household "${newHousehold.name}" has been created!\n\nInvite Code: ${newHousehold.inviteCode}\n\nShare this code with your housemates so they can join.`,
+        t("household.createdTitle"),
+        t("household.createdMessage").replace("{{name}}", newHousehold.name).replace("{{code}}", newHousehold.inviteCode),
         [
           {
-            text: "Got it!",
+            text: t("household.gotIt"),
             onPress: () => router.replace("/(tabs)/home"),
           },
         ]
       );
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("common.error"), error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -83,19 +85,19 @@ const CreateHousehold = () => {
             <View style={styles.iconContainer}>
               <MaterialCommunityIcons name="home-plus" size={48} color="#10B981" />
             </View>
-            <Text style={styles.title}>Create Your Household</Text>
+            <Text style={styles.title}>{t("household.createYourHousehold")}</Text>
             <Text style={styles.subtitle}>
-              Give your household a name. You can change this later.
+              {t("household.createSubtitle")}
             </Text>
           </View>
 
           <View style={styles.form}>
-            <Text style={styles.inputLabel}>Household Name</Text>
+            <Text style={styles.inputLabel}>{t("household.householdName")}</Text>
             <TextInput
               style={styles.input}
               value={householdName}
               onChangeText={setHouseholdName}
-              placeholder="e.g., Apartment 4B, The Cozy House"
+              placeholder={t("household.namePlaceholder")}
               placeholderTextColor="#999999"
               maxLength={50}
             />
@@ -104,7 +106,7 @@ const CreateHousehold = () => {
             <View style={styles.infoBox}>
               <MaterialCommunityIcons name="information-outline" size={20} color="#10B981" />
               <Text style={styles.infoText}>
-                After creating your household, you'll receive an invite code to share with your housemates.
+                {t("household.createInfo")}
               </Text>
             </View>
           </View>
@@ -118,7 +120,7 @@ const CreateHousehold = () => {
             disabled={isSubmitting}
           >
             <Text style={styles.createButtonText}>
-              {isSubmitting ? "Creating..." : "Create Household"}
+              {isSubmitting ? t("household.creating") : t("household.createHousehold")}
             </Text>
           </TouchableOpacity>
         </ScrollView>

@@ -20,6 +20,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 import {
   getHouseholdExpenses,
   createExpense,
@@ -33,21 +34,22 @@ import {
 
 const { width: screenWidth } = Dimensions.get("window");
 
-// Expense Categories with icons and colors
-const EXPENSE_CATEGORIES = {
-  food: { icon: "restaurant", label: "Food & Drinks", color: "#F97316" },
-  groceries: { icon: "cart", label: "Groceries", color: "#22C55E" },
-  rent: { icon: "home", label: "Rent", color: "#8B5CF6" },
-  utilities: { icon: "flash", label: "Utilities", color: "#EAB308" },
-  transport: { icon: "car", label: "Transport", color: "#06B6D4" },
-  entertainment: { icon: "game-controller", label: "Entertainment", color: "#EC4899" },
-  shopping: { icon: "bag", label: "Shopping", color: "#F43F5E" },
-  health: { icon: "medkit", label: "Health", color: "#14B8A6" },
-  other: { icon: "ellipsis-horizontal", label: "Other", color: "#71717A" },
-};
-
 const ExpensesScreen = () => {
   const { user, household } = useGlobalContext();
+  const t = useTranslation();
+  
+  // Expense Categories with icons and colors
+  const EXPENSE_CATEGORIES = {
+    food: { icon: "restaurant", label: t("expenses.food"), color: "#F97316" },
+    groceries: { icon: "cart", label: t("expenses.groceries"), color: "#22C55E" },
+    rent: { icon: "home", label: t("expenses.rent"), color: "#8B5CF6" },
+    utilities: { icon: "flash", label: t("expenses.utilities"), color: "#EAB308" },
+    transport: { icon: "car", label: t("expenses.transport"), color: "#06B6D4" },
+    entertainment: { icon: "game-controller", label: t("expenses.entertainment"), color: "#EC4899" },
+    shopping: { icon: "bag", label: t("expenses.shopping"), color: "#F43F5E" },
+    health: { icon: "medkit", label: t("expenses.health"), color: "#14B8A6" },
+    other: { icon: "ellipsis-horizontal", label: t("expenses.other"), color: "#71717A" },
+  };
   const [activeTab, setActiveTab] = useState("expenses");
   const [expenses, setExpenses] = useState([]);
   const [settlements, setSettlements] = useState([]);
@@ -281,20 +283,20 @@ const ExpensesScreen = () => {
 
   const handleDeleteExpense = async (expense) => {
     Alert.alert(
-      "Delete Expense",
-      `Are you sure you want to delete "${expense.title}"?`,
+      t("expenses.deleteExpense"),
+      t("expenses.deleteConfirm").replace("{{title}}", expense.title),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteExpense(expense.$id);
               await fetchData();
-              Alert.alert("Success", "Expense deleted!");
+              Alert.alert(t("common.success"), t("expenses.expenseDeleted"));
             } catch (error) {
-              Alert.alert("Error", error.message);
+              Alert.alert(t("common.error"), error.message);
             }
           },
         },
@@ -370,7 +372,7 @@ const ExpensesScreen = () => {
   const handleAddExpense = async () => {
     if (!expenseForm.title.trim() || !expenseForm.amount.trim() || 
         !expenseForm.paidBy || expenseForm.splitBetween.length === 0) {
-      return Alert.alert("Missing Info", "Please fill in title, amount, payer, and who to split with");
+      return Alert.alert(t("common.error"), t("expenses.fillAllFields"));
     }
 
     try {
@@ -384,7 +386,7 @@ const ExpensesScreen = () => {
           category: expenseForm.category,
           notes: expenseForm.notes,
         });
-        Alert.alert("Success", "Expense updated!");
+        Alert.alert(t("common.success"), t("expenses.expenseUpdated"));
       } else {
         // Create new expense
         await createExpense({
@@ -393,14 +395,14 @@ const ExpensesScreen = () => {
           date: new Date().toISOString(),
           householdId: household.$id,
         });
-        Alert.alert("Success", "Expense added!");
+        Alert.alert(t("common.success"), t("expenses.expenseAdded"));
       }
 
       setExpenseModalVisible(false);
       resetExpenseForm();
       await fetchData();
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("common.error"), error.message);
     }
   };
 
@@ -420,12 +422,12 @@ const ExpensesScreen = () => {
     
     const amount = parseFloat(settlementForm.amount);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert("Error", "Please enter a valid amount");
+      Alert.alert(t("common.error"), t("expenses.enterValidAmount"));
       return;
     }
 
     if (amount > selectedDebt.amount + 0.01) {
-      Alert.alert("Error", "Amount cannot exceed the debt");
+      Alert.alert(t("common.error"), t("expenses.amountExceedsDebt"));
       return;
     }
 
@@ -436,16 +438,16 @@ const ExpensesScreen = () => {
         paidTo: selectedDebt.to.oderId,
         date: new Date().toISOString(),
         householdId: household.$id,
-        notes: settlementForm.notes || "Settlement",
+        notes: settlementForm.notes || t("expenses.settled"),
       });
 
       setSettlementModalVisible(false);
       setSelectedDebt(null);
       setSettlementForm({ amount: "", notes: "" });
       await fetchData();
-      Alert.alert("Success", "Settlement recorded!");
+      Alert.alert(t("common.success"), t("expenses.settlementRecorded"));
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("common.error"), error.message);
     }
   };
 
@@ -455,20 +457,20 @@ const ExpensesScreen = () => {
     const paidToName = getUserName(settlement.paidTo);
     
     Alert.alert(
-      "Delete Settlement",
-      `Delete settlement of €${parseFloat(settlement.amount).toFixed(2)} from ${paidByName} to ${paidToName}?`,
+      t("expenses.deleteSettlement"),
+      t("expenses.deleteSettlementConfirm").replace("{{amount}}", parseFloat(settlement.amount).toFixed(2)).replace("{{from}}", paidByName).replace("{{to}}", paidToName),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             try {
               await deleteSettlement(settlement.$id);
               await fetchData();
-              Alert.alert("Success", "Settlement deleted");
+              Alert.alert(t("common.success"), t("expenses.settlementDeleted"));
             } catch (error) {
-              Alert.alert("Error", "Failed to delete settlement");
+              Alert.alert(t("common.error"), t("expenses.failedToDeleteSettlement"));
             }
           },
         },
@@ -606,7 +608,7 @@ const ExpensesScreen = () => {
           <View style={styles.debtText}>
             <Text style={styles.debtDescription}>
               <Text style={styles.debtName}>{item.from.username}</Text>
-              {" owes "}
+              {` ${t("expenses.owes")} `}
               <Text style={styles.debtName}>{item.to.username}</Text>
             </Text>
             <Text style={styles.debtAmount}>{formatCurrency(item.amount)}</Text>
@@ -618,7 +620,7 @@ const ExpensesScreen = () => {
             style={styles.settleButton}
             onPress={() => openSettlementModal(item)}
           >
-            <Text style={styles.settleButtonText}>{isDebtor ? "Pay" : "Received"}</Text>
+            <Text style={styles.settleButtonText}>{isDebtor ? t("expenses.pay") : t("expenses.received")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -638,14 +640,14 @@ const ExpensesScreen = () => {
           <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
         </View>
         <View style={styles.settlementInfo}>
-          <Text style={styles.settlementText}>
-            <Text style={[styles.settlementName, { color: getUserColor(item.paidBy) }]}>
-              {paidByName}
-            </Text>
-            {" paid "}
-            <Text style={[styles.settlementName, { color: getUserColor(item.paidTo) }]}>
-              {paidToName}
-            </Text>
+            <Text style={styles.settlementText}>
+              <Text style={[styles.settlementName, { color: getUserColor(item.paidBy) }]}>
+                {paidByName}
+              </Text>
+              {` ${t("expenses.paid")} `}
+              <Text style={[styles.settlementName, { color: getUserColor(item.paidTo) }]}>
+                {paidToName}
+              </Text>
           </Text>
           <Text style={styles.settlementDate}>
             {new Date(item.date).toLocaleDateString()} • {item.notes || "Settlement"}
@@ -707,12 +709,12 @@ const ExpensesScreen = () => {
     return (
       <View style={styles.summaryBanner}>
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Total Expenses</Text>
+          <Text style={styles.summaryLabel}>{t("expenses.totalExpenses")}</Text>
           <Text style={styles.summaryValue}>{formatCurrency(totalExpenses)}</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>Your Balance</Text>
+          <Text style={styles.summaryLabel}>{t("expenses.yourBalance")}</Text>
           <Text style={[
             styles.summaryValue,
             myBalance > 0 && { color: "#22C55E" },
@@ -730,7 +732,7 @@ const ExpensesScreen = () => {
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Expenses</Text>
+          <Text style={styles.title}>{t("expenses.title")}</Text>
         </View>
 
         {/* Tab Switcher */}
@@ -745,7 +747,7 @@ const ExpensesScreen = () => {
               color={activeTab === "expenses" ? "#F43F5E" : "#71717A"} 
             />
             <Text style={[styles.tabText, activeTab === "expenses" && styles.tabTextActive]}>
-              Expenses
+              {t("expenses.title")}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -758,7 +760,7 @@ const ExpensesScreen = () => {
               color={activeTab === "balances" ? "#F43F5E" : "#71717A"} 
             />
             <Text style={[styles.tabText, activeTab === "balances" && styles.tabTextActive]}>
-              Balances
+              {t("expenses.balance")}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -771,7 +773,7 @@ const ExpensesScreen = () => {
               color={activeTab === "history" ? "#F43F5E" : "#71717A"} 
             />
             <Text style={[styles.tabText, activeTab === "history" && styles.tabTextActive]}>
-              Settlements
+              {t("expenses.settled")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -792,8 +794,8 @@ const ExpensesScreen = () => {
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Ionicons name="receipt-outline" size={64} color="#3F3F46" />
-                <Text style={styles.emptyTitle}>No expenses yet</Text>
-                <Text style={styles.emptySubtitle}>Add your first shared expense</Text>
+                <Text style={styles.emptyTitle}>{t("expenses.noExpenses")}</Text>
+                <Text style={styles.emptySubtitle}>{t("expenses.addFirstExpense")}</Text>
               </View>
             }
             // Performance optimizations
@@ -816,13 +818,13 @@ const ExpensesScreen = () => {
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Ionicons name="checkmark-circle-outline" size={64} color="#22C55E" />
-                <Text style={styles.emptyTitle}>All settled up!</Text>
-                <Text style={styles.emptySubtitle}>No outstanding balances</Text>
+                <Text style={styles.emptyTitle}>{t("expenses.allSettled")}</Text>
+                <Text style={styles.emptySubtitle}>{t("expenses.noOutstandingBalances")}</Text>
               </View>
             }
             ListHeaderComponent={
               debts.length > 0 ? (
-                <Text style={styles.balanceHeader}>Who owes whom</Text>
+                <Text style={styles.balanceHeader}>{t("expenses.whoOwesWhom")}</Text>
               ) : null
             }
           />
@@ -840,15 +842,15 @@ const ExpensesScreen = () => {
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Ionicons name="time-outline" size={64} color="#3F3F46" />
-                <Text style={styles.emptyTitle}>No settlements yet</Text>
-                <Text style={styles.emptySubtitle}>Settlements will appear here</Text>
+                <Text style={styles.emptyTitle}>{t("expenses.noSettlementsYet")}</Text>
+                <Text style={styles.emptySubtitle}>{t("expenses.settlementsWillAppear")}</Text>
               </View>
             }
             ListHeaderComponent={
               settlements.length > 0 ? (
                 <View style={styles.settlementsHeader}>
-                  <Text style={styles.balanceHeader}>Settlement History</Text>
-                  <Text style={styles.settlementsCount}>{settlements.length} settlement{settlements.length !== 1 ? 's' : ''}</Text>
+                  <Text style={styles.balanceHeader}>{t("expenses.settlementHistory")}</Text>
+                  <Text style={styles.settlementsCount}>{settlements.length} {settlements.length !== 1 ? t("expenses.settlements") : t("expenses.settlement")}</Text>
                 </View>
               ) : null
             }
@@ -886,9 +888,9 @@ const ExpensesScreen = () => {
               <TouchableOpacity onPress={() => { setExpenseModalVisible(false); resetExpenseForm(); }}>
                 <Ionicons name="close" size={24} color="#A1A1AA" />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>{editingExpense ? "Edit Expense" : "Add Expense"}</Text>
+              <Text style={styles.modalTitle}>{editingExpense ? t("expenses.editExpense") : t("expenses.addExpense")}</Text>
               <TouchableOpacity onPress={handleAddExpense}>
-                <Text style={styles.modalSaveText}>{editingExpense ? "Update" : "Save"}</Text>
+                <Text style={styles.modalSaveText}>{editingExpense ? t("common.save") : t("common.save")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -907,21 +909,21 @@ const ExpensesScreen = () => {
               </View>
 
               {/* Title */}
-              <Text style={styles.inputLabel}>Description</Text>
+              <Text style={styles.inputLabel}>{t("expenses.description")}</Text>
               <TextInput
                 style={styles.input}
                 value={expenseForm.title}
                 onChangeText={(text) => setExpenseForm(prev => ({ ...prev, title: text }))}
-                placeholder="What was this for?"
+                placeholder={t("expenses.descriptionPlaceholder")}
                 placeholderTextColor="#71717A"
               />
 
               {/* Category */}
-              <Text style={styles.inputLabel}>Category</Text>
+              <Text style={styles.inputLabel}>{t("expenses.category")}</Text>
               {renderCategorySelector()}
 
               {/* Paid By */}
-              <Text style={styles.inputLabel}>Paid by</Text>
+              <Text style={styles.inputLabel}>{t("expenses.paidBy")}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.userChipsScroll}>
                 {users.map((u) => (
                   <TouchableOpacity
@@ -947,7 +949,7 @@ const ExpensesScreen = () => {
 
               {/* Split Between */}
               <View style={styles.splitHeader}>
-                <Text style={styles.inputLabel}>Split between</Text>
+                <Text style={styles.inputLabel}>{t("expenses.splitBetween")}</Text>
                 <TouchableOpacity
                   onPress={() => {
                     const allIds = users.map(u => u.$id);
@@ -959,7 +961,7 @@ const ExpensesScreen = () => {
                   }}
                 >
                   <Text style={styles.selectAllText}>
-                    {expenseForm.splitBetween.length === users.length ? "Clear all" : "Select all"}
+                    {expenseForm.splitBetween.length === users.length ? t("expenses.clearAll") : t("expenses.selectAll")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -994,15 +996,15 @@ const ExpensesScreen = () => {
               </View>
 
               {/* Receipt */}
-              <Text style={styles.inputLabel}>Receipt (optional)</Text>
+              <Text style={styles.inputLabel}>{t("expenses.receiptOptional")}</Text>
               <View style={styles.receiptRow}>
                 <TouchableOpacity style={styles.receiptButton} onPress={takePhoto}>
                   <Ionicons name="camera" size={20} color="#F43F5E" />
-                  <Text style={styles.receiptButtonText}>Camera</Text>
+                  <Text style={styles.receiptButtonText}>{t("expenses.camera")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.receiptButton} onPress={pickImage}>
                   <Ionicons name="image" size={20} color="#F43F5E" />
-                  <Text style={styles.receiptButtonText}>Gallery</Text>
+                  <Text style={styles.receiptButtonText}>{t("expenses.gallery")}</Text>
                 </TouchableOpacity>
               </View>
               {imagePreview && (
@@ -1021,12 +1023,12 @@ const ExpensesScreen = () => {
               )}
 
               {/* Notes */}
-              <Text style={styles.inputLabel}>Notes (optional)</Text>
+              <Text style={styles.inputLabel}>{t("expenses.notesOptional")}</Text>
               <TextInput
                 style={[styles.input, styles.notesInput]}
                 value={expenseForm.notes}
                 onChangeText={(text) => setExpenseForm(prev => ({ ...prev, notes: text }))}
-                placeholder="Add notes..."
+                placeholder={t("expenses.addNotes")}
                 placeholderTextColor="#71717A"
                 multiline
               />
@@ -1047,7 +1049,7 @@ const ExpensesScreen = () => {
         <View style={styles.settlementModalOverlay}>
           <View style={styles.settlementModalContent}>
             <View style={styles.settlementModalHeader}>
-              <Text style={styles.settlementModalTitle}>Record Settlement</Text>
+              <Text style={styles.settlementModalTitle}>{t("expenses.recordSettlement")}</Text>
               <TouchableOpacity onPress={() => {
                 setSettlementModalVisible(false);
                 setSelectedDebt(null);
@@ -1074,15 +1076,15 @@ const ExpensesScreen = () => {
                     </View>
                   </View>
                   <Text style={styles.settlementDebtText}>
-                    {selectedDebt.from.username} pays {selectedDebt.to.username}
+                    {selectedDebt.from.username} {t("expenses.pays")} {selectedDebt.to.username}
                   </Text>
                   <Text style={styles.settlementDebtAmount}>
-                    Total owed: {formatCurrency(selectedDebt.amount)}
+                    {t("expenses.totalOwed")}: {formatCurrency(selectedDebt.amount)}
                   </Text>
                 </View>
 
                 {/* Amount Input */}
-                <Text style={styles.settlementInputLabel}>Amount to settle</Text>
+                <Text style={styles.settlementInputLabel}>{t("expenses.amountToSettle")}</Text>
                 <View style={styles.settlementAmountRow}>
                   <Text style={styles.settlementCurrency}>€</Text>
                   <TextInput
@@ -1097,24 +1099,24 @@ const ExpensesScreen = () => {
                     style={styles.settlementFullBtn}
                     onPress={() => setSettlementForm(prev => ({ ...prev, amount: selectedDebt.amount.toFixed(2) }))}
                   >
-                    <Text style={styles.settlementFullBtnText}>Full Amount</Text>
+                    <Text style={styles.settlementFullBtnText}>{t("expenses.fullAmount")}</Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* Notes */}
-                <Text style={styles.settlementInputLabel}>Notes (optional)</Text>
+                <Text style={styles.settlementInputLabel}>{t("expenses.notesOptional")}</Text>
                 <TextInput
                   style={styles.settlementNotesInput}
                   value={settlementForm.notes}
                   onChangeText={(text) => setSettlementForm(prev => ({ ...prev, notes: text }))}
-                  placeholder="e.g., Cash, Bank transfer..."
+                  placeholder={t("expenses.notesPlaceholder")}
                   placeholderTextColor="#71717A"
                 />
 
                 {/* Submit Button */}
                 <TouchableOpacity style={styles.settlementSubmitBtn} onPress={handleSettleDebt}>
                   <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-                  <Text style={styles.settlementSubmitText}>Confirm Settlement</Text>
+                  <Text style={styles.settlementSubmitText}>{t("expenses.confirmSettlement")}</Text>
                 </TouchableOpacity>
               </>
             )}

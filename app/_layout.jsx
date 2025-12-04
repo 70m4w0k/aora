@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useFonts } from "expo-font";
 import { SplashScreen, Stack } from "expo-router";
 import GlobalProvider from "../context/GlobalProvider";
+import { LanguageProvider } from "../context/LanguageProvider";
 import ErrorBoundary from "../components/ErrorBoundary";
 
 SplashScreen.preventAutoHideAsync();
@@ -28,16 +29,18 @@ const RootLayout = () => {
 
   return (
     <ErrorBoundary>
-      <GlobalProvider>
-        <Stack>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(household)" options={{ headerShown: false }} />
-          <Stack.Screen name="(calendar)" options={{ headerShown: false }} />
-          <Stack.Screen name="(tools)" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        </Stack>
-      </GlobalProvider>
+      <LanguageProvider>
+        <GlobalProvider>
+          <Stack>
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(household)" options={{ headerShown: false }} />
+            <Stack.Screen name="(calendar)" options={{ headerShown: false }} />
+            <Stack.Screen name="(tools)" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          </Stack>
+        </GlobalProvider>
+      </LanguageProvider>
     </ErrorBoundary>
   );
 };

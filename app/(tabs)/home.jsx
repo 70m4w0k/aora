@@ -16,6 +16,7 @@ import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 import { Avatar } from "../../components/ui";
 import { 
   getHouseholdShoppingItems,
@@ -86,6 +87,7 @@ const QuickStat = ({ icon, value, label, color }) => (
 
 const Home = () => {
   const { user, household } = useGlobalContext();
+  const t = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState({
     pendingChores: 0,
@@ -174,9 +176,9 @@ const Home = () => {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
+    if (hour < 12) return t("home.greetingMorning");
+    if (hour < 18) return t("home.greetingAfternoon");
+    return t("home.greetingEvening");
   };
 
   return (
@@ -199,7 +201,7 @@ const Home = () => {
           <View style={styles.headerTop}>
             <View style={styles.greeting}>
               <Text style={styles.greetingText}>{getGreeting()},</Text>
-              <Text style={styles.userName}>{user?.username || 'there'}</Text>
+              <Text style={styles.userName}>{user?.username || t("home.greeting")}</Text>
             </View>
             <Avatar 
               source={user?.avatar}
@@ -219,20 +221,20 @@ const Home = () => {
 
         {/* Quick Stats */}
         <View style={styles.quickStatsContainer}>
-          <QuickStat icon="checkbox" value={stats.pendingChores} label="Pending" color={COLORS.accent.chores} />
+          <QuickStat icon="checkbox" value={stats.pendingChores} label={t("home.pending")} color={COLORS.accent.chores} />
           <View style={styles.statDivider} />
-          <QuickStat icon="cart" value={stats.shoppingItems} label="To buy" color={COLORS.accent.shopping} />
+          <QuickStat icon="cart" value={stats.shoppingItems} label={t("home.toBuy")} color={COLORS.accent.shopping} />
           <View style={styles.statDivider} />
-          <QuickStat icon="receipt" value={stats.pendingExpenses} label="Expenses" color={COLORS.accent.expenses} />
+          <QuickStat icon="receipt" value={stats.pendingExpenses} label={t("home.expenses")} color={COLORS.accent.expenses} />
         </View>
 
         {/* Feature Cards */}
         <View style={styles.featuresSection}>
-          <Text style={styles.sectionTitle}>QUICK ACCESS</Text>
+          <Text style={styles.sectionTitle}>{t("home.quickAccess")}</Text>
           
           <FeatureCard 
-            title="Calendar"
-            subtitle={stats.pendingChores > 0 ? `${stats.pendingChores} tasks pending` : "All caught up!"}
+            title={t("home.calendar")}
+            subtitle={stats.pendingChores > 0 ? `${stats.pendingChores} ${t("home.tasksPending")}` : t("home.allCaughtUp")}
             icon="calendar"
             color={COLORS.accent.chores}
             gradient={[COLORS.accent.chores, '#0891B2']}
@@ -240,8 +242,8 @@ const Home = () => {
           />
           
           <FeatureCard 
-            title="Shopping List"
-            subtitle={stats.shoppingItems > 0 ? `${stats.shoppingItems} items to buy` : "List is empty"}
+            title={t("home.shoppingList")}
+            subtitle={stats.shoppingItems > 0 ? `${stats.shoppingItems} ${t("home.itemsToBuy")}` : t("home.listIsEmpty")}
             icon="cart"
             color={COLORS.accent.shopping}
             gradient={[COLORS.accent.shopping, '#059669']}
@@ -249,8 +251,8 @@ const Home = () => {
           />
           
           <FeatureCard 
-            title="Expense Sharing"
-            subtitle={stats.pendingExpenses > 0 ? `${stats.pendingExpenses} expenses recorded` : "No expenses yet"}
+            title={t("home.expenses")}
+            subtitle={stats.pendingExpenses > 0 ? `${stats.pendingExpenses} ${t("home.expensesRecorded")}` : t("home.noExpenses")}
             icon="wallet"
             color={COLORS.accent.expenses}
             gradient={[COLORS.accent.expenses, '#E11D48']}
@@ -260,7 +262,7 @@ const Home = () => {
 
         {/* Tools Section */}
         <View style={styles.toolsSection}>
-          <Text style={styles.sectionTitle}>TOOLS</Text>
+          <Text style={styles.sectionTitle}>{t("home.tools")}</Text>
           
           <View style={styles.toolsGrid}>
             <TouchableOpacity 
@@ -270,8 +272,8 @@ const Home = () => {
               <View style={[styles.toolIcon, { backgroundColor: `${COLORS.accent.primary}20` }]}>
                 <Ionicons name="folder" size={24} color={COLORS.accent.primary} />
               </View>
-              <Text style={styles.toolTitle}>Documents</Text>
-              <Text style={styles.toolSubtitle}>{stats.documents} files</Text>
+              <Text style={styles.toolTitle}>{t("home.documents")}</Text>
+              <Text style={styles.toolSubtitle}>{stats.documents} {t("home.files")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -281,8 +283,8 @@ const Home = () => {
               <View style={[styles.toolIcon, { backgroundColor: '#F59E0B20' }]}>
                 <Ionicons name="pricetag" size={24} color="#F59E0B" />
               </View>
-              <Text style={styles.toolTitle}>Price Tracker</Text>
-              <Text style={styles.toolSubtitle}>Compare prices</Text>
+              <Text style={styles.toolTitle}>{t("home.priceTracker")}</Text>
+              <Text style={styles.toolSubtitle}>{t("home.comparePrices")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -292,8 +294,8 @@ const Home = () => {
               <View style={[styles.toolIcon, { backgroundColor: '#8B5CF620' }]}>
                 <Ionicons name="trophy" size={24} color="#8B5CF6" />
               </View>
-              <Text style={styles.toolTitle}>NEOSYSTEM</Text>
-              <Text style={styles.toolSubtitle}>Habits Tracker</Text>
+              <Text style={styles.toolTitle}>{t("home.neosystem")}</Text>
+              <Text style={styles.toolSubtitle}>{t("home.habitsTracker")}</Text>
             </TouchableOpacity>
           </View>
         </View>

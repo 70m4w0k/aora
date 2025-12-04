@@ -18,6 +18,8 @@ import * as Clipboard from 'expo-clipboard';
 import { Avatar, Badge } from "../../components/ui";
 import { getAllTasksDone, signOut, leaveHousehold, regenerateInviteCode } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useLanguage } from "../../context/LanguageProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 import ProfileEditModal from "../../components/ProfileEditModal";
 import HouseholdManageModal from "../../components/HouseholdManageModal";
 
@@ -98,9 +100,12 @@ const THEME_OPTIONS = [
 
 const Profile = () => {
   const { user, setUser, setIsLogged, household, householdMembers, refreshUser, refreshHousehold } = useGlobalContext();
+  const { language, changeLanguage } = useLanguage();
+  const t = useTranslation();
   const [stats, setStats] = useState({ completedTasks: 0, tasksPerWeek: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [appearanceModalVisible, setAppearanceModalVisible] = useState(false);
+  const [languageModalVisible, setLanguageModalVisible] = useState(false);
   const [profileEditModalVisible, setProfileEditModalVisible] = useState(false);
   const [householdManageModalVisible, setHouseholdManageModalVisible] = useState(false);
   const [selectedTheme, setSelectedTheme] = useState('dark');
@@ -116,7 +121,7 @@ const Profile = () => {
     const joinDate = user.householdJoinDate ? new Date(user.householdJoinDate) : (user.$createdAt ? new Date(user.$createdAt) : null);
     
     if (!joinDate || isNaN(joinDate.getTime())) {
-      return 'Member since recently';
+      return t("profile.memberSinceRecently");
     }
 
     const now = new Date();
@@ -126,11 +131,11 @@ const Profile = () => {
     const diffYears = Math.floor(diffMonths / 12);
 
     if (diffYears > 0) {
-      return `Member since ${diffYears} year${diffYears > 1 ? 's' : ''}`;
+      return t("profile.memberSinceYears").replace("{{years}}", diffYears.toString());
     } else if (diffMonths > 0) {
-      return `Member since ${diffMonths} month${diffMonths > 1 ? 's' : ''}`;
+      return t("profile.memberSinceMonths").replace("{{months}}", diffMonths.toString());
     } else {
-      return `Member since ${diffDays} day${diffDays > 1 ? 's' : ''}`;
+      return t("profile.memberSinceDays").replace("{{days}}", diffDays.toString());
     }
   };
 
@@ -153,10 +158,10 @@ const Profile = () => {
   }, [fetchUserStats, user]);
 
   const logout = async () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("profile.signOut"), t("profile.signOutConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Sign Out",
+        text: t("profile.signOut"),
         style: "destructive",
         onPress: async () => {
           try {
@@ -165,7 +170,7 @@ const Profile = () => {
             setIsLogged(false);
             router.replace("/sign-in");
           } catch (error) {
-            Alert.alert("Error", "Failed to sign out. Please try again.");
+            Alert.alert(t("common.error"), t("profile.signOutFailed"));
           }
         },
       },
@@ -175,7 +180,7 @@ const Profile = () => {
   const copyInviteCode = async () => {
     if (household?.inviteCode) {
       await Clipboard.setStringAsync(household.inviteCode);
-      Alert.alert("Copied!", "Invite code copied to clipboard");
+      Alert.alert(t("profile.copied"), t("profile.inviteCodeCopied"));
     }
   };
 
@@ -183,7 +188,7 @@ const Profile = () => {
     if (household?.inviteCode) {
       try {
         await Share.share({
-          message: `Join my household "${household.name}" on Tipi!\n\nInvite Code: ${household.inviteCode}`,
+          message: t("profile.shareInviteMessage").replace("{{name}}", household.name).replace("{{code}}", household.inviteCode),
         });
       } catch (error) {
         console.error("Error sharing:", error);
@@ -192,18 +197,18 @@ const Profile = () => {
   };
 
   const handleRegenerateCode = () => {
-    Alert.alert("Regenerate Invite Code?", "This will invalidate the current invite code.", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("profile.regenerateCode"), t("profile.regenerateCodeWarning"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Regenerate",
+        text: t("profile.regenerate"),
         style: "destructive",
         onPress: async () => {
           try {
             await regenerateInviteCode(household.$id);
             await refreshHousehold();
-            Alert.alert("Success", "New invite code generated!");
+            Alert.alert(t("common.success"), t("profile.codeRegenerated"));
           } catch (error) {
-            Alert.alert("Error", "Failed to regenerate code");
+            Alert.alert(t("common.error"), t("profile.regenerateFailed"));
           }
         },
       },
@@ -212,13 +217,13 @@ const Profile = () => {
 
   const handleLeaveHousehold = () => {
     const warningMessage = isAdmin 
-      ? "You are the admin. If you leave, the household will remain without an admin."
-      : "Are you sure you want to leave this household?";
+      ? t("profile.leaveHouseholdAdminWarning")
+      : t("profile.leaveHouseholdConfirm");
 
-    Alert.alert("Leave Household?", warningMessage, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("profile.leaveHousehold"), warningMessage, [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Leave",
+        text: t("profile.leave"),
         style: "destructive",
         onPress: async () => {
           try {
@@ -226,15 +231,16 @@ const Profile = () => {
             await refreshUser();
             router.replace("/(household)/onboarding");
           } catch (error) {
-            Alert.alert("Error", "Failed to leave household");
+            Alert.alert(t("common.error"), t("profile.leaveFailed"));
           }
         },
       },
     ]);
   };
 
-  const handleNotifications = () => Alert.alert("Coming Soon", "Notification settings will be available in a future update.");
+  const handleNotifications = () => Alert.alert(t("profile.comingSoon"), t("profile.notificationsComingSoon"));
   const handleAppearance = () => setAppearanceModalVisible(true);
+  const handleLanguage = () => setLanguageModalVisible(true);
 
   const renderAppearanceModal = () => (
     <Modal
@@ -247,14 +253,14 @@ const Profile = () => {
         <View style={styles.modalContent}>
           {/* Header */}
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Appearance</Text>
+            <Text style={styles.modalTitle}>{t("profile.appearance")}</Text>
             <TouchableOpacity onPress={() => setAppearanceModalVisible(false)} style={styles.modalCloseBtn}>
               <Ionicons name="close" size={24} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {/* Theme Selection */}
-          <Text style={styles.modalSectionTitle}>THEME</Text>
+          <Text style={styles.modalSectionTitle}>{t("profile.theme")}</Text>
           <View style={styles.themeOptions}>
             {THEME_OPTIONS.map((theme) => (
               <TouchableOpacity
@@ -285,14 +291,14 @@ const Profile = () => {
                   </View>
                 )}
                 {theme.disabled && (
-                  <Text style={styles.comingSoonBadge}>Soon</Text>
+                  <Text style={styles.comingSoonBadge}>{t("profile.soon")}</Text>
                 )}
               </TouchableOpacity>
             ))}
           </View>
 
           {/* Accent Color Selection */}
-          <Text style={styles.modalSectionTitle}>ACCENT COLOR</Text>
+          <Text style={styles.modalSectionTitle}>{t("profile.accentColor")}</Text>
           <View style={styles.accentOptions}>
             {ACCENT_COLORS.map((color) => (
               <TouchableOpacity
@@ -311,22 +317,22 @@ const Profile = () => {
             ))}
           </View>
           <Text style={styles.accentNote}>
-            Accent color customization coming in a future update
+            {t("profile.accentColorNote")}
           </Text>
 
           {/* Preview */}
-          <Text style={styles.modalSectionTitle}>PREVIEW</Text>
+          <Text style={styles.modalSectionTitle}>{t("profile.preview")}</Text>
           <View style={styles.previewCard}>
             <View style={styles.previewRow}>
               <View style={[styles.previewDot, { backgroundColor: selectedAccent }]} />
-              <Text style={styles.previewText}>Primary buttons & links</Text>
+              <Text style={styles.previewText}>{t("profile.primaryButtons")}</Text>
             </View>
             <View style={styles.previewRow}>
               <View style={[styles.previewDot, { backgroundColor: selectedAccent, opacity: 0.5 }]} />
-              <Text style={styles.previewText}>Highlights & badges</Text>
+              <Text style={styles.previewText}>{t("profile.highlightsBadges")}</Text>
             </View>
             <View style={[styles.previewButton, { backgroundColor: selectedAccent }]}>
-              <Text style={styles.previewButtonText}>Sample Button</Text>
+              <Text style={styles.previewButtonText}>{t("profile.sampleButton")}</Text>
             </View>
           </View>
 
@@ -335,19 +341,86 @@ const Profile = () => {
             style={[styles.modalDoneBtn, { backgroundColor: selectedAccent }]}
             onPress={() => setAppearanceModalVisible(false)}
           >
-            <Text style={styles.modalDoneBtnText}>Done</Text>
+            <Text style={styles.modalDoneBtnText}>{t("profile.done")}</Text>
           </TouchableOpacity>
         </View>
       </View>
     </Modal>
   );
 
+  const renderLanguageModal = () => {
+    const languages = [
+      { code: 'en', name: t('profile.english'), flag: '🇬🇧' },
+      { code: 'fr', name: t('profile.french'), flag: '🇫🇷' },
+    ];
+
+    return (
+      <Modal
+        visible={languageModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setLanguageModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('profile.language')}</Text>
+              <TouchableOpacity onPress={() => setLanguageModalVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Language Selection */}
+            <Text style={styles.modalSectionTitle}>{t("profile.selectLanguage")}</Text>
+            <View style={styles.languageOptions}>
+              {languages.map((lang) => (
+                <TouchableOpacity
+                  key={lang.code}
+                  style={[
+                    styles.languageOption,
+                    language === lang.code && styles.languageOptionActive,
+                  ]}
+                  onPress={() => {
+                    changeLanguage(lang.code);
+                    setLanguageModalVisible(false);
+                  }}
+                >
+                  <Text style={styles.languageFlag}>{lang.flag}</Text>
+                  <Text style={[
+                    styles.languageOptionText,
+                    language === lang.code && styles.languageOptionTextActive,
+                  ]}>
+                    {lang.name}
+                  </Text>
+                  {language === lang.code && (
+                    <View style={[styles.checkBadge, { backgroundColor: selectedAccent }]}>
+                      <Ionicons name="checkmark" size={12} color="#FFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Close Button */}
+            <TouchableOpacity 
+              style={[styles.modalDoneBtn, { backgroundColor: selectedAccent }]}
+              onPress={() => setLanguageModalVisible(false)}
+            >
+              <Text style={styles.modalDoneBtnText}>{t('common.close')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={styles.headerTitle}>{t("profile.title")}</Text>
           <Pressable style={styles.logoutButton} onPress={logout}>
             <Ionicons name="log-out-outline" size={24} color={COLORS.textSecondary} />
           </Pressable>
@@ -366,16 +439,16 @@ const Profile = () => {
           )}
           
           <View style={styles.statsRow}>
-            <StatCard icon="checkmark-circle" value={stats.completedTasks} label="Tasks Done" color={COLORS.accent.chores} />
+            <StatCard icon="checkmark-circle" value={stats.completedTasks} label={t("profile.tasksDone")} color={COLORS.accent.chores} />
             <View style={styles.statDivider} />
-            <StatCard icon="trending-up" value={stats.tasksPerWeek} label="Per Week" color={COLORS.accent.primary} />
+            <StatCard icon="trending-up" value={stats.tasksPerWeek} label={t("profile.perWeek")} color={COLORS.accent.primary} />
           </View>
         </TouchableOpacity>
 
         {/* Household Section */}
         {household && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>HOUSEHOLD</Text>
+            <Text style={styles.sectionTitle}>{t("profile.household")}</Text>
             <TouchableOpacity 
               style={styles.householdCard}
               onPress={() => setHouseholdManageModalVisible(true)}
@@ -387,7 +460,7 @@ const Profile = () => {
                     <Ionicons name="home" size={18} color={COLORS.accent.household} />
                     <Text style={styles.householdName}>{household.name}</Text>
                   </View>
-                  {isAdmin && <Badge label="Admin" variant="warning" size="sm" />}
+                  {isAdmin && <Badge label={t("profile.admin")} variant="warning" size="sm" />}
                 </View>
                 
                 <View style={styles.membersRow}>
@@ -404,7 +477,7 @@ const Profile = () => {
 
               {/* Invite Code */}
               <View style={styles.inviteSection}>
-                <Text style={styles.inviteLabel}>Invite Code</Text>
+                <Text style={styles.inviteLabel}>{t("profile.inviteCode")}</Text>
                 <View style={styles.inviteCodeRow}>
                   <Text style={styles.inviteCode}>{household.inviteCode}</Text>
                   <Pressable style={styles.iconButton} onPress={copyInviteCode}>
@@ -421,12 +494,12 @@ const Profile = () => {
                 {isAdmin && (
                   <Pressable style={styles.actionChip} onPress={handleRegenerateCode}>
                     <Ionicons name="refresh" size={16} color={COLORS.textSecondary} />
-                    <Text style={styles.actionChipText}>New Code</Text>
+                    <Text style={styles.actionChipText}>{t("profile.newCode")}</Text>
                   </Pressable>
                 )}
                 <Pressable style={[styles.actionChip, styles.actionChipDanger]} onPress={handleLeaveHousehold}>
                   <Ionicons name="exit-outline" size={16} color={COLORS.accent.danger} />
-                  <Text style={[styles.actionChipText, styles.actionChipTextDanger]}>Leave</Text>
+                  <Text style={[styles.actionChipText, styles.actionChipTextDanger]}>{t("profile.leave")}</Text>
                 </Pressable>
               </View>
             </TouchableOpacity>
@@ -435,10 +508,16 @@ const Profile = () => {
 
         {/* Settings Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SETTINGS</Text>
+          <Text style={styles.sectionTitle}>{t("profile.settings")}</Text>
           <View style={styles.settingsCard}>
-            <SettingItem icon="notifications-outline" title="Notifications" subtitle="Task reminders, updates" onPress={handleNotifications} />
-            <SettingItem icon="color-palette-outline" title="Appearance" subtitle="Dark mode enabled" onPress={handleAppearance} />
+            <SettingItem icon="notifications-outline" title={t("profile.notifications")} subtitle={t("profile.notificationsSubtitle")} onPress={handleNotifications} />
+            <SettingItem icon="color-palette-outline" title={t("profile.appearance")} subtitle={t("profile.appearanceSubtitle")} onPress={handleAppearance} />
+            <SettingItem 
+              icon="language-outline" 
+              title={t('profile.language')} 
+              subtitle={language === 'en' ? t('profile.english') : t('profile.french')} 
+              onPress={handleLanguage} 
+            />
           </View>
         </View>
 
@@ -448,6 +527,9 @@ const Profile = () => {
 
       {/* Appearance Modal */}
       {renderAppearanceModal()}
+      
+      {/* Language Modal */}
+      {renderLanguageModal()}
       
       {/* Profile Edit Modal */}
       <ProfileEditModal
@@ -613,6 +695,39 @@ const styles = StyleSheet.create({
   },
   themeOptionTextDisabled: {
     color: COLORS.textTertiary,
+  },
+  // Language Options
+  languageOptions: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  languageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+  },
+  languageOptionActive: {
+    borderColor: COLORS.accent.primary,
+    backgroundColor: `${COLORS.accent.primary}10`,
+  },
+  languageFlag: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  languageOptionText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+  },
+  languageOptionTextActive: {
+    color: COLORS.accent.primary,
+    fontWeight: '600',
   },
   checkBadge: {
     position: 'absolute',

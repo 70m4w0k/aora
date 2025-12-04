@@ -17,9 +17,11 @@ import {
 import { images, icons } from "../../constants";
 import { createUser } from "../../lib/appwrite";
 import { useGlobalContext } from "../../context/GlobalProvider";
+import { useTranslation } from "../../hooks/useTranslation";
 
 const SignUp = () => {
   const { refreshUser, setIsLogged } = useGlobalContext();
+  const t = useTranslation();
   const [isSubmitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
@@ -30,7 +32,7 @@ const SignUp = () => {
 
   const submit = async () => {
     if (form.username === "" || form.email === "" || form.password === "") {
-      return Alert.alert("Error", "Please fill in all fields");
+      return Alert.alert(t("common.error"), t("auth.signUp.fillAllFields"));
     }
 
     setSubmitting(true);
@@ -40,10 +42,10 @@ const SignUp = () => {
       setIsLogged(true);
       await refreshUser(); // This will fetch user data and household if exists
 
-      Alert.alert("Success", "Account created successfully");
+      Alert.alert(t("common.success"), t("auth.signUp.signUpSuccess"));
       router.replace("/calendar");
     } catch (error) {
-      Alert.alert("Error", error.message);
+      Alert.alert(t("common.error"), error.message);
     } finally {
       setSubmitting(false);
     }
@@ -65,28 +67,28 @@ const SignUp = () => {
           </View>
           
           <View style={styles.formContainer}>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Sign up to get started with Tipi</Text>
+            <Text style={styles.title}>{t("auth.signUp.title")}</Text>
+            <Text style={styles.subtitle}>{t("auth.signUp.subtitle")}</Text>
             
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Username</Text>
+              <Text style={styles.inputLabel}>{t("auth.signUp.username")}</Text>
               <TextInput
                 style={styles.input}
                 value={form.username}
                 onChangeText={(text) => setForm({ ...form, username: text })}
-                placeholder="Enter your username"
+                placeholder={t("auth.signUp.usernamePlaceholder")}
                 placeholderTextColor="#999999"
                 autoCapitalize="none"
               />
             </View>
             
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email</Text>
+              <Text style={styles.inputLabel}>{t("auth.signUp.email")}</Text>
               <TextInput
                 style={styles.input}
                 value={form.email}
                 onChangeText={(text) => setForm({ ...form, email: text })}
-                placeholder="Enter your email"
+                placeholder={t("auth.signUp.emailPlaceholder")}
                 placeholderTextColor="#999999"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -94,13 +96,13 @@ const SignUp = () => {
             </View>
             
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
+              <Text style={styles.inputLabel}>{t("auth.signUp.password")}</Text>
               <View style={styles.passwordContainer}>
                 <TextInput
                   style={styles.passwordInput}
                   value={form.password}
                   onChangeText={(text) => setForm({ ...form, password: text })}
-                  placeholder="Create a password"
+                  placeholder={t("auth.signUp.passwordPlaceholder")}
                   placeholderTextColor="#999999"
                   secureTextEntry={!showPassword}
                 />
@@ -114,9 +116,6 @@ const SignUp = () => {
                   />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.passwordHint}>
-                Password should be at least 8 characters
-              </Text>
             </View>
             
             <TouchableOpacity
@@ -128,15 +127,15 @@ const SignUp = () => {
               disabled={isSubmitting}
             >
               <Text style={styles.signUpButtonText}>
-                {isSubmitting ? "Creating account..." : "Sign Up"}
+                {isSubmitting ? t("auth.signUp.creatingAccount") : t("auth.signUp.signUp")}
               </Text>
             </TouchableOpacity>
             
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Already have an account?</Text>
+              <Text style={styles.footerText}>{t("auth.signUp.hasAccount")}</Text>
               <Link href="/sign-in" asChild>
                 <TouchableOpacity>
-                  <Text style={styles.signInLink}>Sign In</Text>
+                  <Text style={styles.signInLink}>{t("auth.signUp.signIn")}</Text>
                 </TouchableOpacity>
               </Link>
             </View>
