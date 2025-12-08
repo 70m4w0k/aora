@@ -41,9 +41,16 @@ const SignIn = () => {
       setIsLogged(true);
       await refreshUser(); // This will fetch user data and household if exists
 
+      // Ensure loading state is cleared after successful sign-in
+      setLoading(false);
+      
+      // Small delay to ensure state is updated before navigation
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       Alert.alert(t("common.success"), t("auth.signIn.signInSuccess"));
       router.replace("/home");
     } catch (error) {
+      setLoading(false); // Clear loading on error too
       Alert.alert(t("common.error"), error.message);
     } finally {
       setSubmitting(false);

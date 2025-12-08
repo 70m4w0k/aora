@@ -20,7 +20,7 @@ import { useGlobalContext } from "../../context/GlobalProvider";
 import { useTranslation } from "../../hooks/useTranslation";
 
 const SignUp = () => {
-  const { refreshUser, setIsLogged } = useGlobalContext();
+  const { refreshUser, setIsLogged, setLoading } = useGlobalContext();
   const t = useTranslation();
   const [isSubmitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -38,14 +38,32 @@ const SignUp = () => {
     setSubmitting(true);
 
     try {
-      await createUser(form.email, form.password, form.username);
+      const newUser = await createUser(form.email, form.password, form.username);
+      console.log("SignUp - User created:", newUser);
+      
       setIsLogged(true);
-      await refreshUser(); // This will fetch user data and household if exists
+      
+      // Refresh user data to ensure it's loaded
+      const refreshedUser = await refreshUser();
+      console.log("SignUp - User refreshed:", refreshedUser);
+      
+      if (!refreshedUser) {
+        throw new Error("Failed to load user data after creation");
+      }
 
+      // Ensure loading state is cleared after successful sign-up
+      setLoading(false);
+      
+      // Small delay to ensure state is updated before navigation
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       Alert.alert(t("common.success"), t("auth.signUp.signUpSuccess"));
-      router.replace("/calendar");
+      // Navigate to onboarding if no household, otherwise to home
+      router.replace("/(household)/onboarding");
     } catch (error) {
-      Alert.alert(t("common.error"), error.message);
+      console.error("SignUp - Error:", error);
+      setLoading(false); // Clear loading on error too
+      Alert.alert(t("common.error"), error.message || "Failed to create account");
     } finally {
       setSubmitting(false);
     }

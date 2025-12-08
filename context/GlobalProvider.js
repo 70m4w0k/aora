@@ -45,37 +45,75 @@ const GlobalProvider = ({ children }) => {
   // Refresh user data
   const refreshUser = async () => {
     try {
+      console.log("refreshUser() - Starting user refresh...");
       const userData = await getCurrentUser();
+      
       if (userData) {
+        console.log("refreshUser() - User data received:", {
+          id: userData.$id,
+          email: userData.email,
+          householdId: userData.householdId,
+        });
+        
         setUser(userData);
-        if (userData.householdId) {
-          await fetchHouseholdData(userData.householdId);
+        
+        // Handle householdId - could be a relationship object or string ID
+        const householdIdValue = userData.householdId 
+          ? (typeof userData.householdId === 'object' ? userData.householdId.$id : userData.householdId)
+          : null;
+        
+        if (householdIdValue) {
+          console.log("refreshUser() - Fetching household data for:", householdIdValue);
+          await fetchHouseholdData(householdIdValue);
         } else {
+          console.log("refreshUser() - No household ID, clearing household data");
           setHousehold(null);
           setHouseholdMembers([]);
         }
         return userData; // Return updated user data
+      } else {
+        console.log("refreshUser() - No user data found");
+        setUser(null);
+        setHousehold(null);
+        setHouseholdMembers([]);
       }
       return null;
     } catch (error) {
       console.error("Error refreshing user:", error);
+      console.error("Error stack:", error.stack);
+      setUser(null);
+      setHousehold(null);
+      setHouseholdMembers([]);
       return null;
     }
   };
 
   // Initial load
   useEffect(() => {
+    console.log("GlobalProvider - Initial load starting...");
     getCurrentUser()
       .then(async (res) => {
+        console.log("GlobalProvider - getCurrentUser result:", res ? "User found" : "No user");
         if (res) {
           setIsLogged(true);
           setUser(res);
           
+          // Handle householdId - could be a relationship object or string ID
+          const householdIdValue = res.householdId 
+            ? (typeof res.householdId === 'object' ? res.householdId.$id : res.householdId)
+            : null;
+          
           // If user has a household, fetch household data
-          if (res.householdId) {
-            await fetchHouseholdData(res.householdId);
+          if (householdIdValue) {
+            console.log("GlobalProvider - Fetching household data for:", householdIdValue);
+            await fetchHouseholdData(householdIdValue);
+          } else {
+            console.log("GlobalProvider - No household ID");
+            setHousehold(null);
+            setHouseholdMembers([]);
           }
         } else {
+          console.log("GlobalProvider - No user, setting logged out");
           setIsLogged(false);
           setUser(null);
           setHousehold(null);
@@ -83,9 +121,24 @@ const GlobalProvider = ({ children }) => {
         }
       })
       .catch((error) => {
-        console.log(error);
+        // Handle "guests" role error gracefully - this is expected when not authenticated
+        if (error.message && error.message.includes('missing scopes')) {
+          console.log("GlobalProvider - User not authenticated (guests role) - this is normal");
+          setIsLogged(false);
+          setUser(null);
+          setHousehold(null);
+          setHouseholdMembers([]);
+        } else {
+          console.error("GlobalProvider - Error in initial load:", error);
+          console.error("Error stack:", error.stack);
+          setIsLogged(false);
+          setUser(null);
+          setHousehold(null);
+          setHouseholdMembers([]);
+        }
       })
       .finally(() => {
+        console.log("GlobalProvider - Initial load complete, setting loading to false");
         setLoading(false);
       });
   }, []);
@@ -93,9 +146,18 @@ const GlobalProvider = ({ children }) => {
   // Watch for householdId changes and fetch household data
   useEffect(() => {
     if (user?.householdId) {
-      fetchHouseholdData(user.householdId);
+      // Handle householdId - could be a relationship object or string ID
+      const householdIdValue = typeof user.householdId === 'object' 
+        ? user.householdId.$id 
+        : user.householdId;
+      
+      if (householdIdValue) {
+        console.log("GlobalProvider - householdId changed, fetching data for:", householdIdValue);
+        fetchHouseholdData(householdIdValue);
+      }
     } else if (user && !user.householdId) {
       // User exists but has no household - clear household data
+      console.log("GlobalProvider - User has no household, clearing data");
       setHousehold(null);
       setHouseholdMembers([]);
     }
@@ -116,6 +178,7 @@ const GlobalProvider = ({ children }) => {
         refreshHousehold,
         refreshUser,
         loading,
+        setLoading,
       }}
     >
       {children}

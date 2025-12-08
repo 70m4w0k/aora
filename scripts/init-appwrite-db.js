@@ -37,10 +37,10 @@ const readline = require('readline');
 
 // Configuration - Read from environment variables or use defaults
 const CONFIG = {
-  endpoint: process.env.APPWRITE_ENDPOINT || 'http://192.168.1.46/v1',
-  projectId: process.env.APPWRITE_PROJECT_ID || '',
+  endpoint: process.env.EXPO_PUBLIC_APPWRITE_ENDPOINT || 'http://192.168.1.46/v1',
+  projectId: process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID || '',
   apiKey: process.env.APPWRITE_API_KEY || '',
-  databaseId: process.env.APPWRITE_DATABASE_ID || '',
+  databaseId: process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID || '',
 };
 
 const rl = readline.createInterface({
@@ -74,12 +74,12 @@ const collections = [
       { key: 'idx_inviteCode', attributes: ['inviteCode'], type: 'key', orders: ['ASC'], unique: true },
       { key: 'idx_createdBy', attributes: ['createdBy'], type: 'key', orders: ['ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'users',
@@ -98,12 +98,12 @@ const collections = [
       { key: 'idx_email', attributes: ['email'], type: 'key', orders: ['ASC'], unique: true },
       { key: 'idx_householdId', attributes: ['householdId'], type: 'key', orders: ['ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'tasks',
@@ -126,12 +126,12 @@ const collections = [
       { key: 'idx_household_status', attributes: ['householdId', 'status'], type: 'key', orders: ['ASC', 'ASC'] },
       { key: 'idx_household_dueDate', attributes: ['householdId', 'dueDate'], type: 'key', orders: ['ASC', 'ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'tasks_done',
@@ -152,12 +152,12 @@ const collections = [
       { key: 'idx_user_completed', attributes: ['userId', 'completedAt'], type: 'key', orders: ['ASC', 'DESC'] },
       { key: 'idx_household_completed', attributes: ['householdId', 'completedAt'], type: 'key', orders: ['ASC', 'DESC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'shopping_items',
@@ -180,12 +180,12 @@ const collections = [
       { key: 'idx_household_completed', attributes: ['householdId', 'isCompleted'], type: 'key', orders: ['ASC', 'ASC'] },
       { key: 'idx_addedBy', attributes: ['addedBy'], type: 'key', orders: ['ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'expenses',
@@ -207,12 +207,12 @@ const collections = [
       { key: 'idx_household_date', attributes: ['householdId', 'expenseDate'], type: 'key', orders: ['ASC', 'DESC'] },
       { key: 'idx_paidBy_date', attributes: ['paidBy', 'expenseDate'], type: 'key', orders: ['ASC', 'DESC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'expense_settlements',
@@ -235,12 +235,12 @@ const collections = [
       { key: 'idx_isSettled', attributes: ['isSettled'], type: 'key', orders: ['ASC'] },
       { key: 'idx_household_settled', attributes: ['householdId', 'isSettled'], type: 'key', orders: ['ASC', 'ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'documents',
@@ -265,12 +265,12 @@ const collections = [
       { key: 'idx_household_date', attributes: ['householdId', 'documentDate'], type: 'key', orders: ['ASC', 'DESC'] },
       { key: 'idx_household_category', attributes: ['householdId', 'category'], type: 'key', orders: ['ASC', 'ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'products',
@@ -294,12 +294,12 @@ const collections = [
       { key: 'idx_household_category', attributes: ['householdId', 'category'], type: 'key', orders: ['ASC', 'ASC'] },
       { key: 'idx_household_barcode', attributes: ['householdId', 'barcode'], type: 'key', orders: ['ASC', 'ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'stores',
@@ -316,12 +316,12 @@ const collections = [
       { key: 'idx_name', attributes: ['name'], type: 'key', orders: ['ASC'] },
       { key: 'idx_household_name', attributes: ['householdId', 'name'], type: 'key', orders: ['ASC', 'ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'price_history',
@@ -350,12 +350,12 @@ const collections = [
       { key: 'idx_store_date', attributes: ['storeId', 'recordedAt'], type: 'key', orders: ['ASC', 'DESC'] },
       { key: 'idx_household_date', attributes: ['householdId', 'recordedAt'], type: 'key', orders: ['ASC', 'DESC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'events',
@@ -382,12 +382,12 @@ const collections = [
       { key: 'idx_household_end', attributes: ['householdId', 'endDate'], type: 'key', orders: ['ASC', 'ASC'] },
       { key: 'idx_assignedTo', attributes: ['assignedTo'], type: 'key', orders: ['ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   // Habits collections
   {
@@ -405,12 +405,12 @@ const collections = [
     indexes: [
       { key: 'idx_householdId', attributes: ['householdId'], type: 'key', orders: ['ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'habits_quests',
@@ -432,12 +432,12 @@ const collections = [
       { key: 'idx_householdId', attributes: ['householdId'], type: 'key', orders: ['ASC'] },
       { key: 'idx_household_frequency', attributes: ['householdId', 'frequency'], type: 'key', orders: ['ASC', 'ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'habits_quests_completions',
@@ -460,12 +460,12 @@ const collections = [
       { key: 'idx_user_completed', attributes: ['userId', 'completedAt'], type: 'key', orders: ['ASC', 'DESC'] },
       { key: 'idx_household_completed', attributes: ['householdId', 'completedAt'], type: 'key', orders: ['ASC', 'DESC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'habits_tiers',
@@ -485,12 +485,12 @@ const collections = [
       { key: 'idx_arcId', attributes: ['arcId'], type: 'key', orders: ['ASC'] },
       { key: 'idx_householdId', attributes: ['householdId'], type: 'key', orders: ['ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'habits_tiers_completions',
@@ -510,12 +510,12 @@ const collections = [
       { key: 'idx_tier_completed', attributes: ['tierId', 'completedAt'], type: 'key', orders: ['ASC', 'DESC'] },
       { key: 'idx_user_completed', attributes: ['userId', 'completedAt'], type: 'key', orders: ['ASC', 'DESC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'habits_user_progress',
@@ -541,12 +541,12 @@ const collections = [
       { key: 'idx_userId', attributes: ['userId'], type: 'key', orders: ['ASC'], unique: true },
       { key: 'idx_householdId', attributes: ['householdId'], type: 'key', orders: ['ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
   {
     id: 'habits_xp_history',
@@ -574,12 +574,12 @@ const collections = [
       { key: 'idx_household_date', attributes: ['householdId', 'recordedAt'], type: 'key', orders: ['ASC', 'DESC'] },
       { key: 'idx_source', attributes: ['sourceType', 'sourceId'], type: 'key', orders: ['ASC', 'ASC'] },
     ],
-    permissions: {
-      read: ['role:users'],
-      create: ['role:users'],
-      update: ['role:users'],
-      delete: ['role:users'],
-    }
+    permissions: [
+      'read("users")',
+      'create("users")',
+      'update("users")',
+      'delete("users")',
+    ]
   },
 ];
 
@@ -834,16 +834,13 @@ async function createCollection(collection, existingCollections = []) {
         CONFIG.databaseId,
         collection.id,
         collection.name,
-        [],
-        false,
-        collection.permissions.read,
-        collection.permissions.create,
-        collection.permissions.update,
-        collection.permissions.delete
+        collection.permissions, // Single array of permission strings
+        false // documentSecurity
       );
-      console.log(`  ✅ Permissions set`);
+      console.log(`  ✅ Permissions set: ${collection.permissions.join(', ')}`);
     } catch (error) {
       console.log(`  ⚠️  Error setting permissions: ${error.message}`);
+      console.log(`     Attempted permissions: ${JSON.stringify(collection.permissions)}`);
     }
     
     console.log(`✅ Collection ${collection.name} initialized successfully!\n`);
