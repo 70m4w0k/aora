@@ -12,7 +12,8 @@
     "build:both": "eas build --platform all --profile preview",
     "submit:ios": "eas submit --platform ios",
     "submit:android": "eas submit --platform android",
-    "build:list": "eas build:list"
+    "build:list": "eas build:list",
+    "init:db": "node scripts/init-appwrite-db.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -47,6 +48,8 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^16.4.5",
+    "node-appwrite": "^13.0.0",
     "postcss": "^8.4.41",
     "tailwindcss": "3.3.2"
   },
