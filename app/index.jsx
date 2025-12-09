@@ -18,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import Loader from "../components/Loader";
 import { useGlobalContext } from "../context/GlobalProvider";
+import { useTranslation } from "../hooks/useTranslation";
 import { images } from "../constants";
 
 NativeWindStyleSheet.setOutput({
@@ -77,6 +78,7 @@ const FeatureItem = ({ icon, color, title, delay }) => {
 
 export default function App() {
   const { loading, isLogged } = useGlobalContext();
+  const t = useTranslation();
   
   // Animations
   const logoScale = useRef(new Animated.Value(0.8)).current;
@@ -150,8 +152,8 @@ export default function App() {
             resizeMode="cover"
           />
           
-          <Text style={styles.appName}>Tipi</Text>
-          <Text style={styles.tagline}>Manage your shared home together</Text>
+          <Text style={styles.appName}>{t("landing.appName")}</Text>
+          <Text style={styles.tagline}>{t("landing.tagline")}</Text>
         </Animated.View>
 
         {/* Features */}
@@ -159,25 +161,25 @@ export default function App() {
           <FeatureItem 
             icon="checkbox-outline" 
             color={COLORS.cyan} 
-            title="Track chores & tasks" 
+            title={t("landing.featureChores")} 
             delay={200}
           />
           <FeatureItem 
             icon="cart-outline" 
             color={COLORS.green} 
-            title="Shared shopping lists" 
+            title={t("landing.featureShopping")} 
             delay={300}
           />
           <FeatureItem 
             icon="wallet-outline" 
             color={COLORS.accent} 
-            title="Split expenses fairly" 
+            title={t("landing.featureExpenses")} 
             delay={400}
           />
           <FeatureItem 
             icon="document-text-outline" 
             color={COLORS.accentSecondary} 
-            title="Share documents" 
+            title={t("landing.featureDocuments")} 
             delay={500}
           />
         </Animated.View>
@@ -204,7 +206,7 @@ export default function App() {
               style={styles.primaryButtonGradient}
             >
               <Ionicons name="person-add" size={20} color="#FFF" />
-              <Text style={styles.primaryButtonText}>Get Started</Text>
+              <Text style={styles.primaryButtonText}>{t("landing.getStarted")}</Text>
             </LinearGradient>
           </TouchableOpacity>
           
@@ -213,7 +215,7 @@ export default function App() {
             onPress={() => router.push("/sign-in")}
             activeOpacity={0.8}
           >
-            <Text style={styles.secondaryButtonText}>I already have an account</Text>
+            <Text style={styles.secondaryButtonText}>{t("landing.alreadyHaveAccount")}</Text>
             <Ionicons name="arrow-forward" size={18} color={COLORS.accent} />
           </TouchableOpacity>
         </Animated.View>
@@ -221,7 +223,7 @@ export default function App() {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            By continuing, you agree to our Terms & Privacy Policy
+            {t("landing.termsAndPrivacy")}
           </Text>
         </View>
       </ScrollView>

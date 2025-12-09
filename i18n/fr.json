@@ -211,7 +211,8 @@
     "noChoresYet": "Aucune tâche pour le moment",
     "createFirstChore": "Créez votre première tâche",
     "noCompletionHistory": "Aucun historique de complétion",
-    "completeTaskToSeeHistory": "Complétez cette tâche pour voir l'historique"
+    "completeTaskToSeeHistory": "Complétez cette tâche pour voir l'historique",
+    "noEventsThisDay": "Aucun événement pour ce jour"
   },
   "shopping": {
     "title": "Liste de courses",
@@ -507,6 +508,17 @@
     "noFile": "Aucun fichier",
     "noAttachedFile": "Ce document n'a pas de fichier joint",
     "photo": "Photo"
+  },
+  "landing": {
+    "appName": "Tipi",
+    "tagline": "Gérez votre foyer partagé ensemble",
+    "featureChores": "Suivez les tâches et corvées",
+    "featureShopping": "Listes de courses partagées",
+    "featureExpenses": "Répartissez les dépenses équitablement",
+    "featureDocuments": "Partagez des documents",
+    "getStarted": "Commencer",
+    "alreadyHaveAccount": "J'ai déjà un compte",
+    "termsAndPrivacy": "En continuant, vous acceptez nos Conditions d'utilisation et notre Politique de confidentialité"
   }
 }
 

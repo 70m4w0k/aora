@@ -20,7 +20,7 @@ import { useGlobalContext } from "../../context/GlobalProvider";
 import { useTranslation } from "../../hooks/useTranslation";
 
 const SignIn = () => {
-  const { refreshUser, setIsLogged } = useGlobalContext();
+  const { refreshUser, setIsLogged, setLoading } = useGlobalContext();
   const t = useTranslation();
   const [isSubmitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -39,16 +39,27 @@ const SignIn = () => {
     try {
       await signIn(form.email, form.password);
       setIsLogged(true);
-      await refreshUser(); // This will fetch user data and household if exists
+      
+      // Refresh user data and wait for it to complete
+      const refreshedUser = await refreshUser();
+      console.log("SignIn - User refreshed:", refreshedUser);
+      
+      if (!refreshedUser) {
+        throw new Error("Failed to load user data after sign-in");
+      }
 
       // Ensure loading state is cleared after successful sign-in
       setLoading(false);
       
-      // Small delay to ensure state is updated before navigation
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for state to update - the redirect logic will handle navigation
+      // based on whether user has a household
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       Alert.alert(t("common.success"), t("auth.signIn.signInSuccess"));
-      router.replace("/home");
+      
+      // Navigate to tabs - the redirect logic in (tabs)/_layout.jsx will check hasHousehold
+      // and redirect to onboarding if needed
+      router.replace("/(tabs)/home");
     } catch (error) {
       setLoading(false); // Clear loading on error too
       Alert.alert(t("common.error"), error.message);

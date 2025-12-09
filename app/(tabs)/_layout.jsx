@@ -110,8 +110,22 @@ const TabLayout = () => {
     }).start();
   };
 
-  if (!loading && !isLogged) return <Redirect href="/sign-in" />;
-  if (!loading && isLogged && !hasHousehold) return <Redirect href="/(household)/onboarding" />;
+  // Wait for loading to complete before checking redirects
+  if (loading) return null; // Show nothing while loading
+  
+  if (!isLogged) return <Redirect href="/sign-in" />;
+  
+  // Wait for user data to be loaded before checking hasHousehold
+  // This prevents redirecting to onboarding when user data is still loading
+  if (isLogged && !user) {
+    // User is logged in but user data hasn't loaded yet - wait
+    return null;
+  }
+  
+  // Only check hasHousehold after user is definitely loaded
+  if (isLogged && user && !hasHousehold) {
+    return <Redirect href="/(household)/onboarding" />;
+  }
 
   return (
     <View style={styles.container}>

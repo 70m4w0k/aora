@@ -440,6 +440,17 @@
     "noFile": "No File",
     "noAttachedFile": "This document has no attached file",
     "photo": "Photo"
+  },
+  "landing": {
+    "appName": "Tipi",
+    "tagline": "Manage your shared home together",
+    "featureChores": "Track chores & tasks",
+    "featureShopping": "Shared shopping lists",
+    "featureExpenses": "Split expenses fairly",
+    "featureDocuments": "Share documents",
+    "getStarted": "Get Started",
+    "alreadyHaveAccount": "I already have an account",
+    "termsAndPrivacy": "By continuing, you agree to our Terms & Privacy Policy"
   }
 }
 

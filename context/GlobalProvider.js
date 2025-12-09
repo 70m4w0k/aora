@@ -13,7 +13,15 @@ const GlobalProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   // Check if user has a household
-  const hasHousehold = user?.householdId ? true : false;
+  // Handle both relationship objects and string IDs
+  const getHouseholdId = (userData) => {
+    if (!userData?.householdId) return null;
+    return typeof userData.householdId === 'object' 
+      ? (userData.householdId.$id || userData.householdId)
+      : userData.householdId;
+  };
+  
+  const hasHousehold = getHouseholdId(user) !== null;
 
   // Fetch household data when user has a householdId
   const fetchHouseholdData = async (householdId) => {
@@ -34,8 +42,9 @@ const GlobalProvider = ({ children }) => {
 
   // Refresh household data (call after creating/joining household)
   const refreshHousehold = async () => {
-    if (user?.householdId) {
-      await fetchHouseholdData(user.householdId);
+    const householdIdValue = getHouseholdId(user);
+    if (householdIdValue) {
+      await fetchHouseholdData(householdIdValue);
     } else {
       setHousehold(null);
       setHouseholdMembers([]);
