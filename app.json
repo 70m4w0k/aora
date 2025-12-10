@@ -27,7 +27,6 @@
         "backgroundColor": "#0A0A0C"
       },
       "package": "com.tipi.app",
-      "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -51,7 +50,8 @@
         {
           "photosPermission": "Allow Tipi to access your photos for document uploads."
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "extra": {
       "router": {

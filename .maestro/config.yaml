@@ -1,0 +1,19 @@
+# Maestro Configuration
+# This file contains global Maestro settings for the Tipi app
+
+appId: com.tipi.app
+
+# Timeout settings (in milliseconds)
+timeout: 30000
+
+# Screenshot settings
+screenshots:
+  enabled: true
+  path: ./maestro-screenshots
+
+# Flow settings
+flows:
+  - landing-page.yaml
+
+
+

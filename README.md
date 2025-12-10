@@ -110,6 +110,38 @@ Built with React Native and Expo for cross-platform compatibility, and using App
 
 5. Use Expo Go app on your mobile device to scan the QR code and run the app
 
+### Configuration
+
+1. Create `.env` file from `ENV_TEMPLATE.md`
+2. Set your Appwrite endpoint and project IDs
+3. See `APPWRITE_CONFIG_SETUP.md` for detailed configuration
+
+## 🚀 Self-Hosted Deployment
+
+To deploy Tipi with your self-hosted Appwrite instance:
+
+1. **Set up Cloudflare Tunnel** (exposes Appwrite without port forwarding):
+   - Run `scripts/setup-cloudflare-tunnel.sh` on your self-hosted computer
+   - Or follow manual setup in `SELF_HOST_DEPLOYMENT.md`
+
+2. **Configure Appwrite** for public access:
+   - See `APPWRITE_TUNNEL_CONFIG.md` for Appwrite configuration
+
+3. **Update app configuration**:
+   - Update `.env` with your Cloudflare Tunnel domain
+   - See `ENV_TEMPLATE.md` for required variables
+
+4. **Build and deploy**:
+   - Build iOS: `npm run build:ios`
+   - Build Android: `npm run build:android`
+   - Install on devices and test
+
+5. **Verify deployment**:
+   - Run `scripts/verify-deployment.sh` to test connectivity
+   - Follow `DEPLOYMENT_TESTING_CHECKLIST.md` for comprehensive testing
+
+See `SELF_HOST_DEPLOYMENT.md` for complete deployment guide.
+
 ## 📱 App Structure
 
 The app is organized into several main sections:

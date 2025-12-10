@@ -37,3 +37,7 @@ yarn-error.*
 
 # EAS
 eas-build-*.json
+
+# Maestro
+maestro-screenshots/
+.maestro/screenshots/

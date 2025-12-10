@@ -13,10 +13,12 @@
     "submit:ios": "eas submit --platform ios",
     "submit:android": "eas submit --platform android",
     "build:list": "eas build:list",
-    "init:db": "node scripts/init-appwrite-db.js"
+    "init:db": "node scripts/init-appwrite-db.js",
+    "test:e2e": "maestro test .maestro/",
+    "test:e2e:landing": "maestro test .maestro/landing-page.yaml"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/datetimepicker": "8.2.0",
     "@react-native-picker/picker": "2.9.0",
     "expo": "~52.0.47",
@@ -26,11 +28,11 @@
     "expo-clipboard": "~7.0.1",
     "expo-constants": "~17.0.8",
     "expo-document-picker": "~13.0.3",
-    "expo-haptics": "^15.0.7",
+    "expo-haptics": "~14.0.1",
     "expo-image-picker": "~16.0.6",
     "expo-linear-gradient": "~14.0.2",
     "expo-linking": "~7.0.5",
-    "expo-localization": "^17.0.7",
+    "expo-localization": "~16.0.1",
     "expo-router": "~4.0.21",
     "expo-status-bar": "~2.0.1",
     "nativewind": "^2.0.11",
