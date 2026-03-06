@@ -1,43 +1,43 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Dependencies
 node_modules/
+frontend/node_modules/
 
-# Expo
-.expo/
-dist/
-web-build/
+# Build outputs
+frontend/dist/
+frontend/.vite/
 
-# Native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
+# PocketBase data (never commit)
+backend/pb_data/
+*.pb
 
-# Metro
-.metro-health-check*
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.sever
 
-# debug
+# TypeScript
+*.tsbuildinfo
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+*.pem
+
+# Test reports
+frontend/playwright-report/
+frontend/test-results/
+frontend/coverage/
+
+# Logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-.env
-
-# typescript
-*.tsbuildinfo
-
-# EAS
-eas-build-*.json
-
-# Maestro
-maestro-screenshots/
-.maestro/screenshots/
+# Docker overrides
+docker-compose.override.yml

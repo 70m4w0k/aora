@@ -1,0 +1,26 @@
+services:
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_POCKETBASE_URL=http://localhost:8090
+    depends_on:
+      - pocketbase
+
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    volumes:
+      - pb_data_dev:/pb/pb_data
+      - ./backend/pb_migrations:/pb/pb_migrations:ro
+    ports:
+      - "8090:8090"
+    command: serve --http=0.0.0.0:8090
+
+volumes:
+  pb_data_dev:
