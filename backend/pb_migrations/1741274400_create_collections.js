@@ -26,16 +26,15 @@ migrate((app) => {
 
   // Extend users with householdId, username, color
   const users = app.findCollectionByNameOrId("users");
-  users.fields.add(new TextField({ name: "username", required: false }));
-  users.fields.add(new TextField({ name: "color", required: false }));
-  users.fields.add(
-    new RelationField({
-      name: "householdId",
-      collectionId: households.id,
-      cascadeDelete: false,
-      required: false,
-    })
-  );
+  users.fields.add({ type: "text", name: "username" });
+  users.fields.add({ type: "text", name: "color" });
+  users.fields.add({
+    type: "relation",
+    name: "householdId",
+    collectionId: households.id,
+    cascadeDelete: false,
+    required: false,
+  });
   app.save(users);
 
   // tasks
@@ -188,15 +187,8 @@ migrate((app) => {
         name: "category",
         maxSelect: 1,
         values: [
-          "food",
-          "groceries",
-          "rent",
-          "utilities",
-          "transport",
-          "entertainment",
-          "shopping",
-          "health",
-          "other",
+          "food", "groceries", "rent", "utilities", "transport",
+          "entertainment", "shopping", "health", "other",
         ],
       },
       { type: "date", name: "date", required: true },
@@ -286,9 +278,7 @@ migrate((app) => {
         name: "fileUrl",
         maxSelect: 1,
         mimeTypes: [
-          "image/jpeg",
-          "image/png",
-          "application/pdf",
+          "image/jpeg", "image/png", "application/pdf",
           "application/msword",
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ],
@@ -317,18 +307,22 @@ migrate((app) => {
     deleteRule: "@request.auth.householdId = householdId",
   });
   app.save(documents);
+
 }, (app) => {
   for (const name of [
-    "documents",
-    "expense_settlements",
-    "expenses",
-    "shopping_items",
-    "events",
-    "tasks",
-    "households",
+    "documents", "expense_settlements", "expenses",
+    "shopping_items", "events", "tasks", "households",
   ]) {
-    try {
-      app.delete(app.findCollectionByNameOrId(name));
-    } catch (_) {}
+    try { app.delete(app.findCollectionByNameOrId(name)); } catch (_) {}
   }
+
+  // Remove added fields from users
+  try {
+    const users = app.findCollectionByNameOrId("users");
+    for (const fname of ["username", "color", "householdId"]) {
+      const f = users.fields.getByName(fname);
+      if (f) users.fields.remove(f);
+    }
+    app.save(users);
+  } catch (_) {}
 });
