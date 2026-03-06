@@ -7,6 +7,19 @@ migrate((app) => {
     if (err) throw new Error(String(err));
   }
 
+  // Clean up any partial state from previous failed runs
+  for (const name of ["documents", "expense_settlements", "expenses", "shopping_items", "events", "tasks", "households"]) {
+    try { app.delete(app.findCollectionByNameOrId(name)); } catch (_) {}
+  }
+  try {
+    const u = app.findCollectionByNameOrId("users");
+    for (const fname of ["username", "color", "householdId"]) {
+      const f = u.fields.getByName(fname);
+      if (f) u.fields.remove(f);
+    }
+    app.save(u);
+  } catch (_) {}
+
   // Resolve users collection ID dynamically (avoids relying on internal alias)
   const usersCollection = app.findCollectionByNameOrId("users");
   const usersId = usersCollection.id;
