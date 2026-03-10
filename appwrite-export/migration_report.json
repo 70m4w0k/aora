@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-03-10T16:30:01.120Z",
+  "config": {
+    "appwrite": {
+      "endpoint": "https://cloud.appwrite.io/v1",
+      "projectId": "66cc7b47003a18bd5600",
+      "apiKey": "***",
+      "databaseId": "66cc7c760013e5170042"
+    },
+    "postgres": {
+      "host": "localhost",
+      "port": 5432,
+      "database": "household_app",
+      "user": "postgres",
+      "password": "***"
+    }
+  },
+  "statistics": {
+    "totalCollections": 0,
+    "totalDocuments": 0,
+    "migratedDocuments": 54,
+    "errors": [],
+    "startTime": "2026-03-10T16:30:01.079Z",
+    "endTime": "2026-03-10T16:30:01.120Z"
+  }
+}

@@ -1,0 +1,1843 @@
+{
+  "databaseId": "66cc7c760013e5170042",
+  "totalCollections": 23,
+  "collections": [
+    {
+      "id": "66cc7c930038937612d7",
+      "name": "users",
+      "description": "",
+      "createdAt": "2024-08-26T13:01:08.041+00:00",
+      "permissions": [
+        "create(\"any\")",
+        "read(\"any\")",
+        "update(\"any\")",
+        "delete(\"any\")"
+      ],
+      "attributes": [
+        {
+          "key": "username",
+          "type": "string",
+          "size": 100,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "email",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "avatar",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "accountId",
+          "type": "string",
+          "size": 2200,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "color",
+          "type": "string",
+          "size": 2200,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "role",
+          "type": "string",
+          "size": 50,
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 3,
+      "sampleDocument": {
+        "username": "tom2",
+        "email": "test@test.com",
+        "avatar": "https://cloud.appwrite.io/v1/avatars/initials?name=tom2&project=66cc7b47003a18bd5600",
+        "accountId": "6967b8b6001fd9a35358",
+        "color": "#64fd62",
+        "householdId": "6967b8de0004798fa73c",
+        "role": "admin",
+        "$sequence": 10
+      }
+    },
+    {
+      "id": "66cc7caa003330047163",
+      "name": "videos",
+      "description": "",
+      "createdAt": "2024-08-26T13:01:31.001+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "title",
+          "type": "string",
+          "size": 2200,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "thumbnail",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "prompt",
+          "type": "string",
+          "size": 5000,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "video",
+          "type": "string",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "creator",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [
+        {
+          "key": "search_by_title",
+          "type": "fulltext",
+          "attributes": [
+            "title"
+          ],
+          "orders": [
+            "ASC"
+          ]
+        }
+      ],
+      "documentCount": 4,
+      "sampleDocument": {
+        "title": "How AI Shapes Coding Future",
+        "thumbnail": "https://i.ibb.co/Xkgk7DY/Video.png",
+        "prompt": "Picture the future of coding with AI. Show AR VR",
+        "video": "https://player.vimeo.com/video/949581999?h=4672125b31",
+        "$sequence": 1,
+        "creator": null
+      }
+    },
+    {
+      "id": "66daeaba0012bea61d31",
+      "name": "tasks",
+      "description": "",
+      "createdAt": "2024-09-06T11:44:49.384+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "title",
+          "type": "string",
+          "size": 2200,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "recurrence",
+          "type": "string",
+          "size": 2200,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 12,
+      "sampleDocument": {
+        "title": "Vaiselle",
+        "recurrence": "daily",
+        "householdId": "692d9cd00033069b1e86",
+        "$sequence": 24
+      }
+    },
+    {
+      "id": "66daebd5003dbbdb0beb",
+      "name": "task_done",
+      "description": "",
+      "createdAt": "2024-09-06T11:47:34.028+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "done",
+          "type": "boolean",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "userId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "taskId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "weekNumber",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "completedAt",
+          "type": "datetime",
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 6,
+      "sampleDocument": {
+        "done": true,
+        "weekNumber": 2,
+        "householdId": "6967b8de0004798fa73c",
+        "completedAt": "2026-01-12T23:00:00.000+00:00",
+        "$sequence": 167,
+        "userId": {
+          "username": "tom2",
+          "email": "test@test.com",
+          "avatar": "https://cloud.appwrite.io/v1/avatars/initials?name=tom2&project=66cc7b47003a18bd5600",
+          "accountId": "6967b8b6001fd9a35358",
+          "color": "#64fd62",
+          "householdId": "6967b8de0004798fa73c",
+          "role": "admin",
+          "$id": "6967b8b7000b10584302",
+          "$sequence": 10,
+          "$createdAt": "2026-01-14T15:39:34.894+00:00",
+          "$updatedAt": "2026-01-14T15:40:13.967+00:00",
+          "$permissions": [
+            "read(\"user:6967b8b6001fd9a35358\")",
+            "update(\"user:6967b8b6001fd9a35358\")",
+            "delete(\"user:6967b8b6001fd9a35358\")"
+          ],
+          "$databaseId": "66cc7c760013e5170042",
+          "$collectionId": "66cc7c930038937612d7"
+        },
+        "taskId": {
+          "title": "Serpillière cuisine",
+          "recurrence": "weekly",
+          "householdId": "6967b8de0004798fa73c",
+          "$id": "6967b91800332febf91c",
+          "$sequence": 35,
+          "$createdAt": "2026-01-14T15:41:12.526+00:00",
+          "$updatedAt": "2026-01-14T15:41:12.526+00:00",
+          "$permissions": [
+            "read(\"user:6967b8b6001fd9a35358\")",
+            "update(\"user:6967b8b6001fd9a35358\")",
+            "delete(\"user:6967b8b6001fd9a35358\")"
+          ],
+          "$databaseId": "66cc7c760013e5170042",
+          "$collectionId": "66daeaba0012bea61d31"
+        }
+      }
+    },
+    {
+      "id": "67c5f73b003091bc520c",
+      "name": "shopping_items",
+      "description": "",
+      "createdAt": "2025-03-03T18:38:51.837+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "size": 250,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "category",
+          "type": "string",
+          "size": 250,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "completed",
+          "type": "boolean",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "quantity",
+          "type": "string",
+          "size": 250,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "assignedTo",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "createdBy",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 8,
+      "sampleDocument": {
+        "name": "Pq",
+        "category": "groceries",
+        "completed": false,
+        "quantity": "1",
+        "householdId": "692d9cd00033069b1e86",
+        "$sequence": 6,
+        "assignedTo": null,
+        "createdBy": null
+      }
+    },
+    {
+      "id": "67c5f84e0011953452e2",
+      "name": "expenses",
+      "description": "",
+      "createdAt": "2025-03-03T18:43:26.351+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "title",
+          "type": "string",
+          "size": 250,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "amount",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "paidBy",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "splitBetween",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "category",
+          "type": "string",
+          "size": 250,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "date",
+          "type": "datetime",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "notes",
+          "type": "string",
+          "size": 500,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "imageId",
+          "type": "string",
+          "size": 1000,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [
+        {
+          "key": "last_updated",
+          "type": "key",
+          "attributes": [
+            "date"
+          ],
+          "orders": [
+            "ASC"
+          ]
+        }
+      ],
+      "documentCount": 3,
+      "sampleDocument": {
+        "title": "Pq",
+        "amount": 10,
+        "category": "utilities",
+        "date": "2025-12-01T15:29:14.033+00:00",
+        "notes": "",
+        "imageId": null,
+        "householdId": "692d9cd00033069b1e86",
+        "$sequence": 7,
+        "paidBy": null,
+        "splitBetween": []
+      }
+    },
+    {
+      "id": "67c637aa002f0ba982dc",
+      "name": "expense_settlements",
+      "description": "",
+      "createdAt": "2025-03-03T23:13:46.793+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "paidBy",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "paidTo",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "date",
+          "type": "datetime",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "notes",
+          "type": "string",
+          "size": 500,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "amount",
+          "type": "double",
+          "required": true,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 0
+    },
+    {
+      "id": "67cb1c92003ce7f03311",
+      "name": "plants",
+      "description": "",
+      "createdAt": "2025-03-07T16:19:31.073+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "size": 250,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "type",
+          "type": "string",
+          "size": 250,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "variety",
+          "type": "string",
+          "size": 250,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "owner",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "notes",
+          "type": "string",
+          "size": 500,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "mainImageId",
+          "type": "string",
+          "size": 250,
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 4,
+      "sampleDocument": {
+        "name": "Avocatier 1",
+        "type": "fruit",
+        "variety": "",
+        "notes": "",
+        "mainImageId": null,
+        "$sequence": 1,
+        "owner": null
+      }
+    },
+    {
+      "id": "67cb1d17002e647e5d97",
+      "name": "plant_events",
+      "description": "",
+      "createdAt": "2025-03-07T16:21:43.809+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "plantId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "eventType",
+          "type": "string",
+          "size": 50,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "date",
+          "type": "datetime",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "notes",
+          "type": "string",
+          "size": 500,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "imageIds",
+          "type": "string",
+          "size": 250,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "weather",
+          "type": "string",
+          "size": 500,
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 34,
+      "sampleDocument": {
+        "eventType": "water",
+        "date": "2025-03-07T16:39:44.242+00:00",
+        "notes": "",
+        "imageIds": "",
+        "weather": "[object Object]",
+        "$sequence": 1,
+        "plantId": {
+          "name": "Avocatier 1",
+          "type": "fruit",
+          "variety": "",
+          "notes": "",
+          "mainImageId": null,
+          "$id": "67cb2034000bb27e219b",
+          "$sequence": 1,
+          "$createdAt": "2025-03-07T16:35:00.414+00:00",
+          "$updatedAt": "2026-01-14T15:37:31.515+00:00",
+          "$permissions": [
+            "read(\"user:67c6f56a001f701e348d\")",
+            "update(\"user:67c6f56a001f701e348d\")",
+            "delete(\"user:67c6f56a001f701e348d\")"
+          ],
+          "owner": null,
+          "$databaseId": "66cc7c760013e5170042",
+          "$collectionId": "67cb1c92003ce7f03311"
+        }
+      }
+    },
+    {
+      "id": "67cb1e0d001fe81de7fb",
+      "name": "plant_reminders",
+      "description": "",
+      "createdAt": "2025-03-07T16:25:49.612+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "plantId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "eventType",
+          "type": "string",
+          "size": 250,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "scheduledDate",
+          "type": "datetime",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "recurring",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "recurrencePattern",
+          "type": "string",
+          "size": 250,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "isActive",
+          "type": "boolean",
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 0
+    },
+    {
+      "id": "692d9aa3002cdbc240cc",
+      "name": "households",
+      "description": "",
+      "createdAt": "2025-12-01T13:39:46.995+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "inviteCode",
+          "type": "string",
+          "size": 6,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "createdBy",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 4,
+      "sampleDocument": {
+        "name": "Coloc",
+        "inviteCode": "RWPMJJ",
+        "createdBy": "692b1b2000113f39fe0f",
+        "$sequence": 1
+      }
+    },
+    {
+      "id": "documents",
+      "name": "documents",
+      "description": "",
+      "createdAt": "2025-12-01T17:16:14.242+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "category",
+          "type": "string",
+          "size": 50,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "description",
+          "type": "string",
+          "size": 1000,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "amount",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "fileId",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "fileUrl",
+          "type": "string",
+          "size": 2000,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "fileName",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "userId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "date",
+          "type": "datetime",
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 2,
+      "sampleDocument": {
+        "name": "Chaudière ",
+        "category": "bills",
+        "description": "",
+        "amount": 100,
+        "fileId": "692dceaa001951c6ae8e",
+        "fileUrl": "https://cloud.appwrite.io/v1/storage/buckets/66cc7dd9000d1e1e11e0/files/692dceaa001951c6ae8e/view?project=66cc7b47003a18bd5600",
+        "fileName": "259238216c20a49a893bdb0370dac841.jpg",
+        "householdId": "692d9cd00033069b1e86",
+        "userId": "692b1b2000113f39fe0f",
+        "date": "2025-12-01T00:00:00.000+00:00",
+        "$sequence": 1
+      }
+    },
+    {
+      "id": "stores",
+      "name": "stores",
+      "description": "",
+      "createdAt": "2025-12-01T19:58:59.631+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "size": 100,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "address",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "createdBy",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 1,
+      "sampleDocument": {
+        "name": "Intermarché",
+        "address": null,
+        "householdId": "692d9cd00033069b1e86",
+        "createdBy": "692b1b2000113f39fe0f",
+        "$sequence": 1
+      }
+    },
+    {
+      "id": "products",
+      "name": "products",
+      "description": "",
+      "createdAt": "2025-12-01T20:00:45.225+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "barcode",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "name",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "brand",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "category",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "unit",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "createdBy",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "weight",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "imageUrl",
+          "type": "string",
+          "size": 255,
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 1,
+      "sampleDocument": {
+        "barcode": null,
+        "name": "Tajine de légumes grillés",
+        "brand": "Cassegrain",
+        "category": "groceries",
+        "unit": "unit",
+        "householdId": "692d9cd00033069b1e86",
+        "createdBy": "692b1b2000113f39fe0f",
+        "weight": null,
+        "imageUrl": null,
+        "$sequence": 1
+      }
+    },
+    {
+      "id": "pricehistory",
+      "name": "priceHistory",
+      "description": "",
+      "createdAt": "2025-12-01T20:02:28.621+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "productId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "storeId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "price",
+          "type": "double",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "quantity",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "pricePerUnit",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "date",
+          "type": "datetime",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "userId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "notes",
+          "type": "string",
+          "size": 1000,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "weight",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "pricePerKg",
+          "type": "double",
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 1,
+      "sampleDocument": {
+        "productId": "692df58200083945a22e",
+        "storeId": "692df51e001a89acad23",
+        "price": 4.3,
+        "quantity": 1,
+        "pricePerUnit": 4.3,
+        "date": "2025-12-01T20:09:48.807+00:00",
+        "userId": "692b1b2000113f39fe0f",
+        "householdId": "692d9cd00033069b1e86",
+        "notes": null,
+        "weight": null,
+        "pricePerKg": null,
+        "$sequence": 1
+      }
+    },
+    {
+      "id": "events",
+      "name": "events",
+      "description": "",
+      "createdAt": "2025-12-02T18:33:27.494+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "title",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "description",
+          "type": "string",
+          "size": 2000,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "startDate",
+          "type": "datetime",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "endDate",
+          "type": "datetime",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "allDay",
+          "type": "boolean",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "category",
+          "type": "string",
+          "size": 50,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "color",
+          "type": "string",
+          "size": 20,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "createdBy",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "assignedTo",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "householdId",
+          "type": "string",
+          "size": 255,
+          "required": true,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 0
+    },
+    {
+      "id": "habits_arcs",
+      "name": "habits_arcs",
+      "description": "",
+      "createdAt": "2025-12-03T13:52:14.123+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "size": 100,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "color",
+          "type": "string",
+          "size": 20,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "icon",
+          "type": "string",
+          "size": 100,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "description",
+          "type": "string",
+          "size": 500,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "createdBy",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [],
+      "documentCount": 0
+    },
+    {
+      "id": "habits_quests",
+      "name": "habits_quests",
+      "description": "",
+      "createdAt": "2025-12-03T13:56:13.965+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "size": 200,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "arcId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "frequency",
+          "type": "string",
+          "size": 20,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "repetitionPerPeriod",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "intensity",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "xpPerCompletion",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "accessLevel",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "createdBy",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [],
+      "documentCount": 0
+    },
+    {
+      "id": "habits_quests_completions",
+      "name": "habits_quests_completions",
+      "description": "",
+      "createdAt": "2025-12-03T14:00:11.090+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "questId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "userId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "completedAt",
+          "type": "datetime",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "streakCount",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "xpEarned",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "penaltyXP",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 0
+    },
+    {
+      "id": "habits_tiers",
+      "name": "habits_tiers",
+      "description": "",
+      "createdAt": "2025-12-03T14:02:14.685+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "name",
+          "type": "string",
+          "size": 200,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "arcId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "targetValue",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "targetType",
+          "type": "string",
+          "size": 50,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "xpReward",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "titleReward",
+          "type": "string",
+          "size": 100,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "createdBy",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [],
+      "documentCount": 0
+    },
+    {
+      "id": "habits_tiers_completions",
+      "name": "habits_tiers_completions",
+      "description": "",
+      "createdAt": "2025-12-03T14:05:14.906+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "tierId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "userId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "completedAt",
+          "type": "datetime",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "xpEarned",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "householdId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        }
+      ],
+      "indexes": [],
+      "documentCount": 0
+    },
+    {
+      "id": "habits_user_progress",
+      "name": "habits_user_progress",
+      "description": "",
+      "createdAt": "2025-12-03T14:06:59.261+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "userId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "householdId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "totalXP",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "globalLevel",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "progressionType",
+          "type": "string",
+          "size": 20,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "penaltySystemActive",
+          "type": "boolean",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "gameDurationYears",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "classId",
+          "type": "string",
+          "size": 50,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "unlockedTitles",
+          "type": "string",
+          "size": 100,
+          "required": false,
+          "array": true,
+          "default": null
+        },
+        {
+          "key": "arcProgress",
+          "type": "string",
+          "size": 5000,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "totalPenalties",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "totalPenaltyXP",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "unlockedAchievements",
+          "type": "string",
+          "size": 100,
+          "required": false,
+          "array": true,
+          "default": null
+        }
+      ],
+      "indexes": [],
+      "documentCount": 1,
+      "sampleDocument": {
+        "totalXP": 231402,
+        "globalLevel": 20,
+        "progressionType": "progressive",
+        "penaltySystemActive": true,
+        "gameDurationYears": 1,
+        "classId": null,
+        "unlockedTitles": [
+          "novice",
+          "apprentice",
+          "journeyman",
+          "expert",
+          "quest_starter",
+          "xp_collector",
+          "xp_hunter",
+          "xp_legend",
+          "Clochard",
+          "Padawan",
+          "Dieu grec"
+        ],
+        "arcProgress": "{\"693049cb0035dc1931bc\":{\"totalXP\":29002,\"level\":15,\"questsCompleted\":10,\"tiersCompleted\":2},\"69304c4b00341c1f2d58\":{\"totalXP\":1450,\"level\":7,\"questsCompleted\":4,\"tiersCompleted\":12},\"693049b5003aa4bf054e\":{\"totalXP\":200950,\"level\":19,\"questsCompleted\":41,\"tiersCompleted\":2}}",
+        "totalPenalties": 0,
+        "totalPenaltyXP": 0,
+        "unlockedAchievements": [
+          "first_quest",
+          "first_tier",
+          "level_10"
+        ],
+        "$sequence": 1,
+        "userId": [],
+        "householdId": {
+          "name": "Coloc",
+          "inviteCode": "RWPMJJ",
+          "createdBy": "692b1b2000113f39fe0f",
+          "$id": "692d9cd00033069b1e86",
+          "$sequence": 1,
+          "$createdAt": "2025-12-01T13:49:05.770+00:00",
+          "$updatedAt": "2025-12-02T09:53:57.299+00:00",
+          "$permissions": [
+            "read(\"user:692b1b1f001d12950313\")",
+            "update(\"user:692b1b1f001d12950313\")",
+            "delete(\"user:692b1b1f001d12950313\")"
+          ],
+          "$databaseId": "66cc7c760013e5170042",
+          "$collectionId": "692d9aa3002cdbc240cc"
+        }
+      }
+    },
+    {
+      "id": "habits_xp_history",
+      "name": "habits_xp_history",
+      "description": "",
+      "createdAt": "2025-12-03T18:04:34.940+00:00",
+      "permissions": [
+        "create(\"users\")",
+        "read(\"users\")",
+        "update(\"users\")",
+        "delete(\"users\")"
+      ],
+      "attributes": [
+        {
+          "key": "userId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "householdId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "xpAmount",
+          "type": "integer",
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "sourceType",
+          "type": "string",
+          "size": 20,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "sourceId",
+          "type": "string",
+          "size": 100,
+          "required": true,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "arcId",
+          "type": "relationship",
+          "required": false,
+          "array": false
+        },
+        {
+          "key": "questName",
+          "type": "string",
+          "size": 200,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "tierName",
+          "type": "string",
+          "size": 200,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "arcName",
+          "type": "string",
+          "size": 100,
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "penaltyXP",
+          "type": "integer",
+          "required": false,
+          "array": false,
+          "default": null
+        },
+        {
+          "key": "earnedAt",
+          "type": "datetime",
+          "required": true,
+          "array": false,
+          "default": null
+        }
+      ],
+      "indexes": [
+        {
+          "key": "earnedAt",
+          "type": "key",
+          "attributes": [
+            "earnedAt"
+          ],
+          "orders": [
+            "ASC"
+          ]
+        }
+      ],
+      "documentCount": 0
+    }
+  ]
+}

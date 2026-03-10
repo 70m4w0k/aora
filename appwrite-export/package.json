@@ -1,0 +1,35 @@
+{
+  "name": "appwrite-postgres-migration",
+  "version": "1.0.0",
+  "description": "Migration tool for moving from Appwrite to PostgreSQL",
+  "main": "appwrite_to_postgres_migration.js",
+  "scripts": {
+    "migrate": "node appwrite_to_postgres_migration.js",
+    "migrate:dry-run": "node appwrite_to_postgres_migration.js --dry-run",
+    "migrate:resume": "node appwrite_to_postgres_migration.js --resume",
+    "setup-schema": "node -e \"require('fs').readFile('postgres_schema_complete.sql', 'utf8', (err, data) => { if (err) throw err; console.log('Run this SQL in your PostgreSQL database:'); console.log(data); })\"",
+    "test": "node test_migration_setup.js",
+    "rollback": "node rollback_migration.js",
+    "monitor": "node migration_monitor.js",
+    "status": "echo 'Check STATUS_CHECK.md for current status' && cat STATUS_CHECK.md"
+  },
+  "keywords": [
+    "appwrite",
+    "postgresql",
+    "migration",
+    "database"
+  ],
+  "author": "Orchestrator Agent",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "node-appwrite": "^22.1.3",
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
